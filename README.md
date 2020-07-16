@@ -88,7 +88,7 @@ We show in [`pipeline_SfM.ipynb`](https://nbviewer.jupyter.org/github/cvg/Hierar
 | D2Net (SS) + NN        | 39.9 / 57.6 / 67.2 | 36.6 / 53.4 / 61.8 | NetVLAD top 20 |
 | SuperPoint + NN        | 39.9 / 55.6 / 67.2 | 37.4 / 57.3 / 70.2 | NetVLAD top 20 |
 
-Check out [visuallocalization.net/benchmark](https://www.visuallocalization.net/benchmark) for more details and additional baselines.
+Check out [visuallocalization.net/benchmark](https://www.visuallocalization.net/benchmark) for more details and additional baselines. Please note that we do not plan to release the retrieval pairs generated with temporal consistency.
 
 ## BibTex Citation
 
