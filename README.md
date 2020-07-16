@@ -54,23 +54,23 @@ We provide step-by-step guides to localize with Aachen, InLoc, and to generate r
 
 ### Aachen – outdoor localization
 
-Have a look at [`pipeline_Aachen.ipynb`](./pipeline_Aachen.ipynb) for a step-by-step guide on localizing with Aachen. Play with the visualization, try new local features or matcher, and have fun! Don't like notebooks? You can also run all scripts from the command line.
+Have a look at [`pipeline_Aachen.ipynb`](https://nbviewer.jupyter.org/github/cvg/Hierarchical-Localization/blob/master/pipeline_Aachen.ipynb) for a step-by-step guide on localizing with Aachen. Play with the visualization, try new local features or matcher, and have fun! Don't like notebooks? You can also run all scripts from the command line.
 
 <p align="center">
-  <a href="./pipeline_Aachen.ipynb"><img src="doc/loc_aachen.svg" width="70%"/></a>
+  <a href="https://nbviewer.jupyter.org/github/cvg/Hierarchical-Localization/blob/master/pipeline_Aachen.ipynb"><img src="doc/loc_aachen.svg" width="70%"/></a>
 </p>
 
 ### InLoc – indoor localization
 
-The notebook [`pipeline_InLoc.ipynb`](./pipeline_InLoc.ipynb) shows the steps for localizing with InLoc. It's much simpler since a 3D SfM model is not needed.
+The notebook [`pipeline_InLoc.ipynb`](https://nbviewer.jupyter.org/github/cvg/Hierarchical-Localization/blob/master/pipeline_InLoc.ipynb) shows the steps for localizing with InLoc. It's much simpler since a 3D SfM model is not needed.
 
 <p align="center">
-  <a href="./pipeline_InLoc.ipynb"><img src="doc/loc_inloc.svg" width="70%"/></a>
+  <a href="https://nbviewer.jupyter.org/github/cvg/Hierarchical-Localization/blob/master/pipeline_InLoc.ipynb"><img src="doc/loc_inloc.svg" width="70%"/></a>
 </p>
 
 ### SfM reconstruction from scratch
 
-We show in [`pipeline_SfM.ipynb`](./pipeline_SfM.ipynb) how to run 3D reconstruction for an unordered set of images. This generates reference poses, and a nice sparse 3D model suitable for localization with the same pipeline as Aachen.
+We show in [`pipeline_SfM.ipynb`](https://nbviewer.jupyter.org/github/cvg/Hierarchical-Localization/blob/master/pipeline_SfM.ipynb) how to run 3D reconstruction for an unordered set of images. This generates reference poses, and a nice sparse 3D model suitable for localization with the same pipeline as Aachen.
 
 ## Results
 
