@@ -76,19 +76,19 @@ We show in [`pipeline_SfM.ipynb`](https://nbviewer.jupyter.org/github/cvg/Hierar
 
 `hloc` currently supports [SuperPoint](https://arxiv.org/abs/1712.07629) and [D2-Net](https://arxiv.org/abs/1905.03561) local feature extractors; and [SuperGlue](https://arxiv.org/abs/1911.11763) and Nearest Neighbor matchers. Using [NetVLAD](https://arxiv.org/abs/1511.07247) for retrieval, we obtain the following best results:
 
-| Methods                | Aachen day         | Aachen night       | Retrieval      |
-| ---------------------- | ------------------ | ------------------ | -------------- |
-| SuperPoint + SuperGlue | 89.6 / 95.4 / 98.8 | 86.7 / 93.9 / 100  | NetVLAD top 50 |
-| D2Net (SS) + NN        | 84.6 / 91.4 / 97.1 | 83.7 / 90.8 / 100  | NetVLAD top 30 |
-| SuperPoint + NN        | 85.4 / 93.3 / 97.2 | 75.5 / 86.7 / 92.9 | NetVLAD top 30 |
+| Methods                                                      | Aachen day         | Aachen night       | Retrieval      |
+| ------------------------------------------------------------ | ------------------ | ------------------ | -------------- |
+| [SuperPoint + SuperGlue](https://www.visuallocalization.net/details/10931/) | 89.6 / 95.4 / 98.8 | 86.7 / 93.9 / 100  | NetVLAD top 50 |
+| [SuperPoint + NN](https://www.visuallocalization.net/details/10866/) | 85.4 / 93.3 / 97.2 | 75.5 / 86.7 / 92.9 | NetVLAD top 30 |
+| D2Net (SS) + NN                                              | 84.6 / 91.4 / 97.1 | 83.7 / 90.8 / 100  | NetVLAD top 30 |
 
-| Methods                | InLoc DUC1         | InLoc DUC2         | Retrieval      |
-| ---------------------- | ------------------ | ------------------ | -------------- |
-| SuperPoint + SuperGlue | 46.5 / 65.7 / 78.3 | 52.7 / 72.5 / 79.4 | NetVLAD top 40 |
-| D2Net (SS) + NN        | 39.9 / 57.6 / 67.2 | 36.6 / 53.4 / 61.8 | NetVLAD top 20 |
-| SuperPoint + NN        | 39.9 / 55.6 / 67.2 | 37.4 / 57.3 / 70.2 | NetVLAD top 20 |
+| Methods                                                      | InLoc DUC1         | InLoc DUC2         | Retrieval      |
+| ------------------------------------------------------------ | ------------------ | ------------------ | -------------- |
+| [SuperPoint + SuperGlue](https://www.visuallocalization.net/details/10936/) | 46.5 / 65.7 / 78.3 | 52.7 / 72.5 / 79.4 | NetVLAD top 40 |
+| [SuperPoint + NN](https://www.visuallocalization.net/details/10896/) | 39.9 / 55.6 / 67.2 | 37.4 / 57.3 / 70.2 | NetVLAD top 20 |
+| D2Net (SS) + NN                                              | 39.9 / 57.6 / 67.2 | 36.6 / 53.4 / 61.8 | NetVLAD top 20 |
 
-Check out [visuallocalization.net/benchmark](https://www.visuallocalization.net/benchmark) for more details and additional baselines. Please note that we do not plan to release the retrieval pairs generated with temporal consistency.
+Check out [visuallocalization.net/benchmark](https://www.visuallocalization.net/benchmark) for more details and additional baselines. Please note that we do not plan to release the InLoc retrieval pairs generated [with temporal consistency](https://www.visuallocalization.net/details/10937/).
 
 ## BibTex Citation
 
