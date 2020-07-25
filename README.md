@@ -159,10 +159,10 @@ For now `hloc` does not have an interface for image retrieval. You will need to 
 
 External contributions are very much welcome. This is a non-exaustive list of features that might be valuable additions:
 
+- [ ] more localization datasets (RobotCar Seasons, CMU Seasons, Aachen v1.1, Cambridge Landmarks, 7Scenes)
+- [ ] covisibility clustering for InLoc
 - [ ] visualization of the raw predictions (features and matches)
 - [ ] interfaces for image retrieval (e.g. [DIR](https://github.com/almazan/deep-image-retrieval), [NetVLAD](https://github.com/uzh-rpg/netvlad_tf_open))
 - [ ] other local features
-- [ ] more localization datasets (e.g. RobotCar Seasons and CMU Seasons)
-- [ ] covisibility clustering for InLoc
 
 Created and maintained by [Paul-Edouard Sarlin](https://psarlin.com/).
