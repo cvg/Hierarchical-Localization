@@ -85,10 +85,11 @@ We show in [`pipeline_SfM.ipynb`](https://nbviewer.jupyter.org/github/cvg/Hierar
 | Methods                                                      | InLoc DUC1         | InLoc DUC2         | Retrieval      |
 | ------------------------------------------------------------ | ------------------ | ------------------ | -------------- |
 | [SuperPoint + SuperGlue](https://www.visuallocalization.net/details/10936/) | 46.5 / 65.7 / 78.3 | 52.7 / 72.5 / 79.4 | NetVLAD top 40 |
+| [SuperPoint + SuperGlue (temporal)](https://www.visuallocalization.net/details/10937/) | 49.0 / 68.7 / 80.8 | 53.4 / 77.1 / 82.4 | NetVLAD top 40 |
 | [SuperPoint + NN](https://www.visuallocalization.net/details/10896/) | 39.9 / 55.6 / 67.2 | 37.4 / 57.3 / 70.2 | NetVLAD top 20 |
 | D2Net (SS) + NN                                              | 39.9 / 57.6 / 67.2 | 36.6 / 53.4 / 61.8 | NetVLAD top 20 |
 
-Check out [visuallocalization.net/benchmark](https://www.visuallocalization.net/benchmark) for more details and additional baselines. Please note that we do not plan to release the InLoc retrieval pairs generated [with temporal consistency](https://www.visuallocalization.net/details/10937/).
+Check out [visuallocalization.net/benchmark](https://www.visuallocalization.net/benchmark) for more details and additional baselines.
 
 ## BibTex Citation
 
@@ -158,10 +159,10 @@ For now `hloc` does not have an interface for image retrieval. You will need to 
 
 External contributions are very much welcome. This is a non-exaustive list of features that might be valuable additions:
 
+- [ ] more localization datasets (RobotCar Seasons, CMU Seasons, Aachen v1.1, Cambridge Landmarks, 7Scenes)
+- [ ] covisibility clustering for InLoc
 - [ ] visualization of the raw predictions (features and matches)
 - [ ] interfaces for image retrieval (e.g. [DIR](https://github.com/almazan/deep-image-retrieval), [NetVLAD](https://github.com/uzh-rpg/netvlad_tf_open))
 - [ ] other local features
-- [ ] more localization datasets (e.g. RobotCar Seasons and CMU Seasons)
-- [ ] covisibility clustering for InLoc
 
 Created and maintained by [Paul-Edouard Sarlin](https://psarlin.com/).
