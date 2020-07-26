@@ -140,7 +140,7 @@ class COLMAPDatabase(sqlite3.Connection):
 
     @staticmethod
     def connect(database_path):
-        return sqlite3.connect(database_path, factory=COLMAPDatabase)
+        return sqlite3.connect(str(database_path), factory=COLMAPDatabase)
 
 
     def __init__(self, *args, **kwargs):
