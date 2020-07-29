@@ -26,6 +26,16 @@ pip install git+https://github.com/mihaidusmanu/pycolmap
 
 This codebase includes external local features as git submodules – don't forget to pull submodules with `git submodule update --init --recursive`. Your local features are based on TensorFlow? No problem! See [below](#using-your-own-local-features-or-matcher) for the steps.
 
+We also provide a Docker image that includes COLMAP and other dependencies:
+
+```
+docker build -t hloc:latest .
+docker run -it -p 8888:8888 hocl:latest
+jupyter notebook --ip 0.0.0.0 --port 8888 --no-browser --allow-root
+```
+
+
+
 ## General pipeline
 
 The toolbox is composed of scripts, which roughly perform the following steps:
