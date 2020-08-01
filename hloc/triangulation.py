@@ -6,11 +6,28 @@ import h5py
 import numpy as np
 import subprocess
 import pprint
+import shutil
 
 from .utils.read_write_model import (
-        read_cameras_binary, read_images_binary, CAMERA_MODEL_NAMES)
+        read_cameras_binary, read_images_binary, CAMERA_MODEL_NAMES,
+        write_points3d_binary, write_images_binary, Image)
 from .utils.database import COLMAPDatabase
 from .utils.parsers import names_to_pair
+
+
+def create_empty_model(reference_model, empty_model):
+    logging.info('Creating an empty model.')
+    empty_model.mkdir(exist_ok=True)
+    shutil.copy(reference_model / 'cameras.bin', empty_model)
+    write_points3d_binary(dict(), empty_model / 'points3D.bin')
+    images = read_images_binary(str(reference_model / 'images.bin'))
+    images_empty = dict()
+    for id_, image in images.items():
+        image = image._asdict()
+        image['xys'] = np.zeros((0, 2), float)
+        image['point3D_ids'] = np.full(0, -1, int)
+        images_empty[id_] = Image(**image)
+    write_images_binary(images_empty, empty_model / 'images.bin')
 
 
 def create_db_from_model(empty_model, database_path):
@@ -100,7 +117,9 @@ def geometric_verification(colmap_path, database_path, pairs_path):
         str(colmap_path), 'matches_importer',
         '--database_path', str(database_path),
         '--match_list_path', str(pairs_path),
-        '--match_type', 'pairs']
+        '--match_type', 'pairs',
+        '--SiftMatching.max_num_trials', str(20000),
+        '--SiftMatching.min_inlier_ratio', str(0.1)]
     ret = subprocess.call(cmd)
     if ret != 0:
         logging.warning('Problem with matches_importer, exiting.')
@@ -148,11 +167,11 @@ def run_triangulation(colmap_path, model_path, database_path, image_dir,
     return stats
 
 
-def main(sfm_dir, empty_sfm_model, image_dir, pairs, features, matches,
+def main(sfm_dir, reference_sfm_model, image_dir, pairs, features, matches,
          colmap_path='colmap', skip_geometric_verification=False,
          min_match_score=None):
 
-    assert empty_sfm_model.exists(), empty_sfm_model
+    assert reference_sfm_model.exists(), reference_sfm_model
     assert features.exists(), features
     assert pairs.exists(), pairs
     assert matches.exists(), matches
@@ -161,22 +180,26 @@ def main(sfm_dir, empty_sfm_model, image_dir, pairs, features, matches,
     database = sfm_dir / 'database.db'
     model = sfm_dir / 'model'
     model.mkdir(exist_ok=True)
+    empty_model = sfm_dir / 'empty'
 
-    image_ids = create_db_from_model(empty_sfm_model, database)
+    create_empty_model(reference_sfm_model, empty_model)
+    image_ids = create_db_from_model(empty_model, database)
     import_features(image_ids, database, features)
     import_matches(image_ids, database, pairs, matches,
                    min_match_score=None, skip_geometric_verification=False)
     if not skip_geometric_verification:
         geometric_verification(colmap_path, database, pairs)
     stats = run_triangulation(
-        colmap_path, model, database, image_dir, empty_sfm_model)
+        colmap_path, model, database, image_dir, empty_model)
+
     logging.info(f'Statistics:\n{pprint.pformat(stats)}')
+    shutil.rmtree(empty_model)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--sfm_dir', type=Path, required=True)
-    parser.add_argument('--empty_sfm_model', type=Path, required=True)
+    parser.add_argument('--reference_sfm_model', type=Path, required=True)
     parser.add_argument('--image_dir', type=Path, required=True)
 
     parser.add_argument('--pairs', type=Path, required=True)
