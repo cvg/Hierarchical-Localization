@@ -30,7 +30,7 @@ We also provide a Docker image that includes COLMAP and other dependencies:
 
 ```
 docker build -t hloc:latest .
-docker run -it -p 8888:8888 hocl:latest
+docker run -it -p 8888:8888 hloc:latest
 jupyter notebook --ip 0.0.0.0 --port 8888 --no-browser --allow-root
 ```
 
