@@ -11,19 +11,15 @@ from .utils.read_write_model import write_model
 
 
 def recover_database_images_and_ids(database_path):
-    connection = sqlite3.connect(str(database_path))
-    cursor = connection.cursor()
-
     images = {}
     cameras = {}
-    cursor.execute("SELECT name, image_id, camera_id FROM images;")
-    for name, image_id, camera_id in cursor:
+    db = sqlite3.connect(str(database_path))
+    ret = db.execute("SELECT name, image_id, camera_id FROM images;")
+    for name, image_id, camera_id in ret:
         images[name] = image_id
         cameras[name] = camera_id
 
-    cursor.close()
-    connection.close()
-
+    db.close()
     logging.info(
         f'Found {len(images)} images and {len(cameras)} cameras in database.')
     return images, cameras
@@ -179,7 +175,7 @@ def main(nvm, intrinsics, database, output, skip_points=False):
         nvm, intrinsics, image_ids, camera_ids, skip_points=skip_points)
 
     logging.info('Writing the COLMAP model...')
-    output.mkdir(exist_ok=True)
+    output.mkdir(exist_ok=True, parents=True)
     write_model(*model, path=str(output), ext='.bin')
     logging.info('Done.')
 
