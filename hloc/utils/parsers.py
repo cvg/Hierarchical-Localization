@@ -31,7 +31,7 @@ def parse_retrieval(path):
         for p in f.read().rstrip('\n').split('\n'):
             q, r = p.split(' ')
             retrieval[q].append(r)
-    return retrieval
+    return dict(retrieval)
 
 
 def names_to_pair(name0, name1):
