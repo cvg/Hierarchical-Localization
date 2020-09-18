@@ -34,6 +34,21 @@ confs = {
             'resize_max': 1024,
         },
     },
+    # Resize images to 1600px even if they are originally smaller.
+    # Improves the keypoint localization if the images are of good quality.
+    'superpoint_max': {
+        'output': 'feats-superpoint-n4096-rmax1600',
+        'model': {
+            'name': 'superpoint',
+            'nms_radius': 3,
+            'max_keypoints': 4096,
+        },
+        'preprocessing': {
+            'grayscale': True,
+            'resize_max': 1600,
+            'resize_force': True,
+        },
+    },
     'superpoint_inloc': {
         'output': 'feats-superpoint-n4096-r1600',
         'model': {
@@ -65,6 +80,7 @@ class ImageDataset(torch.utils.data.Dataset):
         'globs': ['*.jpg', '*.png', '*.jpeg', '*.JPG', '*.PNG'],
         'grayscale': False,
         'resize_max': None,
+        'resize_force': False,
     }
 
     def __init__(self, root, conf):
@@ -94,7 +110,8 @@ class ImageDataset(torch.utils.data.Dataset):
         size = image.shape[:2][::-1]
         w, h = size
 
-        if self.conf.resize_max and max(w, h) > self.conf.resize_max:
+        if self.conf.resize_max and (self.conf.resize_force
+                                     or max(w, h) > self.conf.resize_max):
             scale = self.conf.resize_max / max(h, w)
             h_new, w_new = int(round(h*scale)), int(round(w*scale))
             image = cv2.resize(
@@ -134,6 +151,9 @@ def main(conf, image_dir, export_dir, as_half=False):
     feature_file = h5py.File(str(feature_path), 'a')
 
     for data in tqdm(loader):
+        if data['name'][0] in feature_file:
+            continue
+
         pred = model(map_tensor(data, lambda x: x.to(device)))
         pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
 
