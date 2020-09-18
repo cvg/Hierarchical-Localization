@@ -20,12 +20,12 @@ The process is presented in our workshop talk, whose recording can be found [her
 
 We first triangulate a 3D model from the given poses of the reference sequence:
 ```bash
-python3 prepare_reference.py
+python3 pipelines/4Seasons/prepare_reference.py
 ```
 
 We then relocalize a given sequence:
 ```bash
-python3 localize.py --sequence [training|validation|test0|test1]
+python3 pipelines/4Seasons/localize.py --sequence [training|validation|test0|test1]
 ```
 
 The final submission files can be found in `outputs/4Seasons/submission_hloc+superglue/`.
