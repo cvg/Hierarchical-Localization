@@ -112,6 +112,8 @@ def main(conf, pairs, features, export_dir, exhaustive=False):
     match_file.close()
     logging.info('Finished exporting matches.')
 
+    return match_path
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

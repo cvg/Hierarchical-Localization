@@ -158,6 +158,8 @@ def main(conf, image_dir, export_dir, as_half=False):
     feature_file.close()
     logging.info('Finished exporting features.')
 
+    return feature_path
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
