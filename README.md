@@ -26,6 +26,16 @@ pip install git+https://github.com/mihaidusmanu/pycolmap
 
 This codebase includes external local features as git submodules – don't forget to pull submodules with `git submodule update --init --recursive`. Your local features are based on TensorFlow? No problem! See [below](#using-your-own-local-features-or-matcher) for the steps.
 
+We also provide a Docker image that includes COLMAP and other dependencies:
+
+```
+docker build -t hloc:latest .
+docker run -it -p 8888:8888 hloc:latest
+jupyter notebook --ip 0.0.0.0 --port 8888 --no-browser --allow-root
+```
+
+
+
 ## General pipeline
 
 The toolbox is composed of scripts, which roughly perform the following steps:
@@ -159,10 +169,10 @@ For now `hloc` does not have an interface for image retrieval. You will need to 
 
 External contributions are very much welcome. This is a non-exaustive list of features that might be valuable additions:
 
+- [ ] more localization datasets (RobotCar Seasons, CMU Seasons, Aachen v1.1, Cambridge Landmarks, 7Scenes)
+- [ ] covisibility clustering for InLoc
 - [ ] visualization of the raw predictions (features and matches)
 - [ ] interfaces for image retrieval (e.g. [DIR](https://github.com/almazan/deep-image-retrieval), [NetVLAD](https://github.com/uzh-rpg/netvlad_tf_open))
 - [ ] other local features
-- [ ] more localization datasets (e.g. RobotCar Seasons and CMU Seasons)
-- [ ] covisibility clustering for InLoc
 
 Created and maintained by [Paul-Edouard Sarlin](https://psarlin.com/).

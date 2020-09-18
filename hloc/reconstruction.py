@@ -137,15 +137,15 @@ def main(sfm_dir, image_dir, pairs, features, matches,
 
     create_empty_db(database)
     import_images(
-        colmap_path, sfm_dir, image_dir, database, single_camera=False)
+        colmap_path, sfm_dir, image_dir, database, single_camera)
     image_ids = get_image_ids(database)
     import_features(image_ids, database, features)
     import_matches(image_ids, database, pairs, matches,
-                   min_match_score=None, skip_geometric_verification=False)
+                   min_match_score, skip_geometric_verification)
     if not skip_geometric_verification:
         geometric_verification(colmap_path, database, pairs)
     stats = run_reconstruction(
-        colmap_path, models, database, image_dir, min_num_matches=None)
+        colmap_path, models, database, image_dir, min_num_matches)
     stats['num_input_images'] = len(image_ids)
     logging.info(f'Statistics:\n{pprint.pformat(stats)}')
 

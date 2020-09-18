@@ -186,7 +186,7 @@ def main(sfm_dir, reference_sfm_model, image_dir, pairs, features, matches,
     image_ids = create_db_from_model(empty_model, database)
     import_features(image_ids, database, features)
     import_matches(image_ids, database, pairs, matches,
-                   min_match_score=None, skip_geometric_verification=False)
+                   min_match_score, skip_geometric_verification)
     if not skip_geometric_verification:
         geometric_verification(colmap_path, database, pairs)
     stats = run_triangulation(

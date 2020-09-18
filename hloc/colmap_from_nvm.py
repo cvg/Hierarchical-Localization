@@ -174,7 +174,7 @@ def main(nvm, intrinsics, database, output, skip_points=False):
         nvm, intrinsics, image_ids, camera_ids, skip_points=skip_points)
 
     logging.info('Writing the COLMAP model...')
-    output.mkdir(exist_ok=True)
+    output.mkdir(exist_ok=True, parents=True)
     write_model(*model, path=str(output), ext='.bin')
     logging.info('Done.')
 
