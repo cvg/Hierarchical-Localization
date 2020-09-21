@@ -28,7 +28,7 @@ We then relocalize a given sequence:
 python3 pipelines/4Seasons/localize.py --sequence [training|validation|test0|test1]
 ```
 
-The final submission files can be found in `outputs/4Seasons/submission_hloc+superglue/`.
+The final submission files can be found in `outputs/4Seasons/submission_hloc+superglue/`. The script will also evaluate these results if the training or validation sequences are selected.
 
 ## Results
 

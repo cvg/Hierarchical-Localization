@@ -66,7 +66,7 @@ mfile = match_features.main(mconf, loc_pairs, fconf['output'], output_dir)
 localize_sfm.main(
     ref_sfm / 'model', query_list, loc_pairs, ffile, mfile, results_path)
 
-# Comvert the absolute poses to relative poses with the reference frames.
+# Convert the absolute poses to relative poses with the reference frames.
 submission_dir.mkdir(exist_ok=True)
 prepare_submission(results_path, reloc, ref_dir / 'poses.txt', submission_dir)
 
