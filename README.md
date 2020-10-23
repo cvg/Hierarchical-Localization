@@ -30,7 +30,7 @@ We also provide a Docker image that includes COLMAP and other dependencies:
 
 ```
 docker build -t hloc:latest .
-docker run -it -p 8888:8888 hloc:latest
+docker run -it --rm -p 8888:8888 hloc:latest # to run with GPU support, add this option: `--runtime=nvidia`
 jupyter notebook --ip 0.0.0.0 --port 8888 --no-browser --allow-root
 ```
 
