@@ -6,8 +6,8 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from .utils.parsers import parse_image_lists_with_intrinsics
-from .utils.read_write_model import read_images_binary, read_images_text
+from hloc.utils.parsers import parse_image_lists_with_intrinsics
+from hloc.utils.read_write_model import read_images_binary, read_images_text
 
 
 def main(descriptors, output, num_matched,

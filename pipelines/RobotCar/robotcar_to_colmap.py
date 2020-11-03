@@ -6,8 +6,8 @@ import numpy as np
 from pathlib import Path
 import logging
 
-from .utils.read_write_model import Camera, Image, Point3D, CAMERA_MODEL_IDS
-from .utils.read_write_model import write_model
+from hloc.utils.read_write_model import Camera, Image, Point3D, CAMERA_MODEL_IDS
+from hloc.utils.read_write_model import write_model
 
 
 def recover_database_images_and_ids(database_path):

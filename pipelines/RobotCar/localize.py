@@ -8,8 +8,8 @@ from tqdm import tqdm
 import pickle
 import pycolmap
 
-from .utils.read_write_model import read_model
-from .utils.parsers import (
+from hloc.utils.read_write_model import read_model
+from hloc.utils.parsers import (
     parse_image_lists_with_intrinsics, parse_retrieval, names_to_pair)
 
 

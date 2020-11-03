@@ -3,7 +3,7 @@ import argparse
 from tqdm import tqdm
 
 
-def main(dataset, sequence, outputs):
+def generate(dataset, sequence, outputs):
     h, w = 1024, 1024
     images_dir = dataset / 'images/'
     query_list_name = '{}_queries_with_intrinsics.txt'
@@ -28,10 +28,17 @@ def main(dataset, sequence, outputs):
     query_file.close()
 
 
+def main(dataset, outputs):
+    sequences = [p.name for p in (dataset/'images').iterdir() if p.is_dir()]
+    for seq in sequences:
+        if seq == 'overcast-reference':
+            continue
+        generate(dataset, seq, outputs)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=Path, required=True)
-    parser.add_argument('--sequence', type=str, required=True)
     parser.add_argument('--outputs', type=str, required=True)
     args = parser.parse_args()
     main(**args.__dict__)
