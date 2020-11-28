@@ -172,7 +172,6 @@ def main(sfm_dir, empty_sfm_model, image_dir, pairs, features, matches,
     if not skip_geometric_verification:
         geometric_verification(colmap_path, database, pairs)
 
-    print((colmap_path, model, database, image_dir, empty_sfm_model))
     stats = run_triangulation(
         colmap_path, model, database, image_dir, empty_sfm_model)
     logging.info(f'Statistics:\n{pprint.pformat(stats)}')
