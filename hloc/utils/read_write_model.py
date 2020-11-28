@@ -36,6 +36,7 @@ import numpy as np
 import struct
 import argparse
 
+
 CameraModel = collections.namedtuple(
     "CameraModel", ["model_id", "model_name", "num_params"])
 Camera = collections.namedtuple(
