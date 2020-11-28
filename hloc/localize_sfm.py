@@ -7,6 +7,7 @@ import h5py
 from tqdm import tqdm
 import pickle
 import pycolmap
+import platform
 
 from .utils.read_write_model import read_model
 from .utils.parsers import (
@@ -47,7 +48,10 @@ def do_covisibility_clustering(frame_ids, all_images, points3D):
 
 def pose_from_cluster(qname, qinfo, db_ids, db_images, points3D,
                       feature_file, match_file, thresh):
-    kpq = feature_file[qname]['keypoints'].__array__()
+    if platform.system() == 'Windows':
+        kpq = feature_file[qname.replace('/', '\\')]['keypoints'].__array__()
+    else:
+        kpq = feature_file[qname]['keypoints'].__array__()
     kp_idx_to_3D = defaultdict(list)
     kp_idx_to_3D_to_db = defaultdict(lambda: defaultdict(list))
     num_matches = 0
@@ -55,7 +59,6 @@ def pose_from_cluster(qname, qinfo, db_ids, db_images, points3D,
     for i, db_id in enumerate(db_ids):
         db_name = db_images[db_id].name
         points3D_ids = db_images[db_id].point3D_ids
-
         pair = names_to_pair(qname, db_name)
         matches = match_file[pair]['matches0'].__array__()
         valid = np.where(matches > -1)[0]

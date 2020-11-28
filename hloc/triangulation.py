@@ -6,6 +6,7 @@ import h5py
 import numpy as np
 import subprocess
 import pprint
+import platform
 
 from .utils.read_write_model import (
         read_cameras_binary, read_images_binary, CAMERA_MODEL_NAMES)
@@ -43,6 +44,8 @@ def import_features(image_ids, database_path, features_path):
     db = COLMAPDatabase.connect(database_path)
 
     for image_name, image_id in tqdm(image_ids.items()):
+        if platform.system() == 'Windows':
+            image_name = image_name.replace('/', '\\')
         keypoints = hfile[image_name]['keypoints'].__array__()
         keypoints += 0.5  # COLMAP origin
         db.add_keypoints(image_id, keypoints)
@@ -128,7 +131,7 @@ def run_triangulation(colmap_path, model_path, database_path, image_dir,
         exit(ret)
 
     stats_raw = subprocess.check_output(
-        [str(colmap_path), 'model_analyzer', '--path', model_path])
+        [str(colmap_path), 'model_analyzer', '--path', str(model_path)])
     stats_raw = stats_raw.decode().split("\n")
     stats = dict()
     for stat in stats_raw:
@@ -168,6 +171,8 @@ def main(sfm_dir, empty_sfm_model, image_dir, pairs, features, matches,
                    min_match_score, skip_geometric_verification)
     if not skip_geometric_verification:
         geometric_verification(colmap_path, database, pairs)
+
+    print((colmap_path, model, database, image_dir, empty_sfm_model))
     stats = run_triangulation(
         colmap_path, model, database, image_dir, empty_sfm_model)
     logging.info(f'Statistics:\n{pprint.pformat(stats)}')

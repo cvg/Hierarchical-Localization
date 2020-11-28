@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 import pprint
-
+import platform
 from . import extractors
 from .utils.base_model import dynamic_load
 from .utils.tools import map_tensor
@@ -66,6 +66,12 @@ class ImageDataset(torch.utils.data.Dataset):
         'grayscale': False,
         'resize_max': None,
     }
+    if platform.system() =='Windows':
+        default_conf = {
+            'globs': ['*.jpg', '*.png', '*.jpeg'],
+            'grayscale': False,
+            'resize_max': None,
+        }
 
     def __init__(self, root, conf):
         self.conf = conf = SimpleNamespace(**{**self.default_conf, **conf})
