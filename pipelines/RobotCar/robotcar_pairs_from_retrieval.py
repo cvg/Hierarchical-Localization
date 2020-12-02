@@ -9,7 +9,6 @@ from tqdm import tqdm
 from hloc.utils.parsers import parse_image_lists_with_intrinsics
 from hloc.utils.read_write_model import read_images_binary, read_images_text
 
-
 def main(descriptors, output, num_matched,
          query_prefix=None, query_list=None,
          db_prefix=None, db_list=None, db_model=None,
@@ -22,6 +21,7 @@ def main(descriptors, output, num_matched,
         lambda _, obj: h5_names.append(obj.parent.name.strip('/'))
         if isinstance(obj, h5py.Dataset) else None)
     h5_names = list(set(h5_names))
+    print(len(h5_names))
 
     if db_prefix:
         if not isinstance(db_prefix, str):
@@ -81,7 +81,7 @@ def main(descriptors, output, num_matched,
         mask &= same_cameras
     if per_location:
         logging.info('Extracting location information.')
-        root = Path('datasets/robotcar/3D-models/individual/')
+        root = Path(db_model / 'individual/')
         db_locations = {n: -1 for n in db_names}
         query_locations = {n: -1 for n in query_names}
         for i in tqdm(range(1, 50)):
@@ -133,4 +133,5 @@ if __name__ == "__main__":
     parser.add_argument('--per_camera', action='store_true')
     parser.add_argument('--per_location', action='store_true')
     args = parser.parse_args()
+    print(args)
     main(**args.__dict__)

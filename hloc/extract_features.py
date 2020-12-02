@@ -14,6 +14,17 @@ from .utils.base_model import dynamic_load
 from .utils.tools import map_tensor
 
 
+import torch.utils.data
+from PIL import Image
+
+import torchvision
+normalize = torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                 std=[0.229, 0.224, 0.225])
+transform = torchvision.transforms.Compose([
+                                       torchvision.transforms.ToTensor(),
+                                       normalize])
+
+
 '''
 A set of standard configurations that can be directly selected from the command
 line using their name. Each is a dictionary with the following entries:
@@ -72,6 +83,17 @@ confs = {
             'resize_max': 1600,
         },
     },
+    'dirnet': {
+        'output': 'feats-dirnet-2048d-robotcar',
+        'model': {
+            'name': 'dirnet',
+        },
+        'preprocessing': {
+            'grayscale': False,
+            'global_desc': True,
+
+        },
+    },
 }
 
 
@@ -79,6 +101,7 @@ class ImageDataset(torch.utils.data.Dataset):
     default_conf = {
         'globs': ['*.jpg', '*.png', '*.jpeg', '*.JPG', '*.PNG'],
         'grayscale': False,
+        'global_desc': False,
         'resize_max': None,
         'resize_force': False,
     }
@@ -97,31 +120,40 @@ class ImageDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         path = self.paths[idx]
-        if self.conf.grayscale:
-            mode = cv2.IMREAD_GRAYSCALE
-        else:
-            mode = cv2.IMREAD_COLOR
-        image = cv2.imread(str(self.root / path), mode)
-        if not self.conf.grayscale:
-            image = image[:, :, ::-1]  # BGR to RGB
-        if image is None:
-            raise ValueError(f'Cannot read image {str(path)}.')
-        image = image.astype(np.float32)
-        size = image.shape[:2][::-1]
-        w, h = size
+        if self.conf.global_desc:
+            image = np.asarray(Image.open(str(self.root / path)).convert('RGB'))
+            size = image.shape[:2][::-1]
+            if self.conf.grayscale:
+                image = image[None]
+            else:
+                image = image
+            image = transform(image)
 
-        if self.conf.resize_max and (self.conf.resize_force
-                                     or max(w, h) > self.conf.resize_max):
-            scale = self.conf.resize_max / max(h, w)
-            h_new, w_new = int(round(h*scale)), int(round(w*scale))
-            image = cv2.resize(
-                image, (w_new, h_new), interpolation=cv2.INTER_LINEAR)
-
-        if self.conf.grayscale:
-            image = image[None]
         else:
-            image = image.transpose((2, 0, 1))  # HxWxC to CxHxW
-        image = image / 255.
+            if self.conf.grayscale:
+                mode = cv2.IMREAD_GRAYSCALE
+            else:
+                mode = cv2.IMREAD_COLOR
+            image = cv2.imread(str(self.root / path), mode)
+            if not self.conf.grayscale:
+                image = image[:, :, ::-1]  # BGR to RGB
+            if image is None:
+                raise ValueError(f'Cannot read image {str(path)}.')
+            image = image.astype(np.float32)
+            size = image.shape[:2][::-1]
+            w, h = size
+
+            if self.conf.resize_max and (self.conf.resize_force
+                                         or max(w, h) > self.conf.resize_max):
+                scale = self.conf.resize_max / max(h, w)
+                h_new, w_new = int(round(h*scale)), int(round(w*scale))
+                image = cv2.resize(
+                    image, (w_new, h_new), interpolation=cv2.INTER_LINEAR)
+            if self.conf.grayscale:
+                image = image[None]
+            else:
+                image = image.transpose((2, 0, 1))  # HxWxC to CxHxW
+            image = image / 255.
 
         data = {
             'name': str(path),
@@ -142,37 +174,42 @@ def main(conf, image_dir, export_dir, as_half=False):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     Model = dynamic_load(extractors, conf['model']['name'])
     model = Model(conf['model']).eval().to(device)
-
+    #print(model)
     loader = ImageDataset(image_dir, conf['preprocessing'])
     loader = torch.utils.data.DataLoader(loader, num_workers=1)
 
     feature_path = Path(export_dir, conf['output']+'.h5')
     feature_path.parent.mkdir(exist_ok=True, parents=True)
     feature_file = h5py.File(str(feature_path), 'a')
+    print('feature_file', feature_file)
 
     for data in tqdm(loader):
+
         if data['name'][0] in feature_file:
             continue
 
-        pred = model(map_tensor(data, lambda x: x.to(device)))
-        pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
+        if conf['model']['name'] == 'dirnet':
+            if hasattr(model, 'eval'):
+                model.eval()
+            pred = model(data['image'])
+            pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
+        else:
+            pred = model(map_tensor(data, lambda x: x.to(device)))
+            pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
+            pred['image_size'] = original_size = data['original_size'][0].numpy()
+            if 'keypoints' in pred:
+                size = np.array(data['image'].shape[-2:][::-1])
+                scales = (original_size / size).astype(np.float32)
+                pred['keypoints'] = (pred['keypoints'] + .5) * scales[None] - .5
 
-        pred['image_size'] = original_size = data['original_size'][0].numpy()
-        if 'keypoints' in pred:
-            size = np.array(data['image'].shape[-2:][::-1])
-            scales = (original_size / size).astype(np.float32)
-            pred['keypoints'] = (pred['keypoints'] + .5) * scales[None] - .5
-
-        if as_half:
-            for k in pred:
-                dt = pred[k].dtype
-                if (dt == np.float32) and (dt != np.float16):
-                    pred[k] = pred[k].astype(np.float16)
-
+            if as_half:
+                for k in pred:
+                    dt = pred[k].dtype
+                    if (dt == np.float32) and (dt != np.float16):
+                        pred[k] = pred[k].astype(np.float16)
         grp = feature_file.create_group(data['name'][0])
         for k, v in pred.items():
             grp.create_dataset(k, data=v)
-
         del pred
 
     feature_file.close()
@@ -190,3 +227,4 @@ if __name__ == '__main__':
     parser.add_argument('--as_half', action='store_true')
     args = parser.parse_args()
     main(confs[args.conf], args.image_dir, args.export_dir, args.as_half)
+
