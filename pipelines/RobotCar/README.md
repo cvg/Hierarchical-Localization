@@ -2,7 +2,31 @@
 
 This is a pre-release of scripts that run hloc on the RobotCar Seasons dataset. Multi-camera localization will follow later.
 
-## Commands
+
+## For image retrieval with DIR
+
+Feature extraction with [deep-image-retrieval](https://github.com/naver/deep-image-retrieval)
+
+```bash
+python -m hloc.extract_features --image_dir $ROBOTCAR/images/ --export_dir outputs/ --conf 'dirnet'
+```
+
+Pairs from image retrieval
+
+```bash
+python robotcar_pairs_from_retrieval.py \
+    --descriptors outputs/feats-dirnet-2048d-robotcar.h5 \
+    --output pairs/pairs-from-retrieval-dirnet20-percam-perloc.txt \
+    --num_matched 20 \
+    --query_list outputs/queries_with_intrinsics.txt \
+    --db_prefix overcast-reference \
+    --db_model $ROBOTCAR/3D-models \
+    --per_camera \
+    --per_location
+```
+
+## Commands for localization with covisivility
+
 ```bash
 ROBOTCAR=/path/to/dataset
 
