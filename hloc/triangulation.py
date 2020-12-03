@@ -6,7 +6,6 @@ import h5py
 import numpy as np
 import subprocess
 import pprint
-import platform
 
 from .utils.read_write_model import (
         read_cameras_binary, read_images_binary, CAMERA_MODEL_NAMES)
@@ -44,8 +43,6 @@ def import_features(image_ids, database_path, features_path):
     db = COLMAPDatabase.connect(database_path)
 
     for image_name, image_id in tqdm(image_ids.items()):
-        if platform.system() == 'Windows':
-            image_name = image_name.replace('/', '\\')
         keypoints = hfile[image_name]['keypoints'].__array__()
         keypoints += 0.5  # COLMAP origin
         db.add_keypoints(image_id, keypoints)

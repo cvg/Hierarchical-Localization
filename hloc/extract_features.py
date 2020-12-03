@@ -8,11 +8,9 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 import pprint
-import platform
 from . import extractors
 from .utils.base_model import dynamic_load
 from .utils.tools import map_tensor
-
 
 '''
 A set of standard configurations that can be directly selected from the command
@@ -66,12 +64,6 @@ class ImageDataset(torch.utils.data.Dataset):
         'grayscale': False,
         'resize_max': None,
     }
-    if platform.system() =='Windows':
-        default_conf = {
-            'globs': ['*.jpg', '*.png', '*.jpeg'],
-            'grayscale': False,
-            'resize_max': None,
-        }
 
     def __init__(self, root, conf):
         self.conf = conf = SimpleNamespace(**{**self.default_conf, **conf})
@@ -82,6 +74,7 @@ class ImageDataset(torch.utils.data.Dataset):
             self.paths += list(Path(root).glob('**/'+g))
         if len(self.paths) == 0:
             raise ValueError(f'Could not find any image in root: {root}.')
+        self.paths = sorted(list(set(self.paths)))
         self.paths = [i.relative_to(root) for i in self.paths]
         logging.info(f'Found {len(self.paths)} images in root {root}.')
 
@@ -113,7 +106,7 @@ class ImageDataset(torch.utils.data.Dataset):
         image = image / 255.
 
         data = {
-            'name': str(path),
+            'name': path.as_posix(),
             'image': image,
             'original_size': np.array(size),
         }
