@@ -7,6 +7,7 @@ import h5py
 from tqdm import tqdm
 import pickle
 import pycolmap
+
 from .utils.read_write_model import read_model
 from .utils.parsers import (
     parse_image_lists_with_intrinsics, parse_retrieval, names_to_pair)
@@ -54,6 +55,7 @@ def pose_from_cluster(qname, qinfo, db_ids, db_images, points3D,
     for i, db_id in enumerate(db_ids):
         db_name = db_images[db_id].name
         points3D_ids = db_images[db_id].point3D_ids
+
         pair = names_to_pair(qname, db_name)
         matches = match_file[pair]['matches0'].__array__()
         valid = np.where(matches > -1)[0]

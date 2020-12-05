@@ -5,6 +5,7 @@ import h5py
 import logging
 from tqdm import tqdm
 import pprint
+
 from . import matchers
 from .utils.base_model import dynamic_load
 from .utils.parsers import names_to_pair
@@ -85,7 +86,6 @@ def main(conf, pairs, features, export_dir, exhaustive=False):
             continue
 
         data = {}
-
         feats0, feats1 = feature_file[name0], feature_file[name1]
         for k in feats1.keys():
             data[k+'0'] = feats0[k].__array__()

@@ -8,9 +8,11 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 import pprint
+
 from . import extractors
 from .utils.base_model import dynamic_load
 from .utils.tools import map_tensor
+
 
 '''
 A set of standard configurations that can be directly selected from the command
