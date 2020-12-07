@@ -128,7 +128,7 @@ def run_triangulation(colmap_path, model_path, database_path, image_dir,
         exit(ret)
 
     stats_raw = subprocess.check_output(
-        [str(colmap_path), 'model_analyzer', '--path', model_path])
+        [str(colmap_path), 'model_analyzer', '--path', str(model_path)])
     stats_raw = stats_raw.decode().split("\n")
     stats = dict()
     for stat in stats_raw:
