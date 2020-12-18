@@ -9,15 +9,17 @@ import os
 
 from ..utils.base_model import BaseModel
 
-dirnet_path = Path(__file__).parent / '../../third_party/deep-image-retrieval'
+dir_path = Path(__file__).parent / '../../third_party/deep-image-retrieval'
 
-sys.path.append(str(dirnet_path))
+sys.path.append(str(dir_path))
 
 from dirtorch import nets as nets
 from dirtorch.utils import common
 
+# This doesn't work directly, need to comment lines 17, 19, and 20 from `dirtorch/extract_features.py`
+#from dirtorch.extract_features import load_model
 
-def load_model(path, iscuda):
+def load_model(path, iscuda=True):
     checkpoint = common.load_checkpoint(path, iscuda)
     net = nets.create_model(pretrained="", **checkpoint['model_options'])
     net = common.switch_model_to_cuda(net, iscuda, checkpoint)
@@ -27,27 +29,29 @@ def load_model(path, iscuda):
         net.pca = checkpoint.get('pca')
     return net
 
-
-class DIRnet(BaseModel):
+class DIR(BaseModel):
     default_conf = {
-        'model_name': 'Resnet-101-AP-GeM.pt',
-        'checkpoint': dirnet_path / 'dirtorch/data/Resnet-101-AP-GeM.pt',
+        'model_name': 'Resnet-101-AP-GeM',
+        'checkpoint': dir_path / 'dirtorch/data',
         'whiten': 'Landmarks_clean',
         'whitenp': 0.25,
         'whitenv': None,
         'whitenm': 1.0,
         'pooling': 'gem',
         'gemp': 3,
-        'use_gpu': True,
     }
     required_inputs = ['image']
 
     def _init(self, conf):
-        model_file = dirnet_path / 'dirtorch/data' / conf['model_name']
+        dir_models = {
+            'Resnet-101-AP-GeM': 'https://docs.google.com/uc?export=download&id=1UWJGDuHtzaQdFhSMojoYVQjmCXhIwVvy',
+        }
+
+        model_file = dir_path / 'dirtorch/data' / str(conf['model_name']+'.pt')
 
         if not model_file.exists():
             model_file.parent.mkdir(exist_ok=True)
-            cmd = ['wget', '--no-check-certificate', '-r', 'https://docs.google.com/uc?export=download&id=1UWJGDuHtzaQdFhSMojoYVQjmCXhIwVvy',
+            cmd = ['wget', '--no-check-certificate', '-r', dir_models[conf['model_name']],
                    '-O', str(model_file)+'.zip']
             ret = subprocess.call(cmd)
             zf = ZipFile(str(model_file)+'.zip', 'r')
@@ -56,10 +60,10 @@ class DIRnet(BaseModel):
             os.remove(str(model_file)+'.zip')
             if ret != 0:
                 logging.warning(
-                    f'Cannot download the DIRnet model with `{cmd}`.')
+                    f'Cannot download the DIR model with `{cmd}`.')
                 exit(ret)
 
-        self.net = load_model(conf['checkpoint'], iscuda=conf['use_gpu'])
+        self.net = load_model(conf['checkpoint'] / str(conf['model_name']+'.pt'))
 
         if conf['whiten']:
             self.net.pca = self.net.pca[conf['whiten']]
@@ -67,8 +71,7 @@ class DIRnet(BaseModel):
             self.net.pca = None
 
     def _forward(self, data):
-        imgs = data
-        desc = self.net(imgs)
+        desc = self.net(data)
         return {
             'global_descriptor': desc[None],
         }

@@ -21,7 +21,6 @@ def main(descriptors, output, num_matched,
         lambda _, obj: h5_names.append(obj.parent.name.strip('/'))
         if isinstance(obj, h5py.Dataset) else None)
     h5_names = list(set(h5_names))
-    print(len(h5_names))
 
     if db_prefix:
         if not isinstance(db_prefix, str):
@@ -133,5 +132,4 @@ if __name__ == "__main__":
     parser.add_argument('--per_camera', action='store_true')
     parser.add_argument('--per_location', action='store_true')
     args = parser.parse_args()
-    print(args)
     main(**args.__dict__)

@@ -10,7 +10,7 @@ Feature extraction with [deep-image-retrieval](https://github.com/naver/deep-ima
 ```bash
 ROBOTCAR=/path/to/dataset
 
-python -m hloc.extract_features --image_dir $ROBOTCAR/images/ --export_dir outputs/ --conf 'dirnet'
+python -m hloc.extract_features --image_dir $ROBOTCAR/images/ --export_dir outputs/ --conf 'dir'
 ```
 
 Pairs from image retrieval

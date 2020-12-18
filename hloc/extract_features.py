@@ -24,7 +24,6 @@ transform = torchvision.transforms.Compose([
                                        torchvision.transforms.ToTensor(),
                                        normalize])
 
-
 '''
 A set of standard configurations that can be directly selected from the command
 line using their name. Each is a dictionary with the following entries:
@@ -83,15 +82,14 @@ confs = {
             'resize_max': 1600,
         },
     },
-    'dirnet': {
-        'output': 'feats-dirnet-2048d-robotcar',
+    'dir': {
+        'output': 'feats-dir-2048d',
         'model': {
-            'name': 'dirnet',
+            'name': 'dir',
         },
         'preprocessing': {
             'grayscale': False,
-            'global_desc': True,
-
+            'global_descriptor': True,
         },
     },
 }
@@ -101,7 +99,6 @@ class ImageDataset(torch.utils.data.Dataset):
     default_conf = {
         'globs': ['*.jpg', '*.png', '*.jpeg', '*.JPG', '*.PNG'],
         'grayscale': False,
-        'global_desc': False,
         'resize_max': None,
         'resize_force': False,
     }
@@ -109,8 +106,8 @@ class ImageDataset(torch.utils.data.Dataset):
     def __init__(self, root, conf):
         self.conf = conf = SimpleNamespace(**{**self.default_conf, **conf})
         self.root = root
-
         self.paths = []
+
         for g in conf.globs:
             self.paths += list(Path(root).glob('**/'+g))
         if len(self.paths) == 0:
@@ -120,7 +117,8 @@ class ImageDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         path = self.paths[idx]
-        if self.conf.global_desc:
+
+        if self.conf.global_descriptor:
             image = np.asarray(Image.open(str(self.root / path)).convert('RGB'))
             size = image.shape[:2][::-1]
             if self.conf.grayscale:
@@ -174,9 +172,8 @@ def main(conf, image_dir, export_dir, as_half=False):
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     Model = dynamic_load(extractors, conf['model']['name'])
     model = Model(conf['model']).eval().to(device)
-    #print(model)
     loader = ImageDataset(image_dir, conf['preprocessing'])
-    loader = torch.utils.data.DataLoader(loader, num_workers=1)
+    loader = torch.utils.data.DataLoader(loader)
 
     feature_path = Path(export_dir, conf['output']+'.h5')
     feature_path.parent.mkdir(exist_ok=True, parents=True)
@@ -184,29 +181,25 @@ def main(conf, image_dir, export_dir, as_half=False):
     print('feature_file', feature_file)
 
     for data in tqdm(loader):
-
         if data['name'][0] in feature_file:
             continue
 
-        if conf['model']['name'] == 'dirnet':
-            if hasattr(model, 'eval'):
-                model.eval()
+        if conf['model']['name'] == 'dir':
             pred = model(data['image'])
-            pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
         else:
             pred = model(map_tensor(data, lambda x: x.to(device)))
-            pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
-            pred['image_size'] = original_size = data['original_size'][0].numpy()
-            if 'keypoints' in pred:
-                size = np.array(data['image'].shape[-2:][::-1])
-                scales = (original_size / size).astype(np.float32)
-                pred['keypoints'] = (pred['keypoints'] + .5) * scales[None] - .5
+        pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
+        pred['image_size'] = original_size = data['original_size'][0].numpy()
+        if 'keypoints' in pred:
+            size = np.array(data['image'].shape[-2:][::-1])
+            scales = (original_size / size).astype(np.float32)
+            pred['keypoints'] = (pred['keypoints'] + .5) * scales[None] - .5
 
-            if as_half:
-                for k in pred:
-                    dt = pred[k].dtype
-                    if (dt == np.float32) and (dt != np.float16):
-                        pred[k] = pred[k].astype(np.float16)
+        if as_half:
+            for k in pred:
+                dt = pred[k].dtype
+                if (dt == np.float32) and (dt != np.float16):
+                    pred[k] = pred[k].astype(np.float16)
         grp = feature_file.create_group(data['name'][0])
         for k, v in pred.items():
             grp.create_dataset(k, data=v)
