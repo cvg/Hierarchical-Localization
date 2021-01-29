@@ -9,10 +9,11 @@ from tqdm import tqdm
 from hloc.utils.parsers import parse_image_lists_with_intrinsics
 from hloc.utils.read_write_model import read_images_binary, read_images_text
 
+
 def main(descriptors, output, num_matched,
          query_prefix=None, query_list=None,
          db_prefix=None, db_list=None, db_model=None,
-         per_camera=False, per_location=False):
+         per_camera=False, location_dir=None):
     logging.info('Extracting image pairs from a retrieval database.')
     hfile = h5py.File(str(descriptors), 'r')
 
@@ -78,18 +79,21 @@ def main(descriptors, output, num_matched,
         db_cameras = get_cameras(db_names)
         same_cameras = query_cameras[:, None] == db_cameras[None, :]
         mask &= same_cameras
-    if per_location:
+    if location_dir is not None:
         logging.info('Extracting location information.')
-        root = Path(db_model / 'individual/')
         db_locations = {n: -1 for n in db_names}
         query_locations = {n: -1 for n in query_names}
         for i in tqdm(range(1, 50)):
-            images = read_images_text(root / f'colmap_reconstructions/{i:0>3}_aligned/images.txt')
+            images = read_images_text(
+                location_dir
+                / f'colmap_reconstructions/{i:0>3}_aligned/images.txt')
             for im in images.values():
                 name = im.name.replace('png', 'jpg')
                 assert name in db_names, (name, db_names[:10])
                 db_locations[name] = i
-            with open(root / f'queries_per_location/queries_location_{i:0>3}.txt', 'r') as f:
+            qlist_path = (location_dir /
+                          f'queries_per_location/queries_location_{i:0>3}.txt')
+            with open(qlist_path, 'r') as f:
                 for name in f.readlines():
                     name = name.rstrip()
                     assert name in query_names, (name, query_names[:10])
@@ -130,6 +134,6 @@ if __name__ == "__main__":
     parser.add_argument('--db_list', type=Path)
     parser.add_argument('--db_model', type=Path)
     parser.add_argument('--per_camera', action='store_true')
-    parser.add_argument('--per_location', action='store_true')
+    parser.add_argument('--location_dir', type=Path)
     args = parser.parse_args()
     main(**args.__dict__)

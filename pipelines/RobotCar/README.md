@@ -26,7 +26,7 @@ python robotcar_pairs_from_retrieval.py \
     --db_prefix overcast-reference \
     --db_model $ROBOTCAR/3D-models \
     --per_camera \
-    --per_location
+    --location_dir $ROBOTCAR/3D-models/individual/
 ```
 
 ## Commands for localization with covisivility

@@ -39,8 +39,6 @@ def main(dataset, outputs):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=Path, required=True)
-    #parser.add_argument('--outputs', type=str, required=True)
-    # need to move '{}_queries_with_intrinsics.txt' from dataset_folder to outputs/
     parser.add_argument('--outputs', type=Path, required=True)
     args = parser.parse_args()
     main(**args.__dict__)
