@@ -72,15 +72,6 @@ confs = {
             'resize_max': 1600,
         },
     },
-    'dir': {
-        'output': 'global-feats-dir',
-        'model': {
-            'name': 'dir',
-        },
-        'preprocessing': {
-            'resize_max': None,
-        },
-    },
 }
 
 
