@@ -27,7 +27,7 @@ class R2D2(BaseModel):
         'reliability-thr': 0.7,
         'repetability-thr': 0.7,
     }
-    required_data_keys = ['image']
+    required_inputs = ['image']
 
     def _init(self, conf):
         model_fn = r2d2_path / "models" / conf['checkpoint_name']
