@@ -5,6 +5,9 @@
 	path = third_party/SuperGluePretrainedNetwork
 	url = https://github.com/skydes/SuperGluePretrainedNetwork.git
 	branch = fix-memory
+[submodule "third_party/deep-image-retrieval"]
+	path = third_party/deep-image-retrieval
+	url = https://github.com/naver/deep-image-retrieval.git
 [submodule "third_party/disk"]
 	path = third_party/disk
 	url = https://github.com/cvlab-epfl/disk.git
