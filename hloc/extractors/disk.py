@@ -61,9 +61,6 @@ class DISK(BaseModel):
 
         img = F.pad(img, (0, x_pad, 0, y_pad))
         assert img.shape[1] == new_h and img.shape[2] == new_w, "Wrong Padding!"
-        # print(orig_h, orig_w, new_h, new_w, img.shape)
-        # print(img[0, 0, :])
-        # print(img[0, :, 0])
 
         with torch.no_grad():
             try:
@@ -86,7 +83,6 @@ class DISK(BaseModel):
 
             kps_crop_space = features.kp.t()
 
-            # TODO: start from here!
             # we didn't rescale so no need for this
             # kps_img_space, mask = image.to_image_coord(kps_crop_space)
             kps_img_space = kps_crop_space # (2, N)
@@ -100,10 +96,6 @@ class DISK(BaseModel):
             scores      = features.kp_logp[mask]
 
             order = torch.argsort(-scores)
-            # order_gt = np.argsort(scores.cpu().numpy())[::-1]
-            # print(len(order))
-            # print(np.sum(order.cpu().numpy() == order_gt))
-            # assert np.all(order.cpu().numpy() == order_gt)
 
             keypoints   = keypoints[order]
             descriptors = descriptors[order]
