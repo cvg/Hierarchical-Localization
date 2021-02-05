@@ -22,7 +22,7 @@ class DISK(BaseModel):
         'desc-dim': 128, # descriptor dimension. Needs to match the checkpoint value
         'mode': 'nms', # Whether to extract features using the non-maxima suppresion mode or through training-time grid sampling technique
     }
-    required_data_keys = ['image']
+    required_inputs = ['image']
 
     def _init(self, conf):
         state_dict = torch.load(disk_path / conf['model_name'], map_location='cpu')
