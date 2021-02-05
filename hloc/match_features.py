@@ -38,7 +38,7 @@ confs = {
 
 
 @torch.no_grad()
-def main(conf, pairs, features, export_dir, exhaustive=False):
+def main(conf, pairs, features, export_dir, sequential_window=-1, exhaustive=False):
     logging.info('Matching local features with configuration:'
                  f'\n{pprint.pformat(conf)}')
 
@@ -47,10 +47,28 @@ def main(conf, pairs, features, export_dir, exhaustive=False):
     feature_file = h5py.File(str(feature_path), 'r')
 
     pairs_name = pairs.stem
-    if not exhaustive:
+    if not exhaustive and sequential_window <= 0:
         assert pairs.exists(), pairs
         with open(pairs, 'r') as f:
             pair_list = f.read().rstrip('\n').split('\n')
+    elif sequential_window > 0:
+        logging.info(f'Writing sequential match pairs (window size {sequential_window}) to {pairs}.')
+        # assert not pairs.exists(), pairs
+
+        # get the list of images from the feature file
+        images = []
+        feature_file.visititems(
+            lambda name, obj: images.append(obj.parent.name.strip('/'))
+            if isinstance(obj, h5py.Dataset) else None)
+        # assume the image should be ordered alphanumerically
+        images = sorted(list(set(images)))
+
+        pair_list = []
+        for i in range(len(images)):
+            for j in range(i+1, min(i+sequential_window+1, len(images))):
+                pair_list.append(' '.join((images[i], images[j])))
+        with open(str(pairs), 'w') as f:
+            f.write('\n'.join(pair_list))
     elif exhaustive:
         logging.info(f'Writing exhaustive match pairs to {pairs}.')
         assert not pairs.exists(), pairs
