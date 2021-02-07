@@ -5,6 +5,7 @@ import logging
 import torch
 from zipfile import ZipFile
 import os
+import sklearn
 
 from ..utils.base_model import BaseModel
 
@@ -12,9 +13,14 @@ dir_path = Path(__file__).parent / '../../third_party/deep-image-retrieval'
 sys.path.append(str(dir_path))
 os.environ['DB_ROOT'] = ''  # required by dirtorch
 
-from dirtorch import nets as nets
-from dirtorch.utils import common
-from dirtorch.extract_features import load_model
+from dirtorch.utils import common  # noqa: E402
+from dirtorch.extract_features import load_model  # noqa: E402
+
+# The DIR model checkpoints (pickle files) include sklearn.decomposition.pca,
+# which has been deprecated in sklearn v0.24
+# and must be explicitly imported with `from sklearn.decomposition import PCA`.
+# This is a hacky workaround to maintain forward compatibility.
+sys.modules['sklearn.decomposition.pca'] = sklearn.decomposition._pca
 
 
 class DIR(BaseModel):
@@ -70,7 +76,7 @@ class DIR(BaseModel):
         if self.conf['whiten_name']:
             pca = self.net.pca[self.conf['whiten_name']]
             desc = common.whiten_features(
-                    desc.cpu().numpy(), pca, self.conf['whiten_params'])
+                    desc.cpu().numpy(), pca, **self.conf['whiten_params'])
             desc = torch.from_numpy(desc)
 
         return {
