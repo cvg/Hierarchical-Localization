@@ -6,6 +6,7 @@ from ..utils.base_model import BaseModel
 
 r2d2_path = Path(__file__).parent / "../../third_party/r2d2"
 sys.path.append(str(r2d2_path))
+print(r2d2_path)
 from extract import load_network, NonMaxSuppression, extract_multiscale
 
 
@@ -39,13 +40,13 @@ class R2D2(BaseModel):
 
         xys, desc, scores = extract_multiscale(
             self.net, img, self.detector,
-            scale_f=self.conf['scale_f'],
+            scale_f=self.conf['scale_factor'],
             min_size=self.conf['min_size'],
             max_size=self.conf['max_size'],
             min_scale=self.conf['min_scale'],
             max_scale=self.conf['max_scale'],
         )
-        idxs = scores.argsort()[-self.conf['max_points'] or None:]
+        idxs = scores.argsort()[-self.conf['max_keypoints'] or None:]
         xy = xys[idxs, :2]
         desc = desc[idxs].t()
         scores = scores[idxs]
