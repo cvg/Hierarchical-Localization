@@ -31,15 +31,15 @@ class DISK(BaseModel):
             weights = state_dict['disk']
         else:
             raise KeyError('Incompatible weight file!')
-        self.model = _DISK(window=8, desc_dim=conf['desc-dim'])
+        self.model = _DISK(window=8, desc_dim=conf['desc_dim'])
         self.model.load_state_dict(weights)
         if conf['mode'] == 'nms':
             self.extract = partial(
                 self.model.features,
                 kind='nms',
-                window_size=conf['window'],
+                window_size=conf['nms_window_size'],
                 cutoff=0.,
-                n=conf['n']
+                n=conf['max_keypoints']
             )
         elif conf['mode'] == 'rng':
             self.extract = partial(self.model.features, kind='rng')
@@ -84,7 +84,7 @@ class DISK(BaseModel):
         descriptors = descriptors[order]
         scores = scores[order]
 
-        assert descriptors.shape[1] == self.conf['desc-dim']
+        assert descriptors.shape[1] == self.conf['desc_dim']
         assert keypoints.shape[1] == 2
 
         pred = {'keypoints': keypoints[None],
