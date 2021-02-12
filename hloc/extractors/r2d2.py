@@ -9,9 +9,6 @@ r2d2_path = Path(__file__).parent / "../../third_party/r2d2"
 sys.path.append(str(r2d2_path))
 from extract import load_network, NonMaxSuppression, extract_multiscale
 
-RGB_mean = torch.cuda.FloatTensor([0.485, 0.456, 0.406])
-RGB_std  = torch.cuda.FloatTensor([0.229, 0.224, 0.225])
-norm_RGB = tvf.Normalize(mean=RGB_mean, std=RGB_std)
 
 class R2D2(BaseModel):
     default_conf = {
@@ -31,13 +28,14 @@ class R2D2(BaseModel):
 
     def _init(self, conf):
         model_fn = r2d2_path / "models" / conf['checkpoint_name']
+        self.norm_rgb = tvf.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         self.net = load_network(model_fn)
         self.detector = NonMaxSuppression(rel_thr=conf['reliability-thr'], 
             rep_thr=conf['repetability-thr'])
         
     def _forward(self, data):
         img = data['image']
-        img = norm_RGB(img[0])[None]
+        img = self.norm_rgb(img[0])[None]
 
         xys, desc, scores = extract_multiscale(self.net, img, self.detector,
                 scale_f = self.conf['scale-f'],
