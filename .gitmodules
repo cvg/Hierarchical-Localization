@@ -5,3 +5,6 @@
 	path = third_party/SuperGluePretrainedNetwork
 	url = https://github.com/skydes/SuperGluePretrainedNetwork.git
 	branch = fix-memory
+[submodule "third_party/contextdesc"]
+	path = third_party/contextdesc
+	url = https://github.com/lzx551402/contextdesc.git

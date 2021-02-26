@@ -57,6 +57,16 @@ confs = {
             'resize_max': 1600,
         },
     },
+    'context-desc': {
+        'output': 'feats-context-desc',
+        'model': {
+            'name': 'contextdesc',
+        },
+        'preprocessing': {
+            'grayscale': True,
+            'resize_max': 1024,
+        },
+    },
 }
 
 
@@ -135,7 +145,10 @@ def main(conf, image_dir, export_dir, as_half=False):
     feature_file = h5py.File(str(feature_path), 'a')
 
     for data in tqdm(loader):
-        pred = model(map_tensor(data, lambda x: x.to(device)))
+        if 'context' in conf['model']['name']:
+            pred = model(data)
+        else:
+            pred = model(map_tensor(data, lambda x: x.to(device)))
         pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
 
         pred['image_size'] = original_size = data['original_size'][0].numpy()
@@ -158,7 +171,6 @@ def main(conf, image_dir, export_dir, as_half=False):
 
     feature_file.close()
     logging.info('Finished exporting features.')
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
