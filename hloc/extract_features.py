@@ -13,6 +13,8 @@ from . import extractors
 from .utils.base_model import dynamic_load
 from .utils.tools import map_tensor
 
+# https://stackoverflow.com/questions/54013846/pytorch-dataloader-stucked-if-using-opencv-resize-method
+cv2.setNumThreads(0)
 
 '''
 A set of standard configurations that can be directly selected from the command
