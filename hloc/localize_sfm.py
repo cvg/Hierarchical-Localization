@@ -59,6 +59,8 @@ def pose_from_cluster(qname, qinfo, db_ids, db_images, points3D,
         pair = names_to_pair(qname, db_name)
         matches = match_file[pair]['matches0'].__array__()
         valid = np.where(matches > -1)[0]
+        if points3D_ids.size == 0:
+            continue    # handles case where image does not see 3D points
         valid = valid[points3D_ids[matches[valid]] != -1]
         num_matches += len(valid)
 
