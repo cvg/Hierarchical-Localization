@@ -15,13 +15,14 @@ from lib.pyramid import process_multiscale
 class D2Net(BaseModel):
     default_conf = {
         'model_name': 'd2_tf.pth',
+        'checkpoint_dir': d2net_path / 'models',
         'use_relu': True,
         'multiscale': False,
     }
     required_inputs = ['image']
 
     def _init(self, conf):
-        model_file = d2net_path / 'models' / conf['model_name']
+        model_file = conf['checkpoint_dir'] / conf['model_name']
         if not model_file.exists():
             model_file.parent.mkdir(exist_ok=True)
             cmd = ['wget', 'https://dsmn.ml/files/d2-net/'+conf['model_name'],

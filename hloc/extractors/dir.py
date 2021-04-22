@@ -26,7 +26,7 @@ sys.modules['sklearn.decomposition.pca'] = sklearn.decomposition._pca
 class DIR(BaseModel):
     default_conf = {
         'model_name': 'Resnet-101-AP-GeM',
-        'checkpoint': dir_path / 'dirtorch/data',
+        'checkpoint_dir': dir_path / 'dirtorch/data',
         'whiten_name': 'Landmarks_clean',
         'whiten_params': {
             'whitenp': 0.25,
@@ -43,7 +43,7 @@ class DIR(BaseModel):
     }
 
     def _init(self, conf):
-        checkpoint = dir_path / 'dirtorch/data' / str(conf['model_name']+'.pt')
+        checkpoint = conf['checkpoint_dir'] / str(conf['model_name']+'.pt')
         if not checkpoint.exists():
             checkpoint.parent.mkdir(exist_ok=True)
             link = self.dir_models[conf['model_name']]
