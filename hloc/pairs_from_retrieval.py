@@ -4,8 +4,9 @@ from pathlib import Path
 import h5py
 import numpy as np
 import torch
+import collections.abc as collections
 
-from .utils.parsers import parse_image_lists_with_intrinsics
+from .utils.parsers import parse_image_lists
 from .utils.read_write_model import read_images_binary
 
 
@@ -21,32 +22,27 @@ def main(descriptors, output, num_matched,
         if isinstance(obj, h5py.Dataset) else None)
     h5_names = list(set(h5_names))
 
-    if db_prefix:
-        if not isinstance(db_prefix, str):
-            db_prefix = tuple(db_prefix)
-        db_names = [n for n in h5_names if n.startswith(db_prefix)]
-        assert len(db_names)
-    elif db_list:
-        db_names = [
-            n for n, _ in parse_image_lists_with_intrinsics(db_list)]
-    elif db_model:
+    def parse_names(prefix, list_):
+        if prefix:
+            if not isinstance(prefix, str):
+                prefix = tuple(prefix)
+            names = [n for n in h5_names if n.startswith(prefix)]
+            assert len(db_names)
+        elif list_ and isinstance(list_, (str, Path)):
+            names = parse_image_lists(list_)
+        elif list_ and isinstance(list_, collections.Iterable):
+            names = list(list_)
+        else:
+            raise ValueError('Provide either prefixes of names, a list of '
+                             'images, or a path to list file.')
+        return names
+
+    if db_model:
         images = read_images_binary(db_model / 'images.bin')
         db_names = [i.name for i in images.values()]
     else:
-        raise ValueError('Provide either prefixes of DB names, or path to '
-                         'lists of DB images, or path to a COLMAP model.')
-
-    if query_prefix:
-        if not isinstance(query_prefix, str):
-            query_prefix = tuple(query_prefix)
-        query_names = [n for n in h5_names if n.startswith(query_prefix)]
-        assert len(query_names)
-    elif query_list:
-        query_names = [
-            n for n, _ in parse_image_lists_with_intrinsics(query_list)]
-    else:
-        raise ValueError('Provide either prefixes of query names, or path to '
-                         'lists of query images.')
+        db_names = parse_names(db_prefix, db_list)
+    query_names = parse_names(query_prefix, query_list)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 

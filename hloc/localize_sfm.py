@@ -9,8 +9,7 @@ import pickle
 import pycolmap
 
 from .utils.read_write_model import read_model
-from .utils.parsers import (
-    parse_image_lists_with_intrinsics, parse_retrieval, names_to_pair)
+from .utils.parsers import parse_image_lists, parse_retrieval, names_to_pair
 
 
 def do_covisibility_clustering(frame_ids, all_images, points3D):
@@ -102,7 +101,7 @@ def main(reference_sfm, queries, retrieval, features, matches, results,
     assert features.exists(), features
     assert matches.exists(), matches
 
-    queries = parse_image_lists_with_intrinsics(queries)
+    queries = parse_image_lists(queries, with_intrinsics=True)
     retrieval_dict = parse_retrieval(retrieval)
 
     logging.info('Reading 3D model...')

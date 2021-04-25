@@ -8,10 +8,12 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 import pprint
+import collections.abc as collections
 
 from . import extractors
 from .utils.base_model import dynamic_load
 from .utils.tools import map_tensor
+from .utils.parsers import parse_image_lists
 
 
 '''
@@ -92,17 +94,30 @@ class ImageDataset(torch.utils.data.Dataset):
         'resize_force': False,
     }
 
-    def __init__(self, root, conf):
+    def __init__(self, root, conf, paths=None):
         self.conf = conf = SimpleNamespace(**{**self.default_conf, **conf})
         self.root = root
 
-        self.paths = []
-        for g in conf.globs:
-            self.paths += list(Path(root).glob('**/'+g))
-        if len(self.paths) == 0:
-            raise ValueError(f'Could not find any image in root: {root}.')
-        self.paths = [i.relative_to(root) for i in self.paths]
-        logging.info(f'Found {len(self.paths)} images in root {root}.')
+        if paths is None:
+            self.paths = []
+            for g in conf.globs:
+                self.paths += list(Path(root).glob('**/'+g))
+            if len(self.paths) == 0:
+                raise ValueError(f'Could not find any image in root: {root}.')
+            self.paths = [i.relative_to(root) for i in self.paths]
+            logging.info(f'Found {len(self.paths)} images in root {root}.')
+        else:
+            if isinstance(paths, (Path, str)):
+                self.paths = parse_image_lists(paths)
+            elif isinstance(paths, collections.Iterable):
+                self.paths = list(paths)
+            else:
+                raise ValueError(f'Unknown format for path argument {paths}.')
+
+            for path in self.paths:
+                if not (root / path).exists():
+                    raise ValueError(
+                        f'Image {path} does not exists in root: {root}.')
 
     def __getitem__(self, idx):
         path = self.paths[idx]
@@ -144,7 +159,7 @@ class ImageDataset(torch.utils.data.Dataset):
 
 
 @torch.no_grad()
-def main(conf, image_dir, export_dir, as_half=False):
+def main(conf, image_dir, export_dir, as_half=False, image_list=None):
     logging.info('Extracting local features with configuration:'
                  f'\n{pprint.pformat(conf)}')
 
@@ -152,7 +167,7 @@ def main(conf, image_dir, export_dir, as_half=False):
     Model = dynamic_load(extractors, conf['model']['name'])
     model = Model(conf['model']).eval().to(device)
 
-    loader = ImageDataset(image_dir, conf['preprocessing'])
+    loader = ImageDataset(image_dir, conf['preprocessing'], image_list)
     loader = torch.utils.data.DataLoader(loader, num_workers=1)
 
     feature_path = Path(export_dir, conf['output']+'.h5')
@@ -197,5 +212,6 @@ if __name__ == '__main__':
     parser.add_argument('--conf', type=str, default='superpoint_aachen',
                         choices=list(confs.keys()))
     parser.add_argument('--as_half', action='store_true')
+    parser.add_argument('--image_list', type=Path)
     args = parser.parse_args()
     main(confs[args.conf], args.image_dir, args.export_dir, args.as_half)
