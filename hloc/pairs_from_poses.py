@@ -22,8 +22,8 @@ def get_pairwise_distances(images):
     Rs = np.stack(Rs, 0)
     ts = np.stack(ts, 0)
 
-    ts = -(Rs @ ts[:, :, None])[:, :, 0]
     Rs = Rs.transpose(0, 2, 1)
+    ts = -(Rs @ ts[:, :, None])[:, :, 0]
 
     dist = scipy.spatial.distance.squareform(scipy.spatial.distance.pdist(ts))
     trace = np.einsum('nji,mji->mn', Rs, Rs, optimize=True)
