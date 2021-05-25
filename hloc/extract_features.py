@@ -104,6 +104,7 @@ class ImageDataset(torch.utils.data.Dataset):
                 self.paths += list(Path(root).glob('**/'+g))
             if len(self.paths) == 0:
                 raise ValueError(f'Could not find any image in root: {root}.')
+            self.paths = sorted(list(set(self.paths)))
             self.paths = [i.relative_to(root) for i in self.paths]
             logging.info(f'Found {len(self.paths)} images in root {root}.')
         else:
@@ -148,7 +149,7 @@ class ImageDataset(torch.utils.data.Dataset):
         image = image / 255.
 
         data = {
-            'name': str(path),
+            'name': path.as_posix(),
             'image': image,
             'original_size': np.array(size),
         }
