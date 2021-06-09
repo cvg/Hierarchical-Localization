@@ -44,6 +44,8 @@ class SIFT(BaseModel):
 
     def _forward(self, data):
         image = data['image']
+        assert image.shape[1] == 1
+        assert image.min() >= -EPS and image.max() <= 1 + EPS
 
         keypoints, scores, descriptors = self.extract(image[0, 0].cpu().numpy())
         keypoints = keypoints[:, : 2]  # Keep only x, y.
