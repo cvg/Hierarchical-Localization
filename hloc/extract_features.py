@@ -74,6 +74,16 @@ confs = {
             'resize_max': 1600,
         },
     },
+    'sift': {
+        'output': 'feats-sift',
+        'model': {
+            'name': 'sift'
+        },
+        'preprocessing': {
+            'grayscale': True,
+            'resize_max': 1600,
+        },
+    },
     'dir': {
         'output': 'global-feats-dir',
         'model': {
