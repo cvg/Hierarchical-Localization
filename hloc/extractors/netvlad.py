@@ -78,7 +78,8 @@ class NetVLAD(BaseModel):
 
         self.netvlad = NetVLADLayer()
 
-        self.whiten = nn.Linear(self.netvlad.output_dim, 4096) if conf['whiten'] else nn.Identity()
+        if conf['whiten']:
+            self.whiten = nn.Linear(self.netvlad.output_dim, 4096)
 
         # Parse MATLAB weights - based on https://github.com/uzh-rpg/netvlad_tf_open.
         mat = loadmat(checkpoint, struct_as_record=False, squeeze_me=True)
