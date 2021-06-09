@@ -83,6 +83,15 @@ confs = {
             'resize_max': None,
         },
     },
+    'netvlad': {
+        'output': 'global-feats-netvlad',
+        'model': {
+            'name': 'netvlad',
+        },
+        'preprocessing': {
+            'resize_max': None,
+        },
+    },
 }
 
 
