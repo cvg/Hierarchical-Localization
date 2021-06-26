@@ -91,7 +91,7 @@ confs = {
             'name': 'dir',
         },
         'preprocessing': {
-            'resize_max': None,
+            'resize_max': 1024,
         },
     },
     'netvlad': {
@@ -100,7 +100,7 @@ confs = {
             'name': 'netvlad',
         },
         'preprocessing': {
-            'resize_max': None,
+            'resize_max': 1024,
         },
     },
 }
@@ -143,7 +143,7 @@ class ImageDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         name = self.names[idx]
-        image = read_image(str(self.root / name), self.conf.grayscale)
+        image = read_image(self.root / name, self.conf.grayscale)
         image = image.astype(np.float32)
         size = image.shape[:2][::-1]
         w, h = size
