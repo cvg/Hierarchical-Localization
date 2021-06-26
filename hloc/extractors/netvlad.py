@@ -13,14 +13,14 @@ from ..utils.base_model import BaseModel
 
 netvlad_path = Path(__file__).parent / '../../third_party/netvlad'
 
-
 EPS = 1e-6
 
 
 class NetVLADLayer(nn.Module):
     def __init__(self, input_dim=512, K=64, score_bias=False, intranorm=True):
         super().__init__()
-        self.score_proj = nn.Conv1d(input_dim, K, kernel_size=1, bias=score_bias)
+        self.score_proj = nn.Conv1d(
+            input_dim, K, kernel_size=1, bias=score_bias)
         centers = nn.parameter.Parameter(torch.empty([input_dim, K]))
         nn.init.xavier_uniform_(centers)
         self.register_parameter('centers', centers)
@@ -49,7 +49,8 @@ class NetVLAD(BaseModel):
     }
     required_inputs = ['image']
 
-    # Models exported using https://github.com/uzh-rpg/netvlad_tf_open/blob/master/matlab/net_class2struct.m.
+    # Models exported using
+    # https://github.com/uzh-rpg/netvlad_tf_open/blob/master/matlab/net_class2struct.m.
     dir_models = {
         'VGG16-NetVLAD-Pitts30K': 'https://cvg-data.inf.ethz.ch/hloc/netvlad/Pitts30K_struct.mat',
         'VGG16-NetVLAD-TokyoTM': 'https://cvg-data.inf.ethz.ch/hloc/netvlad/TokyoTM_struct.mat'
@@ -67,57 +68,63 @@ class NetVLAD(BaseModel):
             logging.info(f'Downloading theNetVLAD model with `{cmd}`.')
             ret = subprocess.call(cmd)
             if ret != 0:
-                logging.warning(f'Cannot download the NetVLAD model with `{cmd}`.')
+                logging.warning('Cannot download the NetVLAD model.')
                 exit(ret)
 
         # Create the network.
-        backbone = list(models.vgg16().children())[0]  # Remove classification head.
-        self.backbone = nn.Sequential(
-            *list(backbone.children())[: -2]  # Remove last ReLU + MaxPool2d.
-        )
+        # Remove classification head.
+        backbone = list(models.vgg16().children())[0]
+        # Remove last ReLU + MaxPool2d.
+        self.backbone = nn.Sequential(*list(backbone.children())[: -2])
 
         self.netvlad = NetVLADLayer()
 
         if conf['whiten']:
             self.whiten = nn.Linear(self.netvlad.output_dim, 4096)
 
-        # Parse MATLAB weights - based on https://github.com/uzh-rpg/netvlad_tf_open.
+        # Parse MATLAB weights using https://github.com/uzh-rpg/netvlad_tf_open
         mat = loadmat(checkpoint, struct_as_record=False, squeeze_me=True)
 
-        ## CNN weights.
-        for layer, mat_layer in zip(self.backbone.children(), mat['net'].layers):
+        # CNN weights.
+        for layer, mat_layer in zip(self.backbone.children(),
+                                    mat['net'].layers):
             if isinstance(layer, nn.Conv2d):
                 w = mat_layer.weights[0]  # Shape: S x S x IN x OUT
                 b = mat_layer.weights[1]  # Shape: OUT
-                # Prepare for PyTorch - make sure it is float32 and has right shape.
-                w = torch.tensor(w).float().permute([3, 2, 0, 1])  # Shape: OUT x IN x S x S
-                b = torch.tensor(b).float()  # Shape: OUT
+                # Prepare for PyTorch - enforce float32 and right shape.
+                # w should have shape: OUT x IN x S x S
+                # b should have shape: OUT
+                w = torch.tensor(w).float().permute([3, 2, 0, 1])
+                b = torch.tensor(b).float()
                 # Update layer weights.
                 layer.weight = nn.Parameter(w)
                 layer.bias = nn.Parameter(b)
 
-        ## NetVLAD weights.
+        # NetVLAD weights.
         score_w = mat['net'].layers[30].weights[0]  # D x K
-        center_w = -mat['net'].layers[30].weights[1]  # D x K, centers are stored as opposite in official MATLAB code.
+        # centers are stored as opposite in official MATLAB code
+        center_w = -mat['net'].layers[30].weights[1]  # D x K
         # Prepare for PyTorch - make sure it is float32 and has right shape.
-        score_w = torch.tensor(score_w).float().permute([1, 0]).unsqueeze(-1)  # Shape: K x D x 1
-        center_w = torch.tensor(center_w).float()  # Shape: D x K
+        # score_w should have shape K x D x 1
+        # center_w should have shape D x K
+        score_w = torch.tensor(score_w).float().permute([1, 0]).unsqueeze(-1)
+        center_w = torch.tensor(center_w).float()
         # Update layer weights.
         self.netvlad.score_proj.weight = nn.Parameter(score_w)
         self.netvlad.centers = nn.Parameter(center_w)
 
-        ## Whitening weights.
+        # Whitening weights.
         if conf['whiten']:
             w = mat['net'].layers[33].weights[0]  # Shape: 1 x 1 x IN x OUT
             b = mat['net'].layers[33].weights[1]  # Shape: OUT
-            # Prepare for PyTorch - make sure it is float32 and has right shape.
-            w = torch.tensor(w).float().squeeze().permute([1, 0])  # Shape: OUT x IN
+            # Prepare for PyTorch - make sure it is float32 and has right shape
+            w = torch.tensor(w).float().squeeze().permute([1, 0])  # OUT x IN
             b = torch.tensor(b.squeeze()).float()  # Shape: OUT
             # Update layer weights.
             self.whiten.weight = nn.Parameter(w)
             self.whiten.bias = nn.Parameter(b)
 
-        ## Preprocessing parameters.
+        # Preprocessing parameters.
         self.preprocess = {
             'mean': mat['net'].meta.normalization.averageImage[0, 0],
             'std': np.array([1, 1, 1], dtype=np.float32)
