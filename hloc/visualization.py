@@ -1,20 +1,12 @@
 import matplotlib.pyplot as plt
 from matplotlib import cm
 import random
-import cv2
 import numpy as np
 import pickle
 
 from .utils.read_write_model import read_images_binary, read_points3d_binary
 from .utils.viz import plot_images, plot_keypoints, plot_matches, cm_RdGn
-
-
-def read_image(path):
-    assert path.exists(), path
-    image = cv2.imread(str(path))
-    if len(image.shape) == 3:
-        image = image[:, :, ::-1]
-    return image
+from .utils.io import read_image
 
 
 def visualize_sfm_2d(sfm_model, image_dir, color_by='visibility',
