@@ -120,6 +120,9 @@ def main(reference_sfm, queries, retrieval, features, matches, results,
     }
     logging.info('Starting localization...')
     for qname, qinfo in tqdm(queries):
+        if qname not in retrieval_dict:
+            logging.warning(f'No images retrieved for query image {qname}. Skipping...')
+            continue
         db_names = retrieval_dict[qname]
         db_ids = []
         for n in db_names:

@@ -148,6 +148,8 @@ class ImageDataset(torch.utils.data.Dataset):
             image = image.transpose((2, 0, 1))  # HxWxC to CxHxW
         image = image / 255.
 
+        if isinstance(path, str):
+            path = Path(path)
         data = {
             'name': path.as_posix(),
             'image': image,
