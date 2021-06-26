@@ -26,7 +26,7 @@ class NetVLADLayer(nn.Module):
         self.register_parameter('centers', centers)
         self.intranorm = intranorm
         self.output_dim = input_dim * K
-    
+
     def forward(self, x):
         b = x.size(0)
         scores = self.score_proj(x)
@@ -48,11 +48,11 @@ class NetVLAD(BaseModel):
         'whiten': True
     }
     required_inputs = ['image']
-    
+
     # Models exported using https://github.com/uzh-rpg/netvlad_tf_open/blob/master/matlab/net_class2struct.m.
     dir_models = {
-        'VGG16-NetVLAD-Pitts30K': 'https://dsmn.ml/files/netvlad/Pitts30K_struct.mat',
-        'VGG16-NetVLAD-TokyoTM': 'https://dsmn.ml/files/netvlad/TokyoTM_struct.mat'
+        'VGG16-NetVLAD-Pitts30K': 'https://cvg-data.inf.ethz.ch/hloc/netvlad/Pitts30K_struct.mat',
+        'VGG16-NetVLAD-TokyoTM': 'https://cvg-data.inf.ethz.ch/hloc/netvlad/TokyoTM_struct.mat'
     }
 
     def _init(self, conf):
@@ -105,7 +105,7 @@ class NetVLAD(BaseModel):
         # Update layer weights.
         self.netvlad.score_proj.weight = nn.Parameter(score_w)
         self.netvlad.centers = nn.Parameter(center_w)
-    
+
         ## Whitening weights.
         if conf['whiten']:
             w = mat['net'].layers[33].weights[0]  # Shape: 1 x 1 x IN x OUT
@@ -116,7 +116,7 @@ class NetVLAD(BaseModel):
             # Update layer weights.
             self.whiten.weight = nn.Parameter(w)
             self.whiten.bias = nn.Parameter(b)
-        
+
         ## Preprocessing parameters.
         self.preprocess = {
             'mean': mat['net'].meta.normalization.averageImage[0, 0],
