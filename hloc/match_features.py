@@ -33,6 +33,14 @@ confs = {
             'mutual_check': True,
             'distance_threshold': 0.7,
         },
+    },
+    'NN-ratio': {
+        'output': 'matches-NN-mutual-ratio.8',
+        'model': {
+            'name': 'nearest_neighbor',
+            'mutual_check': True,
+            'ratio_threshold': 0.8,
+        }
     }
 }
 

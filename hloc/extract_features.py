@@ -75,10 +75,29 @@ confs = {
             'resize_max': 1600,
         },
     },
+    'sift': {
+        'output': 'feats-sift',
+        'model': {
+            'name': 'sift'
+        },
+        'preprocessing': {
+            'grayscale': True,
+            'resize_max': 1600,
+        },
+    },
     'dir': {
         'output': 'global-feats-dir',
         'model': {
             'name': 'dir',
+        },
+        'preprocessing': {
+            'resize_max': None,
+        },
+    },
+    'netvlad': {
+        'output': 'global-feats-netvlad',
+        'model': {
+            'name': 'netvlad',
         },
         'preprocessing': {
             'resize_max': None,
