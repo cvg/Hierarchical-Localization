@@ -10,11 +10,11 @@ import pycolmap
 EPS = 1e-6
 
 
-def sift_to_rootsift(descs):
-    l1_norm_descs = descs / (np.linalg.norm(descs, ord=1, axis=-1)[:, np.newaxis] + EPS)
-    sqrt_l1_norm_descs = np.sqrt(l1_norm_descs)
-    root_descs = sqrt_l1_norm_descs / (np.linalg.norm(sqrt_l1_norm_descs, axis=-1)[:, np.newaxis] + EPS)
-    return root_descs
+def sift_to_rootsift(x):
+    x = x / (np.linalg.norm(x, ord=1, axis=-1, keepdims=True) + EPS)
+    x = np.sqrt(x.clip(min=EPS))
+    x = x / (np.linalg.norm(x, axis=-1, keepdims=True) + EPS)
+    return x
 
 
 class SIFT(BaseModel):
@@ -43,18 +43,19 @@ class SIFT(BaseModel):
         )
 
     def _forward(self, data):
-        image = data['image']
+        image = data['image'].cpu().numpy()
         assert image.shape[1] == 1
         assert image.min() >= -EPS and image.max() <= 1 + EPS
 
-        keypoints, scores, descriptors = self.extract(image[0, 0].cpu().numpy())
+        keypoints, scores, descriptors = self.extract(image[0, 0])
         keypoints = keypoints[:, : 2]  # Keep only x, y.
 
         if self.root:
             descriptors = sift_to_rootsift(descriptors)
-        
+
         if self.max_keypoints != -1:
-            # It is unclear whether scores from PyCOLMAP are 100% correct - follow https://github.com/mihaidusmanu/pycolmap/issues/8.
+            # TODO: check that the scores from PyCOLMAP are 100% correct,
+            # follow https://github.com/mihaidusmanu/pycolmap/issues/8
             indices = np.argsort(scores)[:: -1][: self.max_keypoints]
             keypoints = keypoints[indices, :]
             scores = scores[indices]
