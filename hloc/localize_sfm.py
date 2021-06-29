@@ -54,7 +54,9 @@ def pose_from_cluster(qname, qinfo, db_ids, db_images, points3D,
     for i, db_id in enumerate(db_ids):
         db_name = db_images[db_id].name
         points3D_ids = db_images[db_id].point3D_ids
-
+        if len(points3D_ids) == 0:
+            logging.debug(f'No 3D points found for {db_name}.')
+            continue
         pair = names_to_pair(qname, db_name)
         matches = match_file[pair]['matches0'].__array__()
         valid = np.where(matches > -1)[0]
