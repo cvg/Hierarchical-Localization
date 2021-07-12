@@ -8,6 +8,7 @@
 
 import matplotlib
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as path_effects
 import numpy as np
 
 
@@ -106,6 +107,17 @@ def plot_matches(kpts0, kpts1, color=None, lw=1.5, ps=4, indices=(0, 1), a=1.):
     if ps > 0:
         ax0.scatter(kpts0[:, 0], kpts0[:, 1], c=color, s=ps)
         ax1.scatter(kpts1[:, 0], kpts1[:, 1], c=color, s=ps)
+
+
+def add_text(idx, text, pos=(0.01, 0.99), fs=15, color='w',
+             lcolor='k', lwidth=2, ha='left', va='top'):
+    ax = plt.gcf().axes[idx]
+    t = ax.text(*pos, text, fontsize=fs, ha=ha, va=va,
+                color=color, transform=ax.transAxes)
+    if lcolor is not None:
+        t.set_path_effects([
+            path_effects.Stroke(linewidth=lwidth, foreground=lcolor),
+            path_effects.Normal()])
 
 
 def save_plot(path, **kw):
