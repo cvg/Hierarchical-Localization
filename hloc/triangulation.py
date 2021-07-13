@@ -118,10 +118,7 @@ def geometric_verification(colmap_path, database_path, pairs_path):
         '--match_type', 'pairs',
         '--SiftMatching.max_num_trials', str(20000),
         '--SiftMatching.min_inlier_ratio', str(0.1)]
-    ret = subprocess.call(cmd)
-    if ret != 0:
-        logging.warning('Problem with matches_importer, exiting.')
-        exit(ret)
+    subprocess.run(cmd, check=True)
 
 
 def run_triangulation(colmap_path, model_path, database_path, image_dir,
@@ -139,10 +136,7 @@ def run_triangulation(colmap_path, model_path, database_path, image_dir,
         '--Mapper.ba_refine_principal_point', '0',
         '--Mapper.ba_refine_extra_params', '0']
     logging.info(' '.join(cmd))
-    ret = subprocess.call(cmd)
-    if ret != 0:
-        logging.warning('Problem with point_triangulator, exiting.')
-        exit(ret)
+    subprocess.run(cmd, check=True)
 
     stats_raw = subprocess.check_output(
         [str(colmap_path), 'model_analyzer', '--path', str(model_path)])

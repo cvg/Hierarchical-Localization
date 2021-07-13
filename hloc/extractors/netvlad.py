@@ -66,10 +66,7 @@ class NetVLAD(BaseModel):
             link = self.dir_models[conf['model_name']]
             cmd = ['wget', link, '-O', str(checkpoint)]
             logging.info(f'Downloading theNetVLAD model with `{cmd}`.')
-            ret = subprocess.call(cmd)
-            if ret != 0:
-                logging.warning('Cannot download the NetVLAD model.')
-                exit(ret)
+            subprocess.run(cmd, check=True)
 
         # Create the network.
         # Remove classification head.

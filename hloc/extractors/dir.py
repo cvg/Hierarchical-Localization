@@ -1,7 +1,6 @@
 import sys
 from pathlib import Path
 import subprocess
-import logging
 import torch
 from zipfile import ZipFile
 import os
@@ -49,15 +48,11 @@ class DIR(BaseModel):
             link = self.dir_models[conf['model_name']]
             cmd = ['wget', '--no-check-certificate', '-r', link,
                    '-O', str(checkpoint)+'.zip']
-            ret = subprocess.call(cmd)
+            subprocess.run(cmd, check=True)
             zf = ZipFile(str(checkpoint)+'.zip', 'r')
             zf.extractall(checkpoint.parent)
             zf.close()
             os.remove(str(checkpoint)+'.zip')
-            if ret != 0:
-                logging.warning(
-                    f'Cannot download the DIR model with `{cmd}`.')
-                exit(ret)
 
         self.net = load_model(checkpoint, False)  # first load on CPU
         if conf['whiten_name']:

@@ -41,10 +41,7 @@ def import_images(colmap_path, sfm_dir, image_dir, database_path,
         '--import_path', str(dummy_dir),
         '--ImageReader.single_camera',
         str(int(single_camera))]
-    ret = subprocess.call(cmd)
-    if ret != 0:
-        logging.warning('Problem with feature_importer, exiting.')
-        exit(ret)
+    subprocess.run(cmd, check=True)
 
     db = COLMAPDatabase.connect(database_path)
     db.execute("DELETE FROM keypoints;")
@@ -77,10 +74,7 @@ def run_reconstruction(colmap_path, model_path, database_path, image_dir,
     if min_num_matches:
         cmd += ['--Mapper.min_num_matches', str(min_num_matches)]
     logging.info(' '.join(cmd))
-    ret = subprocess.call(cmd)
-    if ret != 0:
-        logging.warning('Problem with mapper, exiting.')
-        exit(ret)
+    subprocess.run(cmd, check=True)
 
     models = list(model_path.iterdir())
     if len(models) == 0:

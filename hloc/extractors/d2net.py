@@ -1,7 +1,6 @@
 import sys
 from pathlib import Path
 import subprocess
-import logging
 import torch
 
 from ..utils.base_model import BaseModel
@@ -27,11 +26,7 @@ class D2Net(BaseModel):
             model_file.parent.mkdir(exist_ok=True)
             cmd = ['wget', 'https://dsmn.ml/files/d2-net/'+conf['model_name'],
                    '-O', str(model_file)]
-            ret = subprocess.call(cmd)
-            if ret != 0:
-                logging.warning(
-                    f'Cannot download the D2-Net model with `{cmd}`.')
-                exit(ret)
+            subprocess.run(cmd, check=True)
 
         self.net = _D2Net(
             model_file=model_file,
