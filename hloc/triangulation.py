@@ -170,8 +170,6 @@ def main(sfm_dir, reference_sfm_model, image_dir, pairs, features, matches,
 
     sfm_dir.mkdir(parents=True, exist_ok=True)
     database = sfm_dir / 'database.db'
-    model = sfm_dir / 'model'
-    model.mkdir(exist_ok=True)
     empty_model = sfm_dir / 'empty'
 
     create_empty_model(reference_sfm_model, empty_model)
@@ -182,7 +180,7 @@ def main(sfm_dir, reference_sfm_model, image_dir, pairs, features, matches,
     if not skip_geometric_verification:
         geometric_verification(colmap_path, database, pairs)
     stats = run_triangulation(
-        colmap_path, model, database, image_dir, empty_model)
+        colmap_path, sfm_dir, database, image_dir, empty_model)
 
     logging.info(f'Statistics:\n{pprint.pformat(stats)}')
     shutil.rmtree(empty_model)
