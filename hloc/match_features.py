@@ -106,8 +106,8 @@ def match_from_paths(conf: Dict, pairs_path: Path, match_path: Path,
         pairs = parse_retrieval(pairs_path)
         pairs = [(q, r) for q, rs in pairs.items() for r in rs]
     else:
-        logging.info(f'Writing exhaustive match pairs to {pairs}.')
-        assert not pairs.exists(), pairs
+        logging.info(f'Writing exhaustive match pairs to {pairs_path}.')
+        assert not pairs_path.exists(), pairs_path
         names_q = list_h5_names(feature_path_q)
         # TODO: move exhqustive pair generation to a standalone script
         # detect self-matching
