@@ -10,7 +10,7 @@ from .utils.read_write_model import read_model
 
 def main(model, output, num_matched):
     logging.info('Reading the COLMAP model...')
-    cameras, images, points3D = read_model(model, '.bin')
+    cameras, images, points3D = read_model(model)
 
     logging.info('Extracting image pairs from covisibility info...')
     pairs = []

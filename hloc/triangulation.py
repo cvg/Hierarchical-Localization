@@ -10,7 +10,7 @@ import shutil
 
 from .utils.read_write_model import (
         read_cameras_binary, read_images_binary, CAMERA_MODEL_NAMES,
-        write_points3d_binary, write_images_binary, Image)
+        write_points3D_binary, write_images_binary, Image)
 from .utils.database import COLMAPDatabase
 from .utils.parsers import names_to_pair
 
@@ -19,7 +19,7 @@ def create_empty_model(reference_model, empty_model):
     logging.info('Creating an empty model.')
     empty_model.mkdir(exist_ok=True)
     shutil.copy(reference_model / 'cameras.bin', empty_model)
-    write_points3d_binary(dict(), empty_model / 'points3D.bin')
+    write_points3D_binary(dict(), empty_model / 'points3D.bin')
     images = read_images_binary(str(reference_model / 'images.bin'))
     images_empty = dict()
     for id_, image in images.items():

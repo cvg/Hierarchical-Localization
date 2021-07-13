@@ -3,7 +3,7 @@ import random
 import numpy as np
 import pickle
 
-from .utils.read_write_model import read_images_binary, read_points3d_binary
+from .utils.read_write_model import read_images_binary, read_points3D_binary
 from .utils.viz import (
         plot_images, plot_keypoints, plot_matches, cm_RdGn, add_text)
 from .utils.io import read_image
@@ -16,7 +16,7 @@ def visualize_sfm_2d(sfm_model, image_dir, color_by='visibility',
 
     images = read_images_binary(sfm_model / 'images.bin')
     if color_by in ['track_length', 'depth']:
-        points3D = read_points3d_binary(sfm_model / 'points3D.bin')
+        points3D = read_points3D_binary(sfm_model / 'points3D.bin')
 
     if not selected:
         image_ids = list(images.keys())
@@ -72,7 +72,7 @@ def visualize_loc(results, image_dir, sfm_model=None, top_k_db=2,
     if is_sfm:
         assert sfm_model.exists()
         images = read_images_binary(sfm_model / 'images.bin')
-        points3D = read_points3d_binary(sfm_model / 'points3D.bin')
+        points3D = read_points3D_binary(sfm_model / 'points3D.bin')
 
     for q in selected:
         q_image = read_image(image_dir / q)

@@ -108,7 +108,7 @@ def main(reference_sfm, queries, retrieval, features, matches, results,
     retrieval_dict = parse_retrieval(retrieval)
 
     logging.info('Reading 3D model...')
-    _, db_images, points3D = read_model(str(reference_sfm), '.bin')
+    _, db_images, points3D = read_model(str(reference_sfm))
     db_name_to_id = {image.name: i for i, image in db_images.items()}
 
     feature_file = h5py.File(features, 'r')
