@@ -23,15 +23,15 @@ line using their name. Each is a dictionary with the following entries:
 '''
 confs = {
     'superpoint_aachen': {
-        'output': 'feats-superpoint-n4096-r1024',
+        'output': 'feats-superpoint-n512-r512',
         'model': {
             'name': 'superpoint',
             'nms_radius': 3,
-            'max_keypoints': 4096,
+            'max_keypoints': 512,
         },
         'preprocessing': {
             'grayscale': True,
-            'resize_max': 1024,
+            'resize_max': 512,
         },
     },
     'superpoint_inloc': {

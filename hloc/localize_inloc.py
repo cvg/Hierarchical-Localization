@@ -10,7 +10,7 @@ import pickle
 import cv2
 import pycolmap
 
-from .utils.parsers import parse_retrieval, names_to_pair
+from utils.parsers import parse_retrieval, names_to_pair
 
 
 def interpolate_scan(scan, kp):

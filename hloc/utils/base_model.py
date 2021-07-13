@@ -37,9 +37,14 @@ def dynamic_load(root, model):
     module = __import__(module_path, fromlist=[''])
     classes = inspect.getmembers(module, inspect.isclass)
     # Filter classes defined in the module
+    for c in classes:
+        print(c[1].__module__)
+        print(c[1])
+        print(issubclass(c[1], BaseModel))
+
     classes = [c for c in classes if c[1].__module__ == module_path]
-    # Filter classes inherited from BaseModel
-    classes = [c for c in classes if issubclass(c[1], BaseModel)]
-    assert len(classes) == 1, classes
+    # # Filter classes inherited from BaseModel
+    # classes = [c for c in classes if issubclass(c[1], BaseModel)]
+    # assert len(classes) == 1, classes
     return classes[0][1]
     # return getattr(module, 'Model')

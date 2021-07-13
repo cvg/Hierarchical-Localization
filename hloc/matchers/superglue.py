@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-from ..utils.base_model import BaseModel
+from utils.base_model import BaseModel
 
 sys.path.append(str(Path(__file__).parent / '../../third_party'))
 from SuperGluePretrainedNetwork.models.superglue import SuperGlue as SG
