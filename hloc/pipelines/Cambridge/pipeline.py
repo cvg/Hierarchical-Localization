@@ -2,7 +2,8 @@ import logging
 from pathlib import Path
 import argparse
 
-from .utils import create_query_list_with_intrinsics, scale_model, evaluate
+from .utils import (
+    create_query_list_with_intrinsics, scale_sfm_images, evaluate)
 from ... import extract_features, match_features, pairs_from_covisibility
 from ... import triangulation, localize_sfm, pairs_from_retrieval
 
@@ -54,7 +55,7 @@ def run_scene(images, gt_dir, outputs, results, num_covis, num_loc):
     sfm_matches = match_features.main(
             matcher_conf, sfm_pairs, feature_conf['output'], outputs)
 
-    scale_model(ref_sfm_sift, ref_sfm_scaled, images)
+    scale_sfm_images(ref_sfm_sift, ref_sfm_scaled, images)
     triangulation.main(
         ref_sfm, ref_sfm_scaled,
         images,
