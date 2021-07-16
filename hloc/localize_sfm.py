@@ -97,7 +97,8 @@ def pose_from_cluster(qname, qinfo, db_ids, db_images, points3D,
 
 
 def main(reference_sfm, queries, retrieval, features, matches, results,
-         ransac_thresh=12, covisibility_clustering=False):
+         ransac_thresh=12, covisibility_clustering=False,
+         prepend_camera_name=False):
 
     assert reference_sfm.exists(), reference_sfm
     assert retrieval.exists(), retrieval
@@ -192,6 +193,8 @@ def main(reference_sfm, queries, retrieval, features, matches, results,
             qvec = ' '.join(map(str, qvec))
             tvec = ' '.join(map(str, tvec))
             name = q.split('/')[-1]
+            if prepend_camera_name:
+                name = q.split('/')[-2] + '/' + name
             f.write(f'{name} {qvec} {tvec}\n')
 
     logs_path = f'{results}_logs.pkl'
@@ -211,5 +214,6 @@ if __name__ == '__main__':
     parser.add_argument('--results', type=Path, required=True)
     parser.add_argument('--ransac_thresh', type=float, default=12.0)
     parser.add_argument('--covisibility_clustering', action='store_true')
+    parser.add_argument('--prepend_camera_name', action='store_true')
     args = parser.parse_args()
     main(**args.__dict__)
