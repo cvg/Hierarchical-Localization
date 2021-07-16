@@ -2,11 +2,10 @@ from pathlib import Path
 import logging
 import argparse
 
-from hloc import extract_features, match_features, localize_sfm
-
-from utils import get_timestamps, delete_unused_images
-from utils import generate_query_lists, generate_localization_pairs
-from utils import prepare_submission, evaluate_submission
+from ... import extract_features, match_features, localize_sfm
+from .utils import get_timestamps, delete_unused_images
+from .utils import generate_query_lists, generate_localization_pairs
+from .utils import prepare_submission, evaluate_submission
 
 relocalization_files = {
     'training': 'RelocalizationFilesTrain//relocalizationFile_recording_2020-03-24_17-36-22.txt',

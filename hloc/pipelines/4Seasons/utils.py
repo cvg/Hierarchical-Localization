@@ -3,9 +3,9 @@ import numpy as np
 import logging
 from pathlib import Path
 
-from hloc.utils.read_write_model import qvec2rotmat, rotmat2qvec
-from hloc.utils.read_write_model import Image, write_model, Camera
-from hloc.utils.parsers import parse_retrieval
+from ...utils.read_write_model import qvec2rotmat, rotmat2qvec
+from ...utils.read_write_model import Image, write_model, Camera
+from ...utils.parsers import parse_retrieval
 
 
 def get_timestamps(files, idx):
