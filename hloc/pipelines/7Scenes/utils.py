@@ -1,10 +1,10 @@
 import logging
 import numpy as np
 
-from hloc.utils.read_write_model import read_model, write_model, Point3D
+from hloc.utils.read_write_model import read_model, write_model
 
 
-def create_reference_model(full_model, ref_model, blacklist=None, ext='.bin'):
+def create_reference_sfm(full_model, ref_model, blacklist=None, ext='.bin'):
     '''Create a new COLMAP model with only training images.'''
     logging.info('Creating the reference model.')
     ref_model.mkdir(exist_ok=True)
@@ -22,12 +22,10 @@ def create_reference_model(full_model, ref_model, blacklist=None, ext='.bin'):
 
     points3D_ref = dict()
     for id_, point3D in points3D.items():
-        point3D = point3D._asdict()
-        ref_ids = [i for i in point3D['image_ids'] if i in images_ref]
+        ref_ids = [i for i in point3D.image_ids if i in images_ref]
         if len(ref_ids) == 0:
             continue
-        point3D['image_ids'] = np.array(ref_ids)
-        points3D_ref[id_] = Point3D(**point3D)
+        points3D_ref[id_] = point3D._replace(image_ids=np.array(ref_ids))
 
     write_model(cameras, images_ref, points3D_ref, ref_model, '.bin')
     logging.info(f'Kept {len(images_ref)} images out of {len(images)}.')

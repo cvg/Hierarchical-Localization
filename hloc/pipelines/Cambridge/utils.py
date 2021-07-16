@@ -4,10 +4,10 @@ import numpy as np
 
 from hloc.utils.read_write_model import (
         read_cameras_binary, read_images_binary, read_model, write_model,
-        Camera, qvec2rotmat, read_images_text, read_cameras_text)
+        qvec2rotmat, read_images_text, read_cameras_text)
 
 
-def scale_model(full_model, scaled_model, image_dir):
+def scale_sfm_images(full_model, scaled_model, image_dir):
     '''Duplicate the provided model and scale the camera intrinsics so that
        they match the original image resolution - makes everything easier.
     '''
@@ -33,11 +33,8 @@ def scale_model(full_model, scaled_model, image_dir):
         sx = w / camera.width
         sy = h / camera.height
         assert sx == sy, (sx, sy)
-        camera = camera._asdict()
-        camera['width'] = w
-        camera['height'] = h
-        camera['params'] = camera['params'] * np.array([sx, sx, sy, 1.])
-        scaled_cameras[cam_id] = Camera(**camera)
+        scaled_cameras[cam_id] = camera._replace(
+            width=w, height=h, params=camera.params*np.array([sx, sx, sy, 1.]))
 
     write_model(scaled_cameras, images, points3D, scaled_model)
 

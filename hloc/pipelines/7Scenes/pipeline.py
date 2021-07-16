@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 import argparse
 
-from .utils import create_reference_model
+from .utils import create_reference_sfm
 from ..Cambridge.utils import create_query_list_with_intrinsics, evaluate
 from ... import extract_features, match_features, pairs_from_covisibility
 from ... import triangulation, localize_sfm
@@ -34,7 +34,7 @@ def run_scene(images, gt_dir, retrieval, outputs, scene, results, num_covis,
     matcher_conf = match_features.confs['superglue']
 
     test_list = gt_dir / 'list_test.txt'
-    create_reference_model(gt_dir, ref_sfm_sift, test_list)
+    create_reference_sfm(gt_dir, ref_sfm_sift, test_list)
     create_query_list_with_intrinsics(gt_dir, query_list, test_list)
 
     features = extract_features.main(
@@ -83,8 +83,8 @@ if __name__ == '__main__':
                         help='Number of image pairs for SfM, default: %(default)s')
     args = parser.parse_args()
 
-    gt_dirs = args.dataset / '7scenes_sfm_triangulated/{scene}/old_gt_triangulated'
-    retrieval_dirs = args.dataset / '7scenes_densevlad_retrieval'
+    gt_dirs = args.dataset / '7scenes_sfm_triangulated/{scene}/triangulated'
+    retrieval_dirs = args.dataset / '7scenes_densevlad_retrieval_top_10'
 
     all_results = {}
     for scene in args.scenes:
@@ -94,7 +94,7 @@ if __name__ == '__main__':
         if args.overwrite or not results.exists():
             run_scene(
                 args.dataset / scene,
-                Path(str(gt_dirs).format(scene)),
+                Path(str(gt_dirs).format(scene=scene)),
                 retrieval_dirs / f'{scene}_top10.txt',
                 args.outputs / scene,
                 scene,
@@ -105,5 +105,5 @@ if __name__ == '__main__':
 
     for scene in args.scenes:
         logging.info(f'Evaluate scene "{scene}".')
-        gt_dir = Path(str(gt_dirs).format(scene))
+        gt_dir = Path(str(gt_dirs).format(scene=scene))
         evaluate(gt_dir, all_results[scene], gt_dir / 'list_test.txt')
