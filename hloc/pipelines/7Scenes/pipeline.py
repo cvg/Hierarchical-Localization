@@ -3,6 +3,7 @@ from pathlib import Path
 import argparse
 
 from .utils import create_reference_sfm
+from .create_gt_sfm import correct_sfm_with_gt_depth
 from ..Cambridge.utils import create_query_list_with_intrinsics, evaluate
 from ... import extract_features, match_features, pairs_from_covisibility
 from ... import triangulation, localize_sfm
@@ -11,8 +12,8 @@ SCENES = ['chess', 'fire', 'heads', 'office', 'pumpkin',
           'redkitchen', 'stairs']
 
 
-def run_scene(images, gt_dir, retrieval, outputs, scene, results, num_covis,
-              use_dense_depth):
+def run_scene(images, gt_dir, retrieval, outputs, results, num_covis,
+              use_dense_depth, depth_dir=None):
     outputs.mkdir(exist_ok=True, parents=True)
     ref_sfm_sift = outputs / 'sfm_sift'
     ref_sfm = outputs / 'sfm_superpoint+superglue'
@@ -40,21 +41,24 @@ def run_scene(images, gt_dir, retrieval, outputs, scene, results, num_covis,
     features = extract_features.main(
             feature_conf, images, outputs, as_half=True)
 
+    sfm_pairs = outputs / f'pairs-db-covis{num_covis}.txt'
+    pairs_from_covisibility.main(
+            ref_sfm_sift, sfm_pairs, num_matched=num_covis)
+    sfm_matches = match_features.main(
+            matcher_conf, sfm_pairs, feature_conf['output'], outputs)
+    triangulation.main(
+        ref_sfm, ref_sfm_sift,
+        images,
+        sfm_pairs,
+        features,
+        sfm_matches,
+        colmap_path='colmap')
     if use_dense_depth:
-        raise NotImplementedError
-    else:
-        sfm_pairs = outputs / f'pairs-db-covis{num_covis}.txt'
-        pairs_from_covisibility.main(
-                ref_sfm_sift, sfm_pairs, num_matched=num_covis)
-        sfm_matches = match_features.main(
-                matcher_conf, sfm_pairs, feature_conf['output'], outputs)
-        triangulation.main(
-            ref_sfm, ref_sfm_sift,
-            images,
-            sfm_pairs,
-            features,
-            sfm_matches,
-            colmap_path='colmap')
+        assert depth_dir is not None
+        ref_sfm_fix = outputs / 'sfm_superpoint+superglue+depth'
+        correct_sfm_with_gt_depth(
+            ref_sfm / 'model', depth_dir, ref_sfm_fix / 'model')
+        ref_sfm = ref_sfm_fix
 
     loc_matches = match_features.main(
         matcher_conf, retrieval, feature_conf['output'], outputs)
@@ -97,10 +101,10 @@ if __name__ == '__main__':
                 Path(str(gt_dirs).format(scene=scene)),
                 retrieval_dirs / f'{scene}_top10.txt',
                 args.outputs / scene,
-                scene,
                 results,
                 args.num_covis,
-                args.use_dense_depth)
+                args.use_dense_depth,
+                depth_dir=args.dataset / f'depth/7scenes_{scene}/train/depth')
         all_results[scene] = results
 
     for scene in args.scenes:
