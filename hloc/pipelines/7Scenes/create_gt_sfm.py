@@ -5,6 +5,7 @@ import PIL.Image
 from tqdm import tqdm
 import pycolmap
 
+from .pipeline import SCENES
 from ...utils.read_write_model import write_model, read_model
 
 
@@ -116,10 +117,10 @@ def correct_sfm_with_gt_depth(sfm_path, depth_folder_path, output_path):
 
 if __name__ == '__main__':
     dataset = Path('datasets/7scenes')
-    outputs = Path('outputs/7Scenes_test')
-    scene = 'chess'
-    sfm_path = outputs / scene / 'sfm_superpoint+superglue/model'
-    depth_path = dataset / f'depth/7scenes_{scene}/train/depth'
-    output_path = outputs / scene / 'sfm_superpoint+superglue+depth'
+    outputs = Path('outputs/7Scenes')
 
-    correct_sfm_with_gt_depth(sfm_path, depth_path, output_path)
+    for scene in SCENES:
+        sfm_path = outputs / scene / 'sfm_superpoint+superglue/model'
+        depth_path = dataset / f'depth/7scenes_{scene}/train/depth'
+        output_path = outputs / scene / 'sfm_superpoint+superglue+depth/model'
+        correct_sfm_with_gt_depth(sfm_path, depth_path, output_path)
