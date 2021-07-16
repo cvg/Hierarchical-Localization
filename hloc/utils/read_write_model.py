@@ -424,7 +424,7 @@ def read_model(path, ext=""):
             ext = ".txt"
         else:
             raise FileNotFoundError(
-                "Could not find binary or text COLMAP model")
+                f"Could not find binary or text COLMAP model at {path}")
 
     if ext == ".txt":
         cameras = read_cameras_text(os.path.join(path, "cameras" + ext))

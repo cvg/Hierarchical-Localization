@@ -154,7 +154,6 @@ def main(reference_sfm, queries, retrieval, features, matches, results,
                     'points3D_ids': mp3d_ids,
                     'num_matches': num_matches,
                 })
-            # logging.info(f'# inliers: {best_inliers}')
             if best_cluster is not None:
                 ret = logs_clusters[best_cluster]['PnP_ret']
                 poses[qname] = (ret['qvec'], ret['tvec'])
@@ -167,7 +166,6 @@ def main(reference_sfm, queries, retrieval, features, matches, results,
             ret, mkpq, mp3d, mp3d_ids, num_matches, map_ = pose_from_cluster(
                 qname, qinfo, db_ids, db_images, points3D,
                 feature_file, match_file, thresh=ransac_thresh)
-            # logging.info(f'# inliers: {ret["num_inliers"]}')
 
             if ret['success']:
                 poses[qname] = (ret['qvec'], ret['tvec'])
