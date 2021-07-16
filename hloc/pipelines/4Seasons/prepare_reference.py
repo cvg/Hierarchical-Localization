@@ -1,11 +1,10 @@
 from pathlib import Path
 import argparse
 
-from hloc import extract_features, match_features
-from hloc import pairs_from_poses, triangulation
-
-from utils import get_timestamps, delete_unused_images
-from utils import build_empty_colmap_model
+from ... import extract_features, match_features
+from ... import pairs_from_poses, triangulation
+from .utils import get_timestamps, delete_unused_images
+from .utils import build_empty_colmap_model
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=Path, default='datasets/4Seasons',
