@@ -63,7 +63,7 @@ generate_localization_pairs(
 ffile = extract_features.main(fconf, seq_images, output_dir)
 mfile = match_features.main(mconf, loc_pairs, fconf['output'], output_dir)
 localize_sfm.main(
-    ref_sfm / 'model', query_list, loc_pairs, ffile, mfile, results_path)
+    ref_sfm, query_list, loc_pairs, ffile, mfile, results_path)
 
 # Convert the absolute poses to relative poses with the reference frames.
 submission_dir.mkdir(exist_ok=True)
