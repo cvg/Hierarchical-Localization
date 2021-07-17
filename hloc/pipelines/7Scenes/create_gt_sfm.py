@@ -120,7 +120,7 @@ if __name__ == '__main__':
     outputs = Path('outputs/7Scenes')
 
     for scene in SCENES:
-        sfm_path = outputs / scene / 'sfm_superpoint+superglue/model'
+        sfm_path = outputs / scene / 'sfm_superpoint+superglue'
         depth_path = dataset / f'depth/7scenes_{scene}/train/depth'
-        output_path = outputs / scene / 'sfm_superpoint+superglue+depth/model'
+        output_path = outputs / scene / 'sfm_superpoint+superglue+depth'
         correct_sfm_with_gt_depth(sfm_path, depth_path, output_path)

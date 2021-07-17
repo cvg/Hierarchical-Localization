@@ -56,15 +56,14 @@ def run_scene(images, gt_dir, retrieval, outputs, results, num_covis,
     if use_dense_depth:
         assert depth_dir is not None
         ref_sfm_fix = outputs / 'sfm_superpoint+superglue+depth'
-        correct_sfm_with_gt_depth(
-            ref_sfm / 'model', depth_dir, ref_sfm_fix / 'model')
+        correct_sfm_with_gt_depth(ref_sfm, depth_dir, ref_sfm_fix)
         ref_sfm = ref_sfm_fix
 
     loc_matches = match_features.main(
         matcher_conf, retrieval, feature_conf['output'], outputs)
 
     localize_sfm.main(
-        ref_sfm / 'model',
+        ref_sfm,
         query_list,
         retrieval,
         features,

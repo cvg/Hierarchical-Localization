@@ -66,7 +66,7 @@ def run_slice(slice_, root, outputs, num_covis, num_loc):
         retrieval_conf, query_images, outputs)
     pairs_from_retrieval.main(
         global_descriptors, loc_pairs, num_loc,
-        query_list=query_list, db_model=ref_sfm / 'model')
+        query_list=query_list, db_model=ref_sfm)
 
     features = extract_features.main(
         feature_conf, query_images, outputs, as_half=True)
@@ -74,7 +74,7 @@ def run_slice(slice_, root, outputs, num_covis, num_loc):
         matcher_conf, loc_pairs, feature_conf['output'], outputs)
 
     localize_sfm.main(
-        ref_sfm / 'model',
+        ref_sfm,
         dataset / 'queries/*_time_queries_with_intrinsics.txt',
         loc_pairs,
         features,

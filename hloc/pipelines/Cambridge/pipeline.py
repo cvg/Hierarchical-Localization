@@ -68,7 +68,7 @@ def run_scene(images, gt_dir, outputs, results, num_covis, num_loc):
         matcher_conf, loc_pairs, feature_conf['output'], outputs)
 
     localize_sfm.main(
-        ref_sfm / 'model',
+        ref_sfm,
         query_list,
         loc_pairs,
         features,
