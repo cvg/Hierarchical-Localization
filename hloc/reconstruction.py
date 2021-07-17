@@ -41,10 +41,7 @@ def import_images(colmap_path, sfm_dir, image_dir, database_path,
         '--import_path', str(dummy_dir),
         '--ImageReader.single_camera',
         str(int(single_camera))]
-    ret = subprocess.call(cmd)
-    if ret != 0:
-        logging.warning('Problem with feature_importer, exiting.')
-        exit(ret)
+    subprocess.run(cmd, check=True)
 
     db = COLMAPDatabase.connect(database_path)
     db.execute("DELETE FROM keypoints;")
@@ -63,26 +60,24 @@ def get_image_ids(database_path):
     return images
 
 
-def run_reconstruction(colmap_path, model_path, database_path, image_dir,
+def run_reconstruction(colmap_path, sfm_dir, database_path, image_dir,
                        min_num_matches=None):
     logging.info('Running the 3D reconstruction...')
-    model_path.mkdir(exist_ok=True)
+    models_path = sfm_dir / 'models'
+    models_path.mkdir(exist_ok=True, parents=True)
 
     cmd = [
         str(colmap_path), 'mapper',
         '--database_path', str(database_path),
         '--image_path', str(image_dir),
-        '--output_path', str(model_path),
+        '--output_path', str(models_path),
         '--Mapper.num_threads', str(min(multiprocessing.cpu_count(), 16))]
     if min_num_matches:
         cmd += ['--Mapper.min_num_matches', str(min_num_matches)]
     logging.info(' '.join(cmd))
-    ret = subprocess.call(cmd)
-    if ret != 0:
-        logging.warning('Problem with mapper, exiting.')
-        exit(ret)
+    subprocess.run(cmd, check=True)
 
-    models = list(model_path.iterdir())
+    models = list(models_path.iterdir())
     if len(models) == 0:
         logging.error('Could not reconstruct any model!')
         return False
@@ -97,7 +92,7 @@ def run_reconstruction(colmap_path, model_path, database_path, image_dir,
             largest_model_num_images = num_images
     assert largest_model_num_images > 0
     logging.info(f'Largest model is #{largest_model.name} '
-                 'with {largest_model_num_images} images.')
+                 f'with {largest_model_num_images} images.')
 
     stats_raw = subprocess.check_output(
         [str(colmap_path), 'model_analyzer',
@@ -118,6 +113,9 @@ def run_reconstruction(colmap_path, model_path, database_path, image_dir,
         elif stat.startswith("Mean reprojection error"):
             stats['mean_reproj_error'] = float(stat.split()[-1][:-2])
 
+    for filename in ['images.bin', 'cameras.bin', 'points3D.bin']:
+        shutil.move(str(largest_model / filename), str(sfm_dir))
+
     return stats
 
 
@@ -132,8 +130,6 @@ def main(sfm_dir, image_dir, pairs, features, matches,
 
     sfm_dir.mkdir(parents=True, exist_ok=True)
     database = sfm_dir / 'database.db'
-    models = sfm_dir / 'models'
-    models.mkdir(exist_ok=True)
 
     create_empty_db(database)
     import_images(
@@ -145,7 +141,7 @@ def main(sfm_dir, image_dir, pairs, features, matches,
     if not skip_geometric_verification:
         geometric_verification(colmap_path, database, pairs)
     stats = run_reconstruction(
-        colmap_path, models, database, image_dir, min_num_matches)
+        colmap_path, sfm_dir, database, image_dir, min_num_matches)
     stats['num_input_images'] = len(image_ids)
     logging.info(f'Statistics:\n{pprint.pformat(stats)}')
 

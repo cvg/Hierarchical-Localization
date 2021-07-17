@@ -1,7 +1,6 @@
 import sys
 from pathlib import Path
 import subprocess
-import logging
 import torch
 
 from ..utils.base_model import BaseModel
@@ -15,22 +14,19 @@ from lib.pyramid import process_multiscale
 class D2Net(BaseModel):
     default_conf = {
         'model_name': 'd2_tf.pth',
+        'checkpoint_dir': d2net_path / 'models',
         'use_relu': True,
         'multiscale': False,
     }
     required_inputs = ['image']
 
     def _init(self, conf):
-        model_file = d2net_path / 'models' / conf['model_name']
+        model_file = conf['checkpoint_dir'] / conf['model_name']
         if not model_file.exists():
             model_file.parent.mkdir(exist_ok=True)
             cmd = ['wget', 'https://dsmn.ml/files/d2-net/'+conf['model_name'],
                    '-O', str(model_file)]
-            ret = subprocess.call(cmd)
-            if ret != 0:
-                logging.warning(
-                    f'Cannot download the D2-Net model with `{cmd}`.')
-                exit(ret)
+            subprocess.run(cmd, check=True)
 
         self.net = _D2Net(
             model_file=model_file,
