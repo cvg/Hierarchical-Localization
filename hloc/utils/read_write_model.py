@@ -34,6 +34,7 @@ import collections
 import numpy as np
 import struct
 import argparse
+import logging
 
 
 CameraModel = collections.namedtuple(
@@ -423,8 +424,14 @@ def read_model(path, ext=""):
         elif detect_model_format(path, ".txt"):
             ext = ".txt"
         else:
-            raise FileNotFoundError(
-                f"Could not find binary or text COLMAP model at {path}")
+            try:
+                cameras, images, points3D = read_model(os.path.join(path, "model/"))
+                logging.warning(
+                    "This SfM file structure was deprecated in hloc v1.1")
+                return cameras, images, points3D
+            except FileNotFoundError:
+                raise FileNotFoundError(
+                    f"Could not find binary or text COLMAP model at {path}")
 
     if ext == ".txt":
         cameras = read_cameras_text(os.path.join(path, "cameras" + ext))
