@@ -18,7 +18,6 @@ def recover_database_images_and_ids(database_path):
     for name, image_id, camera_id in ret:
         images[name] = image_id
         cameras[name] = camera_id
-
     db.close()
     logging.info(
         f'Found {len(images)} images and {len(cameras)} cameras in database.')

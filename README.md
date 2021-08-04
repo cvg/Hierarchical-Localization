@@ -1,6 +1,6 @@
 # hloc - the hierarchical localization toolbox
 
-This is `hloc`, a modular toolbox for state-of-the-art 6-DoF visual localization. It implements [Hierarchical Localization](https://arxiv.org/abs/1812.03506), leveraging image retrieval and feature matching, and is fast, accurate, and scalable. This codebase won the indoor/outdoor [localization challenge at CVPR 2020](https://sites.google.com/view/vislocslamcvpr2020/home), in combination with [SuperGlue](https://psarlin.com/superglue/), our graph neural network for feature matching.
+This is `hloc`, a modular toolbox for state-of-the-art 6-DoF visual localization. It implements [Hierarchical Localization](https://arxiv.org/abs/1812.03506), leveraging image retrieval and feature matching, and is fast, accurate, and scalable. This codebase won the indoor/outdoor localization challenges at [CVPR 2020](https://sites.google.com/view/vislocslamcvpr2020/home) and [ECCV 2020](https://sites.google.com/view/ltvl2020/), in combination with [SuperGlue](https://psarlin.com/superglue/), our graph neural network for feature matching.
 
 With `hloc`, you can:
 
@@ -34,8 +34,6 @@ docker run -it --rm -p 8888:8888 hloc:latest  # for GPU support, add `--runtime=
 jupyter notebook --ip 0.0.0.0 --port 8888 --no-browser --allow-root
 ```
 
-
-
 ## General pipeline
 
 The toolbox is composed of scripts, which roughly perform the following steps:
@@ -57,6 +55,7 @@ Strcture of the toolbox:
 - `hloc/*.py` : top-level scripts
 - `hloc/extractors/` : interfaces for feature extractors
 - `hloc/matchers/` : interfaces for feature matchers
+- `hloc/pipelines/` : entire pipelines for multiple datasets
 
 ## Tasks
 
@@ -84,7 +83,11 @@ We show in [`pipeline_SfM.ipynb`](https://nbviewer.jupyter.org/github/cvg/Hierar
 
 ## Results
 
-`hloc` currently supports [SuperPoint](https://arxiv.org/abs/1712.07629) and [D2-Net](https://arxiv.org/abs/1905.03561) local feature extractors; and [SuperGlue](https://arxiv.org/abs/1911.11763) and Nearest Neighbor matchers. Using [NetVLAD](https://arxiv.org/abs/1511.07247) for retrieval, we obtain the following best results:
+- Supported local feature extractors: [SuperPoint](https://arxiv.org/abs/1712.07629), [D2-Net](https://arxiv.org/abs/1905.03561), [SIFT](https://www.cs.ubc.ca/~lowe/papers/ijcv04.pdf), and [R2D2](https://arxiv.org/abs/1906.06195).
+- Supported feature matchers: [SuperGlue](https://arxiv.org/abs/1911.11763) and the Nearest Neighbor matcher with ratio test and/or mutual check.
+- Supported image retrieval: [NetVLAD](https://arxiv.org/abs/1511.07247) and [AP-GeM/DIR](https://github.com/naver/deep-image-retrieval).
+
+Using [NetVLAD](https://arxiv.org/abs/1511.07247) for retrieval, we obtain the following best results:
 
 | Methods                                                      | Aachen day         | Aachen night       | Retrieval      |
 | ------------------------------------------------------------ | ------------------ | ------------------ | -------------- |
@@ -100,6 +103,10 @@ We show in [`pipeline_SfM.ipynb`](https://nbviewer.jupyter.org/github/cvg/Hierar
 | D2Net (SS) + NN                                              | 39.9 / 57.6 / 67.2 | 36.6 / 53.4 / 61.8 | NetVLAD top 20 |
 
 Check out [visuallocalization.net/benchmark](https://www.visuallocalization.net/benchmark) for more details and additional baselines.
+
+## Supported datasets
+
+We provide in [`hloc/pipelines/`](./hloc/pipelines) scripts to run the reconstruction and the localization on the following datasets: Aachen Day-Night (v1.0 and v1.1), InLoc, Extended CMU Seasons, RobotCar Seasons, 4Seasons, Cambridge Landmarks, and 7-Scenes.
 
 ## BibTex Citation
 
@@ -162,17 +169,39 @@ In a match file, each key corresponds to the string `path0.replace('/', '-')+'_'
 <details>
 <summary>[Click to expand]</summary>
 
-For now `hloc` does not have an interface for image retrieval. You will need to export the global descriptors into an HDF5 file, in which each key corresponds to the relative path of an image w.r.t. the dataset root, and contains a dataset `global_descriptor` with size D. You can then export the images pairs with [`hloc/pairs_from_retrieval.py`](hloc/pairs_from_retrieval.py).
+`hloc` also provides an interface for image retrieval via `hloc/extract_features.py`. As previously, simply add a new interface to [`hloc/extractors/`](hloc/extractors/). Alternatively, you will need to export the global descriptors into an HDF5 file, in which each key corresponds to the relative path of an image w.r.t. the dataset root, and contains a dataset `global_descriptor` with size D. You can then export the images pairs with [`hloc/pairs_from_retrieval.py`](hloc/pairs_from_retrieval.py).
+</details>
+
+## Versions
+
+<details>
+<summary>dev branch</summary>
+  
+Continuously adds new features.
+</details>
+
+<details>
+<summary>v1.1 (July 2021)</summary>
+  
+- **Breaking**: improved structure of the SfM folders (triangulation and reconstruction), see [#76](https://github.com/cvg/Hierarchical-Localization/pull/76)
+- Support for image retrieval (NetVLAD, DIR) and more local features (SIFT, R2D2)
+- Support for more datasets: Aachen v1.1, Extended CMU Seasons, RobotCar Seasons, Cambridge Landmarks, 7-Scenes
+- Simplified pipeline and API
+- Spatial matcher
+</details>
+
+<details>
+<summary>v1.0 (July 2020)</summary>
+  
+Initial public version.
 </details>
 
 ## Contributions welcome!
 
 External contributions are very much welcome. This is a non-exaustive list of features that might be valuable additions:
 
-- [ ] more localization datasets (RobotCar Seasons, CMU Seasons, Aachen v1.1, Cambridge Landmarks, 7Scenes)
 - [ ] covisibility clustering for InLoc
 - [ ] visualization of the raw predictions (features and matches)
-- [ ] interfaces for image retrieval (e.g. [DIR](https://github.com/almazan/deep-image-retrieval), [NetVLAD](https://github.com/uzh-rpg/netvlad_tf_open))
-- [ ] other local features
+- [ ] other local features or image retrieval
 
-Created and maintained by [Paul-Edouard Sarlin](https://psarlin.com/).
+Created and maintained by [Paul-Edouard Sarlin](https://psarlin.com/) with the help of many.

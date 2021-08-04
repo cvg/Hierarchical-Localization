@@ -6,18 +6,18 @@ import inspect
 
 class BaseModel(nn.Module, metaclass=ABCMeta):
     default_conf = {}
-    required_data_keys = []
+    required_inputs = []
 
     def __init__(self, conf):
         """Perform some logic and call the _init method of the child model."""
         super().__init__()
         self.conf = conf = {**self.default_conf, **conf}
-        self.required_data_keys = copy(self.required_data_keys)
+        self.required_inputs = copy(self.required_inputs)
         self._init(conf)
 
     def forward(self, data):
         """Check the data and call the _forward method of the child model."""
-        for key in self.required_data_keys:
+        for key in self.required_inputs:
             assert key in data, 'Missing key {} in data'.format(key)
         return self._forward(data)
 

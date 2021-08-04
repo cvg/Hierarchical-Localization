@@ -5,3 +5,9 @@
 	path = third_party/SuperGluePretrainedNetwork
 	url = https://github.com/skydes/SuperGluePretrainedNetwork.git
 	branch = fix-memory
+[submodule "third_party/deep-image-retrieval"]
+	path = third_party/deep-image-retrieval
+	url = https://github.com/naver/deep-image-retrieval.git
+[submodule "third_party/r2d2"]
+	path = third_party/r2d2
+	url = https://github.com/naver/r2d2.git

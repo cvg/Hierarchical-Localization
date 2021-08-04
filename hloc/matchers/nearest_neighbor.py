@@ -40,9 +40,6 @@ class NearestNeighbor(BaseModel):
             'bdn,bdm->bnm', data['descriptors0'], data['descriptors1'])
         matches0, scores0 = find_nn(
             sim, self.conf['ratio_threshold'], self.conf['distance_threshold'])
-        matches1, scores1 = find_nn(
-            sim.transpose(1, 2), self.conf['ratio_threshold'],
-            self.conf['distance_threshold'])
         if self.conf['do_mutual_check']:
             matches1, scores1 = find_nn(
                 sim.transpose(1, 2), self.conf['ratio_threshold'],
