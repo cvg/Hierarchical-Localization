@@ -88,7 +88,7 @@ if __name__ == '__main__':
                         help='Path to the output directory, default: %(default)s')
     parser.add_argument('--num_covis', type=int, default=20,
                         help='Number of image pairs for SfM, default: %(default)s')
-    parser.add_argument('--num_loc', type=int, default=50,
+    parser.add_argument('--num_loc', type=int, default=10,
                         help='Number of image pairs for loc, default: %(default)s')
     args = parser.parse_args()
 

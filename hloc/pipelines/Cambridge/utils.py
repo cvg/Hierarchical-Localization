@@ -59,7 +59,7 @@ def create_query_list_with_intrinsics(model, out, list_file=None, ext='.bin',
     for name in names:
         image = images[name2id[name]]
         camera = cameras[image.camera_id]
-        h, w, params = camera.width, camera.height, camera.params
+        w, h, params = camera.width, camera.height, camera.params
 
         if image_dir is not None:
             # Check the original image size and rescale the camera intrinsics
