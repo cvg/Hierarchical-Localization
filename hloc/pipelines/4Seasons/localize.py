@@ -2,11 +2,10 @@ from pathlib import Path
 import logging
 import argparse
 
-from hloc import extract_features, match_features, localize_sfm
-
-from utils import get_timestamps, delete_unused_images
-from utils import generate_query_lists, generate_localization_pairs
-from utils import prepare_submission, evaluate_submission
+from ... import extract_features, match_features, localize_sfm
+from .utils import get_timestamps, delete_unused_images
+from .utils import generate_query_lists, generate_localization_pairs
+from .utils import prepare_submission, evaluate_submission
 
 relocalization_files = {
     'training': 'RelocalizationFilesTrain//relocalizationFile_recording_2020-03-24_17-36-22.txt',
@@ -64,7 +63,7 @@ generate_localization_pairs(
 ffile = extract_features.main(fconf, seq_images, output_dir)
 mfile = match_features.main(mconf, loc_pairs, fconf['output'], output_dir)
 localize_sfm.main(
-    ref_sfm / 'model', query_list, loc_pairs, ffile, mfile, results_path)
+    ref_sfm, query_list, loc_pairs, ffile, mfile, results_path)
 
 # Convert the absolute poses to relative poses with the reference frames.
 submission_dir.mkdir(exist_ok=True)

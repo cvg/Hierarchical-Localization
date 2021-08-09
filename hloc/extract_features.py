@@ -8,10 +8,13 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 import pprint
+import collections.abc as collections
 
 from . import extractors
 from .utils.base_model import dynamic_load
 from .utils.tools import map_tensor
+from .utils.parsers import parse_image_lists
+from .utils.io import read_image, list_h5_names
 
 
 '''
@@ -72,13 +75,32 @@ confs = {
             'resize_max': 1600,
         },
     },
+    'sift': {
+        'output': 'feats-sift',
+        'model': {
+            'name': 'sift'
+        },
+        'preprocessing': {
+            'grayscale': True,
+            'resize_max': 1600,
+        },
+    },
     'dir': {
         'output': 'global-feats-dir',
         'model': {
             'name': 'dir',
         },
         'preprocessing': {
-            'resize_max': None,
+            'resize_max': 1024,
+        },
+    },
+    'netvlad': {
+        'output': 'global-feats-netvlad',
+        'model': {
+            'name': 'netvlad',
+        },
+        'preprocessing': {
+            'resize_max': 1024,
         },
     },
 }
@@ -92,29 +114,36 @@ class ImageDataset(torch.utils.data.Dataset):
         'resize_force': False,
     }
 
-    def __init__(self, root, conf):
+    def __init__(self, root, conf, paths=None):
         self.conf = conf = SimpleNamespace(**{**self.default_conf, **conf})
         self.root = root
 
-        self.paths = []
-        for g in conf.globs:
-            self.paths += list(Path(root).glob('**/'+g))
-        if len(self.paths) == 0:
-            raise ValueError(f'Could not find any image in root: {root}.')
-        self.paths = [i.relative_to(root) for i in self.paths]
-        logging.info(f'Found {len(self.paths)} images in root {root}.')
+        if paths is None:
+            paths = []
+            for g in conf.globs:
+                paths += list(Path(root).glob('**/'+g))
+            if len(paths) == 0:
+                raise ValueError(f'Could not find any image in root: {root}.')
+            paths = sorted(list(set(paths)))
+            self.names = [i.relative_to(root).as_posix() for i in paths]
+            logging.info(f'Found {len(self.names)} images in root {root}.')
+        else:
+            if isinstance(paths, (Path, str)):
+                self.names = parse_image_lists(paths)
+            elif isinstance(paths, collections.Iterable):
+                self.names = [p.as_posix() if isinstance(p, Path) else p
+                              for p in paths]
+            else:
+                raise ValueError(f'Unknown format for path argument {paths}.')
+
+            for name in self.names:
+                if not (root / name).exists():
+                    raise ValueError(
+                        f'Image {name} does not exists in root: {root}.')
 
     def __getitem__(self, idx):
-        path = self.paths[idx]
-        if self.conf.grayscale:
-            mode = cv2.IMREAD_GRAYSCALE
-        else:
-            mode = cv2.IMREAD_COLOR
-        image = cv2.imread(str(self.root / path), mode)
-        if not self.conf.grayscale:
-            image = image[:, :, ::-1]  # BGR to RGB
-        if image is None:
-            raise ValueError(f'Cannot read image {str(path)}.')
+        name = self.names[idx]
+        image = read_image(self.root / name, self.conf.grayscale)
         image = image.astype(np.float32)
         size = image.shape[:2][::-1]
         w, h = size
@@ -133,34 +162,41 @@ class ImageDataset(torch.utils.data.Dataset):
         image = image / 255.
 
         data = {
-            'name': str(path),
+            'name': name,
             'image': image,
             'original_size': np.array(size),
         }
         return data
 
     def __len__(self):
-        return len(self.paths)
+        return len(self.names)
 
 
 @torch.no_grad()
-def main(conf, image_dir, export_dir, as_half=False):
+def main(conf, image_dir, export_dir=None, as_half=False,
+         image_list=None, feature_path=None):
     logging.info('Extracting local features with configuration:'
                  f'\n{pprint.pformat(conf)}')
+
+    loader = ImageDataset(image_dir, conf['preprocessing'], image_list)
+    loader = torch.utils.data.DataLoader(loader, num_workers=1)
+
+    if feature_path is None:
+        feature_path = Path(export_dir, conf['output']+'.h5')
+    feature_path.parent.mkdir(exist_ok=True, parents=True)
+    skip_names = set(list_h5_names(feature_path)
+                     if feature_path.exists() else ())
+    if set(loader.dataset.names).issubset(set(skip_names)):
+        logging.info('Skipping the extraction.')
+        return feature_path
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     Model = dynamic_load(extractors, conf['model']['name'])
     model = Model(conf['model']).eval().to(device)
 
-    loader = ImageDataset(image_dir, conf['preprocessing'])
-    loader = torch.utils.data.DataLoader(loader, num_workers=1)
-
-    feature_path = Path(export_dir, conf['output']+'.h5')
-    feature_path.parent.mkdir(exist_ok=True, parents=True)
-    feature_file = h5py.File(str(feature_path), 'a')
-
     for data in tqdm(loader):
-        if data['name'][0] in feature_file:
+        name = data['name'][0]  # remove batch dimension
+        if name in skip_names:
             continue
 
         pred = model(map_tensor(data, lambda x: x.to(device)))
@@ -178,15 +214,14 @@ def main(conf, image_dir, export_dir, as_half=False):
                 if (dt == np.float32) and (dt != np.float16):
                     pred[k] = pred[k].astype(np.float16)
 
-        grp = feature_file.create_group(data['name'][0])
-        for k, v in pred.items():
-            grp.create_dataset(k, data=v)
+        with h5py.File(str(feature_path), 'a') as fd:
+            grp = fd.create_group(name)
+            for k, v in pred.items():
+                grp.create_dataset(k, data=v)
 
         del pred
 
-    feature_file.close()
     logging.info('Finished exporting features.')
-
     return feature_path
 
 
@@ -197,5 +232,7 @@ if __name__ == '__main__':
     parser.add_argument('--conf', type=str, default='superpoint_aachen',
                         choices=list(confs.keys()))
     parser.add_argument('--as_half', action='store_true')
+    parser.add_argument('--image_list', type=Path)
+    parser.add_argument('--feature_path', type=Path)
     args = parser.parse_args()
     main(confs[args.conf], args.image_dir, args.export_dir, args.as_half)

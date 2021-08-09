@@ -9,8 +9,7 @@ import pickle
 import pycolmap
 
 from .utils.read_write_model import read_model
-from .utils.parsers import (
-    parse_image_lists_with_intrinsics, parse_retrieval, names_to_pair)
+from .utils.parsers import parse_image_lists, parse_retrieval, names_to_pair
 
 
 def do_covisibility_clustering(frame_ids, all_images, points3D):
@@ -55,6 +54,9 @@ def pose_from_cluster(qname, qinfo, db_ids, db_images, points3D,
     for i, db_id in enumerate(db_ids):
         db_name = db_images[db_id].name
         points3D_ids = db_images[db_id].point3D_ids
+        if len(points3D_ids) == 0:
+            logging.debug(f'No 3D points found for {db_name}.')
+            continue
 
         pair = names_to_pair(qname, db_name)
         matches = match_file[pair]['matches0'].__array__()
@@ -95,18 +97,19 @@ def pose_from_cluster(qname, qinfo, db_ids, db_images, points3D,
 
 
 def main(reference_sfm, queries, retrieval, features, matches, results,
-         ransac_thresh=12, covisibility_clustering=False):
+         ransac_thresh=12, covisibility_clustering=False,
+         prepend_camera_name=False):
 
     assert reference_sfm.exists(), reference_sfm
     assert retrieval.exists(), retrieval
     assert features.exists(), features
     assert matches.exists(), matches
 
-    queries = parse_image_lists_with_intrinsics(queries)
+    queries = parse_image_lists(queries, with_intrinsics=True)
     retrieval_dict = parse_retrieval(retrieval)
 
     logging.info('Reading 3D model...')
-    _, db_images, points3D = read_model(str(reference_sfm), '.bin')
+    _, db_images, points3D = read_model(str(reference_sfm))
     db_name_to_id = {image.name: i for i, image in db_images.items()}
 
     feature_file = h5py.File(features, 'r')
@@ -121,6 +124,9 @@ def main(reference_sfm, queries, retrieval, features, matches, results,
     }
     logging.info('Starting localization...')
     for qname, qinfo in tqdm(queries):
+        if qname not in retrieval_dict:
+            logging.warning(f'No images retrieved for query image {qname}. Skipping...')
+            continue
         db_names = retrieval_dict[qname]
         db_ids = []
         for n in db_names:
@@ -149,7 +155,6 @@ def main(reference_sfm, queries, retrieval, features, matches, results,
                     'points3D_ids': mp3d_ids,
                     'num_matches': num_matches,
                 })
-            # logging.info(f'# inliers: {best_inliers}')
             if best_cluster is not None:
                 ret = logs_clusters[best_cluster]['PnP_ret']
                 poses[qname] = (ret['qvec'], ret['tvec'])
@@ -162,7 +167,6 @@ def main(reference_sfm, queries, retrieval, features, matches, results,
             ret, mkpq, mp3d, mp3d_ids, num_matches, map_ = pose_from_cluster(
                 qname, qinfo, db_ids, db_images, points3D,
                 feature_file, match_file, thresh=ransac_thresh)
-            # logging.info(f'# inliers: {ret["num_inliers"]}')
 
             if ret['success']:
                 poses[qname] = (ret['qvec'], ret['tvec'])
@@ -187,6 +191,8 @@ def main(reference_sfm, queries, retrieval, features, matches, results,
             qvec = ' '.join(map(str, qvec))
             tvec = ' '.join(map(str, tvec))
             name = q.split('/')[-1]
+            if prepend_camera_name:
+                name = q.split('/')[-2] + '/' + name
             f.write(f'{name} {qvec} {tvec}\n')
 
     logs_path = f'{results}_logs.pkl'
@@ -206,5 +212,6 @@ if __name__ == '__main__':
     parser.add_argument('--results', type=Path, required=True)
     parser.add_argument('--ransac_thresh', type=float, default=12.0)
     parser.add_argument('--covisibility_clustering', action='store_true')
+    parser.add_argument('--prepend_camera_name', action='store_true')
     args = parser.parse_args()
     main(**args.__dict__)

@@ -10,7 +10,7 @@ import shutil
 
 from .utils.read_write_model import (
         read_cameras_binary, read_images_binary, CAMERA_MODEL_NAMES,
-        write_points3d_binary, write_images_binary, Image)
+        write_points3D_binary, write_images_binary)
 from .utils.database import COLMAPDatabase
 from .utils.parsers import names_to_pair
 
@@ -19,14 +19,12 @@ def create_empty_model(reference_model, empty_model):
     logging.info('Creating an empty model.')
     empty_model.mkdir(exist_ok=True)
     shutil.copy(reference_model / 'cameras.bin', empty_model)
-    write_points3d_binary(dict(), empty_model / 'points3D.bin')
+    write_points3D_binary(dict(), empty_model / 'points3D.bin')
     images = read_images_binary(str(reference_model / 'images.bin'))
     images_empty = dict()
     for id_, image in images.items():
-        image = image._asdict()
-        image['xys'] = np.zeros((0, 2), float)
-        image['point3D_ids'] = np.full(0, -1, int)
-        images_empty[id_] = Image(**image)
+        images_empty[id_] = image._replace(
+            xys=np.zeros((0, 2), float), point3D_ids=np.full(0, -1, int))
     write_images_binary(images_empty, empty_model / 'images.bin')
 
 
@@ -118,10 +116,7 @@ def geometric_verification(colmap_path, database_path, pairs_path):
         '--match_type', 'pairs',
         '--SiftMatching.max_num_trials', str(20000),
         '--SiftMatching.min_inlier_ratio', str(0.1)]
-    ret = subprocess.call(cmd)
-    if ret != 0:
-        logging.warning('Problem with matches_importer, exiting.')
-        exit(ret)
+    subprocess.run(cmd, check=True)
 
 
 def run_triangulation(colmap_path, model_path, database_path, image_dir,
@@ -139,13 +134,10 @@ def run_triangulation(colmap_path, model_path, database_path, image_dir,
         '--Mapper.ba_refine_principal_point', '0',
         '--Mapper.ba_refine_extra_params', '0']
     logging.info(' '.join(cmd))
-    ret = subprocess.call(cmd)
-    if ret != 0:
-        logging.warning('Problem with point_triangulator, exiting.')
-        exit(ret)
+    subprocess.run(cmd, check=True)
 
     stats_raw = subprocess.check_output(
-        [str(colmap_path), 'model_analyzer', '--path', model_path])
+        [str(colmap_path), 'model_analyzer', '--path', str(model_path)])
     stats_raw = stats_raw.decode().split("\n")
     stats = dict()
     for stat in stats_raw:
@@ -176,8 +168,6 @@ def main(sfm_dir, reference_sfm_model, image_dir, pairs, features, matches,
 
     sfm_dir.mkdir(parents=True, exist_ok=True)
     database = sfm_dir / 'database.db'
-    model = sfm_dir / 'model'
-    model.mkdir(exist_ok=True)
     empty_model = sfm_dir / 'empty'
 
     create_empty_model(reference_sfm_model, empty_model)
@@ -188,7 +178,7 @@ def main(sfm_dir, reference_sfm_model, image_dir, pairs, features, matches,
     if not skip_geometric_verification:
         geometric_verification(colmap_path, database, pairs)
     stats = run_triangulation(
-        colmap_path, model, database, image_dir, empty_model)
+        colmap_path, sfm_dir, database, image_dir, empty_model)
 
     logging.info(f'Statistics:\n{pprint.pformat(stats)}')
     shutil.rmtree(empty_model)

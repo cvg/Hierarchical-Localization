@@ -1,20 +1,12 @@
-import matplotlib.pyplot as plt
 from matplotlib import cm
 import random
-import cv2
 import numpy as np
 import pickle
 
-from .utils.read_write_model import read_images_binary, read_points3d_binary
-from .utils.viz import plot_images, plot_keypoints, plot_matches, cm_RdGn
-
-
-def read_image(path):
-    assert path.exists(), path
-    image = cv2.imread(str(path))
-    if len(image.shape) == 3:
-        image = image[:, :, ::-1]
-    return image
+from .utils.read_write_model import read_images_binary, read_points3D_binary
+from .utils.viz import (
+        plot_images, plot_keypoints, plot_matches, cm_RdGn, add_text)
+from .utils.io import read_image
 
 
 def visualize_sfm_2d(sfm_model, image_dir, color_by='visibility',
@@ -24,7 +16,7 @@ def visualize_sfm_2d(sfm_model, image_dir, color_by='visibility',
 
     images = read_images_binary(sfm_model / 'images.bin')
     if color_by in ['track_length', 'depth']:
-        points3D = read_points3d_binary(sfm_model / 'points3D.bin')
+        points3D = read_points3D_binary(sfm_model / 'points3D.bin')
 
     if not selected:
         image_ids = list(images.keys())
@@ -59,14 +51,8 @@ def visualize_sfm_2d(sfm_model, image_dir, color_by='visibility',
 
         plot_images([image], dpi=dpi)
         plot_keypoints([keypoints], colors=[color], ps=4)
-        fig = plt.gcf()
-        fig.text(
-            0.01, 0.99, text, transform=fig.axes[0].transAxes,
-            fontsize=10, va='top', ha='left', color='k',
-            bbox=dict(fc=(1, 1, 1, 0.5), edgecolor=(0, 0, 0, 0)))
-        fig.text(
-            0.01, 0.01, name, transform=fig.axes[0].transAxes,
-            fontsize=5, va='bottom', ha='left', color='w')
+        add_text(0, text)
+        add_text(0, name, pos=(0.01, 0.01), fs=5, lcolor=None, va='bottom')
 
 
 def visualize_loc(results, image_dir, sfm_model=None, top_k_db=2,
@@ -86,7 +72,7 @@ def visualize_loc(results, image_dir, sfm_model=None, top_k_db=2,
     if is_sfm:
         assert sfm_model.exists()
         images = read_images_binary(sfm_model / 'images.bin')
-        points3D = read_points3d_binary(sfm_model / 'points3D.bin')
+        points3D = read_points3D_binary(sfm_model / 'points3D.bin')
 
     for q in selected:
         q_image = read_image(image_dir / q)
@@ -141,14 +127,7 @@ def visualize_loc(results, image_dir, sfm_model=None, top_k_db=2,
 
             plot_images([q_image, db_image], dpi=dpi)
             plot_matches(kp_q, kp_db, color, a=0.1)
-            fig = plt.gcf()
-            fig.text(
-                0.01, 0.99, text, transform=fig.axes[0].transAxes,
-                fontsize=15, va='top', ha='left', color='k',
-                bbox=dict(fc=(1, 1, 1, 0.5), edgecolor=(0, 0, 0, 0)))
-            fig.text(
-                0.01, 0.01, q, transform=fig.axes[0].transAxes,
-                fontsize=5, va='bottom', ha='left', color='w')
-            fig.text(
-                0.01, 0.01, db_name, transform=fig.axes[1].transAxes,
-                fontsize=5, va='bottom', ha='left', color='w')
+            add_text(0, text)
+            add_text(0, q, pos=(0.01, 0.01), fs=5, lcolor=None, va='bottom')
+            add_text(1, db_name, pos=(0.01, 0.01), fs=5,
+                     lcolor=None, va='bottom')
