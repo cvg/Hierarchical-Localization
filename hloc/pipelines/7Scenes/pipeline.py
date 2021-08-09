@@ -33,6 +33,7 @@ def run_scene(images, gt_dir, retrieval, outputs, results, num_covis,
         },
     }
     matcher_conf = match_features.confs['superglue']
+    matcher_conf['model']['sinkhorn_iterations'] = 5
 
     test_list = gt_dir / 'list_test.txt'
     create_reference_sfm(gt_dir, ref_sfm_sift, test_list)
@@ -46,13 +47,14 @@ def run_scene(images, gt_dir, retrieval, outputs, results, num_covis,
             ref_sfm_sift, sfm_pairs, num_matched=num_covis)
     sfm_matches = match_features.main(
             matcher_conf, sfm_pairs, feature_conf['output'], outputs)
-    triangulation.main(
-        ref_sfm, ref_sfm_sift,
-        images,
-        sfm_pairs,
-        features,
-        sfm_matches,
-        colmap_path='colmap')
+    if not (use_dense_depth and ref_sfm.exists()):
+        triangulation.main(
+            ref_sfm, ref_sfm_sift,
+            images,
+            sfm_pairs,
+            features,
+            sfm_matches,
+            colmap_path='colmap')
     if use_dense_depth:
         assert depth_dir is not None
         ref_sfm_fix = outputs / 'sfm_superpoint+superglue+depth'

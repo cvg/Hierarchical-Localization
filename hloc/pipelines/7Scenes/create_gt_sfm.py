@@ -5,7 +5,6 @@ import PIL.Image
 from tqdm import tqdm
 import pycolmap
 
-from .pipeline import SCENES
 from ...utils.read_write_model import write_model, read_model
 
 
@@ -106,7 +105,8 @@ def correct_sfm_with_gt_depth(sfm_path, depth_folder_path, output_path):
         new_p3D_ids[new_p3D_ids != -1] = sub_p3D_ids
         img = img._replace(point3D_ids=new_p3D_ids)
 
-        assert len(img.point3D_ids[img.point3D_ids != -1]) == len(scs), f"{len(scs)}, {len(img.point3D_ids[img.point3D_ids != -1])}"
+        assert len(img.point3D_ids[img.point3D_ids != -1]) == len(scs), (
+                f"{len(scs)}, {len(img.point3D_ids[img.point3D_ids != -1])}")
         for i, p3did in enumerate(img.point3D_ids[img.point3D_ids != -1]):
             points3D[p3did] = points3D[p3did]._replace(xyz=scs[i])
         images[imgid] = img
@@ -119,6 +119,8 @@ if __name__ == '__main__':
     dataset = Path('datasets/7scenes')
     outputs = Path('outputs/7Scenes')
 
+    SCENES = ['chess', 'fire', 'heads', 'office', 'pumpkin',
+              'redkitchen', 'stairs']
     for scene in SCENES:
         sfm_path = outputs / scene / 'sfm_superpoint+superglue'
         depth_path = dataset / f'depth/7scenes_{scene}/train/depth'
