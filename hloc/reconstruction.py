@@ -80,7 +80,7 @@ def run_reconstruction(colmap_path, sfm_dir, database_path, image_dir,
     models = list(models_path.iterdir())
     if len(models) == 0:
         logging.error('Could not reconstruct any model!')
-        return False
+        return None
     logging.info(f'Reconstructed {len(models)} models.')
 
     largest_model = None
@@ -142,8 +142,9 @@ def main(sfm_dir, image_dir, pairs, features, matches,
         geometric_verification(colmap_path, database, pairs)
     stats = run_reconstruction(
         colmap_path, sfm_dir, database, image_dir, min_num_matches)
-    stats['num_input_images'] = len(image_ids)
-    logging.info(f'Statistics:\n{pprint.pformat(stats)}')
+    if stats is not None:
+        stats['num_input_images'] = len(image_ids)
+        logging.info(f'Statistics:\n{pprint.pformat(stats)}')
 
 
 if __name__ == '__main__':
