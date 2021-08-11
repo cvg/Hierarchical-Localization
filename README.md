@@ -34,6 +34,11 @@ docker run -it --rm -p 8888:8888 hloc:latest  # for GPU support, add `--runtime=
 jupyter notebook --ip 0.0.0.0 --port 8888 --no-browser --allow-root
 ```
 
+You can install `hloc` as a package and import it in other projects as an external library:
+```
+python -m pip install -e .
+```
+
 ## General pipeline
 
 The toolbox is composed of scripts, which roughly perform the following steps:
@@ -175,9 +180,9 @@ In a match file, each key corresponds to the string `path0.replace('/', '-')+'_'
 ## Versions
 
 <details>
-<summary>dev branch</summary>
+<summary>master (development)</summary>
   
-Continuously adds new features.
+Minor bug fixes.
 </details>
 
 <details>
@@ -200,6 +205,8 @@ Initial public version.
 
 External contributions are very much welcome. This is a non-exaustive list of features that might be valuable additions:
 
+- [ ] handle unknown query intrinsics (extraction from EXIF + refinement in PnP)
+- [ ] support for GPS (extraction from EXIF + guided retrieval)
 - [ ] covisibility clustering for InLoc
 - [ ] visualization of the raw predictions (features and matches)
 - [ ] other local features or image retrieval
