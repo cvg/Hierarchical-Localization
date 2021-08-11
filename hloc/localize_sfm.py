@@ -148,12 +148,14 @@ def main(reference_sfm, queries, retrieval, features, matches, results,
                     best_cluster = i
                     best_inliers = ret['num_inliers']
                 logs_clusters.append({
-                    'cluster_ids': cluster_ids,
+                    'db': cluster_ids,
                     'PnP_ret': ret,
                     'keypoints_query': mkpq,
                     'points3D_xyz': mp3d,
                     'points3D_ids': mp3d_ids,
                     'num_matches': num_matches,
+                    'keypoint_index_to_db': map_,
+                    'covisibility_clustering': covisibility_clustering,
                 })
             if best_cluster is not None:
                 ret = logs_clusters[best_cluster]['PnP_ret']
@@ -162,6 +164,7 @@ def main(reference_sfm, queries, retrieval, features, matches, results,
                 'db_ids': db_ids,
                 'best_cluster': best_cluster,
                 'log_clusters': logs_clusters,
+                **logs_clusters[best_cluster],
             }
         else:
             ret, mkpq, mp3d, mp3d_ids, num_matches, map_ = pose_from_cluster(
@@ -181,6 +184,7 @@ def main(reference_sfm, queries, retrieval, features, matches, results,
                 'points3D_ids': mp3d_ids,
                 'num_matches': num_matches,
                 'keypoint_index_to_db': map_,
+                'covisibility_clustering': covisibility_clustering,
             }
 
     logging.info(f'Localized {len(poses)} / {len(queries)} images.')
