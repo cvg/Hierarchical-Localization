@@ -141,27 +141,30 @@ def main(reference_sfm, queries, retrieval, features, matches, results,
             best_cluster = None
             logs_clusters = []
             for i, cluster_ids in enumerate(clusters):
-                ret, mkpq, mp3d, mp3d_ids, num_matches, _ = pose_from_cluster(
-                    qname, qinfo, cluster_ids, db_images, points3D,
-                    feature_file, match_file, thresh=ransac_thresh)
+                ret, mkpq, mp3d, mp3d_ids, num_matches, map_ = (
+                        pose_from_cluster(
+                            qname, qinfo, cluster_ids, db_images, points3D,
+                            feature_file, match_file, thresh=ransac_thresh))
                 if ret['success'] and ret['num_inliers'] > best_inliers:
                     best_cluster = i
                     best_inliers = ret['num_inliers']
                 logs_clusters.append({
-                    'cluster_ids': cluster_ids,
+                    'db': cluster_ids,
                     'PnP_ret': ret,
                     'keypoints_query': mkpq,
                     'points3D_xyz': mp3d,
                     'points3D_ids': mp3d_ids,
                     'num_matches': num_matches,
+                    'keypoint_index_to_db': map_,
                 })
             if best_cluster is not None:
                 ret = logs_clusters[best_cluster]['PnP_ret']
                 poses[qname] = (ret['qvec'], ret['tvec'])
             logs['loc'][qname] = {
-                'db_ids': db_ids,
+                'db': db_ids,
                 'best_cluster': best_cluster,
                 'log_clusters': logs_clusters,
+                'covisibility_clustering': covisibility_clustering,
             }
         else:
             ret, mkpq, mp3d, mp3d_ids, num_matches, map_ = pose_from_cluster(
@@ -181,6 +184,7 @@ def main(reference_sfm, queries, retrieval, features, matches, results,
                 'points3D_ids': mp3d_ids,
                 'num_matches': num_matches,
                 'keypoint_index_to_db': map_,
+                'covisibility_clustering': covisibility_clustering,
             }
 
     logging.info(f'Localized {len(poses)} / {len(queries)} images.')
