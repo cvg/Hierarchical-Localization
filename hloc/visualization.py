@@ -77,6 +77,10 @@ def visualize_loc(results, image_dir, sfm_model=None, top_k_db=2,
     for q in selected:
         q_image = read_image(image_dir / q)
         loc = logs['loc'][q]
+        if loc.get('covisibility_clustering', False):
+            # select the first, largest cluster if the localization failed
+            loc = loc['log_clusters'][loc['best_cluster'] or 0]
+
         inliers = np.array(loc['PnP_ret']['inliers'])
         mkp_q = loc['keypoints_query']
 
