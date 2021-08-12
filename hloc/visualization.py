@@ -83,7 +83,6 @@ def visualize_loc(results, image_dir, sfm_model=None, top_k_db=2,
 
         inliers = np.array(loc['PnP_ret']['inliers'])
         mkp_q = loc['keypoints_query']
-
         n = len(loc['db'])
         if is_sfm:
             # for each pair of query keypoint and its matched 3D point,
