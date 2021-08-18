@@ -124,7 +124,7 @@ def pair_id_to_image_ids(pair_id):
 
 def array_to_blob(array):
     if IS_PYTHON3:
-        return array.tostring()
+        return array.tobytes()
     else:
         return np.getbuffer(array)
 
