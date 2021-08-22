@@ -91,7 +91,7 @@ global_descriptors = extract_features.main(retrieval_conf, images, outputs)
 # TODO: do per location and per camera
 pairs_from_retrieval.main(
     global_descriptors, loc_pairs, args.num_loc,
-    query_prefix='query', db_model=reference_sfm)
+    query_prefix=CONDITIONS, db_model=reference_sfm)
 loc_matches = match_features.main(
     matcher_conf, loc_pairs, feature_conf['output'], outputs)
 
