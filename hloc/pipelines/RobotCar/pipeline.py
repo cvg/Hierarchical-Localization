@@ -26,7 +26,7 @@ def generate_query_list(dataset, image_dir, path):
             cameras[side] = [str(p) for p in params]
 
     queries = sorted(image_dir.glob('**/*.jpg'))
-    queries = [str(q.relative_to(image_dir)) for q in queries]
+    queries = [str(q.relative_to(image_dir.parents[0])) for q in queries]
 
     out = [[q] + cameras[Path(q).parent.name] for q in queries]
     with open(path, 'w') as f:
