@@ -215,9 +215,17 @@ def main(conf, image_dir, export_dir=None, as_half=False,
                     pred[k] = pred[k].astype(np.float16)
 
         with h5py.File(str(feature_path), 'a') as fd:
-            grp = fd.create_group(name)
-            for k, v in pred.items():
-                grp.create_dataset(k, data=v)
+            try:
+                grp = fd.create_group(name)
+                for k, v in pred.items():
+                    grp.create_dataset(k, data=v)
+            except OSError as error:
+                if 'No space left on device' in error.args[0]:
+                    logging.error(
+                        'Out of disk space: storing features on disk can take '
+                        'significant space, did you enable the as_half flag?')
+                    del grp, fd[name]
+                raise error
 
         del pred
 
