@@ -89,10 +89,10 @@ We show in [`pipeline_SfM.ipynb`](https://nbviewer.jupyter.org/github/cvg/Hierar
 ## Results
 
 - Supported local feature extractors: [SuperPoint](https://arxiv.org/abs/1712.07629), [D2-Net](https://arxiv.org/abs/1905.03561), [SIFT](https://www.cs.ubc.ca/~lowe/papers/ijcv04.pdf), and [R2D2](https://arxiv.org/abs/1906.06195).
-- Supported feature matchers: [SuperGlue](https://arxiv.org/abs/1911.11763) and the Nearest Neighbor matcher with ratio test and/or mutual check.
+- Supported feature matchers: [SuperGlue](https://arxiv.org/abs/1911.11763) and nearest neighbor search with ratio test, distance test, mutual check.
 - Supported image retrieval: [NetVLAD](https://arxiv.org/abs/1511.07247) and [AP-GeM/DIR](https://github.com/naver/deep-image-retrieval).
 
-Using [NetVLAD](https://arxiv.org/abs/1511.07247) for retrieval, we obtain the following best results:
+Using NetVLAD for retrieval, we obtain the following best results:
 
 | Methods                                                      | Aachen day         | Aachen night       | Retrieval      |
 | ------------------------------------------------------------ | ------------------ | ------------------ | -------------- |
@@ -182,7 +182,7 @@ In a match file, each key corresponds to the string `path0.replace('/', '-')+'_'
 <details>
 <summary>master (development)</summary>
   
-Minor bug fixes.
+Multiple bug fixes and minor improvements.
 </details>
 
 <details>
@@ -211,4 +211,4 @@ External contributions are very much welcome. This is a non-exaustive list of fe
 - [ ] visualization of the raw predictions (features and matches)
 - [ ] other local features or image retrieval
 
-Created and maintained by [Paul-Edouard Sarlin](https://psarlin.com/) with the help of many.
+Created and maintained by [Paul-Edouard Sarlin](https://psarlin.com/) with the help of many contributors.
