@@ -18,7 +18,7 @@ from .utils.parsers import names_to_pair
 def create_empty_model(reference_model, empty_model):
     logging.info('Creating an empty model.')
     empty_model.mkdir(exist_ok=True)
-    shutil.copy(reference_model / 'cameras.bin', empty_model)
+    shutil.copyfile(reference_model/'cameras.bin', empty_model/'cameras.bin')
     write_points3D_binary(dict(), empty_model / 'points3D.bin')
     images = read_images_binary(str(reference_model / 'images.bin'))
     images_empty = dict()
