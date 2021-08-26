@@ -11,7 +11,7 @@ def parse_image_list(path, with_intrinsics=False):
             line = line.strip('\n')
             if len(line) == 0 or line[0] == '#':
                 continue
-            name, *data = line.split(' ')
+            name, *data = line.split()
             if with_intrinsics:
                 camera_model, width, height, *params = data
                 params = np.array(params, float)
@@ -38,7 +38,7 @@ def parse_retrieval(path):
     retrieval = defaultdict(list)
     with open(path, 'r') as f:
         for p in f.read().rstrip('\n').split('\n'):
-            q, r = p.split(' ')
+            q, r = p.split()
             retrieval[q].append(r)
     return dict(retrieval)
 
