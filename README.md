@@ -18,25 +18,21 @@ With `hloc`, you can:
 
 ## Installation
 
-`hloc` requires Python >=3.6, PyTorch >=1.1, and [COLMAP](https://colmap.github.io/index.html). Other minor dependencies are listed in `requirements.txt`.  For pose estimation, we use [pycolmap](https://github.com/mihaidusmanu/pycolmap), which can be installed as:
-
+`hloc` requires Python >=3.6, PyTorch >=1.1, and [COLMAP](https://colmap.github.io/index.html). Installing the package locally pulls the other dependencies:
 ```
-pip install git+https://github.com/mihaidusmanu/pycolmap
+git clone --recursive https://github.com/cvg/Hierarchical-Localization/
+cd Hierarchical-Localization/
+python -m pip install -e .
 ```
 
+All dependencies are listed in `requirements.txt`.
 This codebase includes external local features as git submodules – don't forget to pull submodules with `git submodule update --init --recursive`. Your local features are based on TensorFlow? No problem! See [below](#using-your-own-local-features-or-matcher) for the steps.
 
 We also provide a Docker image that includes COLMAP and other dependencies:
-
 ```
 docker build -t hloc:latest .
 docker run -it --rm -p 8888:8888 hloc:latest  # for GPU support, add `--runtime=nvidia`
 jupyter notebook --ip 0.0.0.0 --port 8888 --no-browser --allow-root
-```
-
-You can install `hloc` as a package and import it in other projects as an external library:
-```
-python -m pip install -e .
 ```
 
 ## General pipeline
@@ -61,6 +57,8 @@ Strcture of the toolbox:
 - `hloc/extractors/` : interfaces for feature extractors
 - `hloc/matchers/` : interfaces for feature matchers
 - `hloc/pipelines/` : entire pipelines for multiple datasets
+
+`hloc` can be imported as an external package with `import hloc` or from the command line with `python -m hloc.script`.
 
 ## Tasks
 
@@ -164,7 +162,7 @@ If your code is based on PyTorch: simply add a new interface in [`hloc/extractor
 
 If your code is based on TensorFlow: you will need to either modify `hloc/extract_features.py` and `hloc/match_features.py`, or export yourself the features and matches to HDF5 files, described below.
 
-In a feature file, each key corresponds to the relative path of an image w.r.t. the dataset root (e.g. `db/1.jpg` for Aachen), and has one dataset per prediction (e.g. `keypoints` and `descriptors`, with shape Nx2 and DxN). 
+In a feature file, each key corresponds to the relative path of an image w.r.t. the dataset root (e.g. `db/1.jpg` for Aachen), and has one dataset per prediction (e.g. `keypoints` and `descriptors`, with shape Nx2 and DxN).
 
 In a match file, each key corresponds to the string `path0.replace('/', '-')+'_'+path1.replace('/', '-')` and has a dataset `matches0` with shape N. It indicates, for each keypoint in the first image, the index of the matching keypoint in the second image, or `-1` if the keypoint is unmatched.
 </details>
@@ -181,13 +179,13 @@ In a match file, each key corresponds to the string `path0.replace('/', '-')+'_'
 
 <details>
 <summary>master (development)</summary>
-  
+
 Multiple bug fixes and minor improvements.
 </details>
 
 <details>
 <summary>v1.1 (July 2021)</summary>
-  
+
 - **Breaking**: improved structure of the SfM folders (triangulation and reconstruction), see [#76](https://github.com/cvg/Hierarchical-Localization/pull/76)
 - Support for image retrieval (NetVLAD, DIR) and more local features (SIFT, R2D2)
 - Support for more datasets: Aachen v1.1, Extended CMU Seasons, RobotCar Seasons, Cambridge Landmarks, 7-Scenes
@@ -197,13 +195,13 @@ Multiple bug fixes and minor improvements.
 
 <details>
 <summary>v1.0 (July 2020)</summary>
-  
+
 Initial public version.
 </details>
 
 ## Contributions welcome!
 
-External contributions are very much welcome. This is a non-exaustive list of features that might be valuable additions:
+External contributions are very much welcome. Please follow the [PEP8 style guidelines](https://www.python.org/dev/peps/pep-0008/) using a linter like flake8. This is a non-exhaustive list of features that might be valuable additions:
 
 - [ ] handle unknown query intrinsics (extraction from EXIF + refinement in PnP)
 - [ ] support for GPS (extraction from EXIF + guided retrieval)

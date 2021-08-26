@@ -1,7 +1,8 @@
-torch
+torch>=1.1
 numpy
 opencv-python
 tqdm
 matplotlib
 scipy
 h5py
+git+https://github.com/mihaidusmanu/pycolmap
