@@ -8,6 +8,7 @@ with open(str(Path(__file__).parent / 'README.md'), 'r', encoding='utf-8') as f:
 
 dependencies = [
     'torch>=1.1',
+    'torchvision>=0.3',
     'opencv-python',
     'numpy',
     'tqdm',
