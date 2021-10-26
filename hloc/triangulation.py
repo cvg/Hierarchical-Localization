@@ -30,7 +30,8 @@ def create_empty_model(reference_model, empty_model):
 
 def create_db_from_model(empty_model, database_path):
     if database_path.exists():
-        logging.warning('Database already exists.')
+        logging.warning('The database already exists, deleting it.')
+        database_path.unlink()
 
     cameras = read_cameras_binary(str(empty_model / 'cameras.bin'))
     images = read_images_binary(str(empty_model / 'images.bin'))
@@ -114,6 +115,7 @@ def geometric_verification(colmap_path, database_path, pairs_path):
         '--database_path', str(database_path),
         '--match_list_path', str(pairs_path),
         '--match_type', 'pairs',
+        '--SiftMatching.use_gpu', '0',
         '--SiftMatching.max_num_trials', str(20000),
         '--SiftMatching.min_inlier_ratio', str(0.1)]
     subprocess.run(cmd, check=True)

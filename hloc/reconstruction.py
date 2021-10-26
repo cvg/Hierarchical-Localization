@@ -13,6 +13,9 @@ from .triangulation import (
 
 
 def create_empty_db(database_path):
+    if database_path.exists():
+        logging.warning('The database already exists, deleting it.')
+        database_path.unlink()
     logging.info('Creating an empty database...')
     db = COLMAPDatabase.connect(database_path)
     db.create_tables()
