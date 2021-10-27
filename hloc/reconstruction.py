@@ -9,7 +9,7 @@ import pprint
 from .utils.read_write_model import read_cameras_binary
 from .utils.database import COLMAPDatabase
 from .triangulation import (
-    import_features, import_matches, geometric_verification)
+    import_features, import_matches, geometric_verification, run_command)
 
 
 def create_empty_db(database_path):
@@ -24,7 +24,7 @@ def create_empty_db(database_path):
 
 
 def import_images(colmap_path, sfm_dir, image_dir, database_path,
-                  single_camera=False):
+                  single_camera=False, verbose=False):
     logging.info('Importing images into the database...')
     images = list(image_dir.iterdir())
     if len(images) == 0:
@@ -44,7 +44,7 @@ def import_images(colmap_path, sfm_dir, image_dir, database_path,
         '--import_path', str(dummy_dir),
         '--ImageReader.single_camera',
         str(int(single_camera))]
-    subprocess.run(cmd, check=True)
+    run_command(cmd, verbose)
 
     db = COLMAPDatabase.connect(database_path)
     db.execute("DELETE FROM keypoints;")
@@ -64,11 +64,9 @@ def get_image_ids(database_path):
 
 
 def run_reconstruction(colmap_path, sfm_dir, database_path, image_dir,
-                       min_num_matches=None):
-    logging.info('Running the 3D reconstruction...')
+                       min_num_matches=None, verbose=False):
     models_path = sfm_dir / 'models'
     models_path.mkdir(exist_ok=True, parents=True)
-
     cmd = [
         str(colmap_path), 'mapper',
         '--database_path', str(database_path),
@@ -77,8 +75,8 @@ def run_reconstruction(colmap_path, sfm_dir, database_path, image_dir,
         '--Mapper.num_threads', str(min(multiprocessing.cpu_count(), 16))]
     if min_num_matches:
         cmd += ['--Mapper.min_num_matches', str(min_num_matches)]
-    logging.info(' '.join(cmd))
-    subprocess.run(cmd, check=True)
+    logging.info('Running the reconstruction with command:\n%s', ' '.join(cmd))
+    run_command(cmd, verbose)
 
     models = list(models_path.iterdir())
     if len(models) == 0:
@@ -125,7 +123,7 @@ def run_reconstruction(colmap_path, sfm_dir, database_path, image_dir,
 def main(sfm_dir, image_dir, pairs, features, matches,
          colmap_path='colmap', single_camera=False,
          skip_geometric_verification=False,
-         min_match_score=None, min_num_matches=None):
+         min_match_score=None, min_num_matches=None, verbose=False):
 
     assert features.exists(), features
     assert pairs.exists(), pairs
@@ -136,18 +134,18 @@ def main(sfm_dir, image_dir, pairs, features, matches,
 
     create_empty_db(database)
     import_images(
-        colmap_path, sfm_dir, image_dir, database, single_camera)
+        colmap_path, sfm_dir, image_dir, database, single_camera, verbose)
     image_ids = get_image_ids(database)
     import_features(image_ids, database, features)
     import_matches(image_ids, database, pairs, matches,
                    min_match_score, skip_geometric_verification)
     if not skip_geometric_verification:
-        geometric_verification(colmap_path, database, pairs)
+        geometric_verification(colmap_path, database, pairs, verbose)
     stats = run_reconstruction(
-        colmap_path, sfm_dir, database, image_dir, min_num_matches)
+        colmap_path, sfm_dir, database, image_dir, min_num_matches, verbose)
     if stats is not None:
         stats['num_input_images'] = len(image_ids)
-        logging.info(f'Statistics:\n{pprint.pformat(stats)}')
+        logging.info('Reconstruction statistics:\n%s', pprint.pformat(stats))
 
 
 if __name__ == '__main__':
@@ -165,6 +163,7 @@ if __name__ == '__main__':
     parser.add_argument('--skip_geometric_verification', action='store_true')
     parser.add_argument('--min_match_score', type=float)
     parser.add_argument('--min_num_matches', type=int)
+    parser.add_argument('--verbose', action='store_true')
     args = parser.parse_args()
 
     main(**args.__dict__)
