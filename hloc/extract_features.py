@@ -9,6 +9,7 @@ import numpy as np
 from tqdm import tqdm
 import pprint
 import collections.abc as collections
+import PIL.Image
 
 from . import extractors
 from .utils.base_model import dynamic_load
@@ -106,12 +107,31 @@ confs = {
 }
 
 
+def resize_image(image, size, interp):
+    if interp.startswith('cv2_'):
+        interp = getattr(cv2, 'INTER_'+interp[len('cv2_'):].upper())
+        h, w = image.shape[:2]
+        if interp == cv2.INTER_AREA and (w < size[0] or h < size[1]):
+            interp = cv2.INTER_LINEAR
+        resized = cv2.resize(image, size, interpolation=interp)
+    elif interp.startswith('pil_'):
+        interp = getattr(PIL.Image, interp[len('pil_'):].upper())
+        resized = PIL.Image.fromarray(image.astype(np.uint8))
+        resized = resized.resize(size, resample=interp)
+        resized = np.asarray(resized, dtype=image.dtype)
+    else:
+        raise ValueError(
+            f'Unknown interpolation {interp}.')
+    return resized
+
+
 class ImageDataset(torch.utils.data.Dataset):
     default_conf = {
         'globs': ['*.jpg', '*.png', '*.jpeg', '*.JPG', '*.PNG'],
         'grayscale': False,
         'resize_max': None,
         'resize_force': False,
+        'interpolation': 'cv2_linear',  # switch to pil_linear for accuracy
     }
 
     def __init__(self, root, conf, paths=None):
@@ -146,14 +166,12 @@ class ImageDataset(torch.utils.data.Dataset):
         image = read_image(self.root / name, self.conf.grayscale)
         image = image.astype(np.float32)
         size = image.shape[:2][::-1]
-        w, h = size
 
         if self.conf.resize_max and (self.conf.resize_force
-                                     or max(w, h) > self.conf.resize_max):
-            scale = self.conf.resize_max / max(h, w)
-            h_new, w_new = int(round(h*scale)), int(round(w*scale))
-            image = cv2.resize(
-                image, (w_new, h_new), interpolation=cv2.INTER_LINEAR)
+                                     or max(size) > self.conf.resize_max):
+            scale = self.conf.resize_max / max(size)
+            size_new = tuple(int(round(x*scale)) for x in size)
+            image = resize_image(image, size_new, self.conf.interpolation)
 
         if self.conf.grayscale:
             image = image[None]
