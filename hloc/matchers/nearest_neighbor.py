@@ -4,6 +4,11 @@ from ..utils.base_model import BaseModel
 
 
 def find_nn(sim, ratio_thresh, distance_thresh):
+    *dims, n = sim.shape
+    if n == 0:
+        return torch.full(dims, -1, device=sim.device), sim.new_zeros(dims)
+    elif n == 1:
+        ratio_thresh = False
     sim_nn, ind_nn = sim.topk(2 if ratio_thresh else 1, dim=-1, largest=True)
     dist_nn = 2 * (1 - sim_nn)
     mask = torch.ones(ind_nn.shape[:-1], dtype=torch.bool, device=sim.device)
@@ -17,6 +22,8 @@ def find_nn(sim, ratio_thresh, distance_thresh):
 
 
 def mutual_check(m0, m1):
+    if m1.shape[-1] == 0:
+        return m0
     inds0 = torch.arange(m0.shape[-1], device=m0.device)
     loop = torch.gather(m1, -1, torch.where(m0 > -1, m0, m0.new_tensor(0)))
     ok = (m0 > -1) & (inds0 == loop)
