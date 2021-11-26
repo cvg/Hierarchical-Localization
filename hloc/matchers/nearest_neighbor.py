@@ -37,11 +37,12 @@ class NearestNeighbor(BaseModel):
 
     def _forward(self, data):
         if data['descriptors0'].size(-1) == 0 or data['descriptors1'].size(-1) == 0:
-            b = data['descriptors0'].size(0)
-            device = data['descriptors0'].device
+            matches0 = torch.full(
+                [data['descriptors0'].size(0), data['descriptors0'].size(1)], -1,
+                device=data['descriptors0'].device)
             return {
-                'matches0': torch.zeros([b, 0]).to(device),
-                'matching_scores0': torch.zeros([b, 0]).to(device)
+                'matches0': matches0,
+                'matching_scores0': torch.zeros_like(matches0)
             }
         ratio_threshold = self.conf['ratio_threshold']
         if data['descriptors0'].size(-1) == 1 or data['descriptors1'].size(-1) == 1:
