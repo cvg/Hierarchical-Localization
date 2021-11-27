@@ -38,7 +38,7 @@ class NearestNeighbor(BaseModel):
     def _forward(self, data):
         if data['descriptors0'].size(-1) == 0 or data['descriptors1'].size(-1) == 0:
             matches0 = torch.full(
-                [data['descriptors0'].size(0), data['descriptors0'].size(1)], -1,
+                data['descriptors0'].shape[:2], -1,
                 device=data['descriptors0'].device)
             return {
                 'matches0': matches0,
