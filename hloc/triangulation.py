@@ -15,10 +15,23 @@ from .utils.database import COLMAPDatabase
 from .utils.parsers import names_to_pair
 
 
+class CalledProcessError(subprocess.CalledProcessError):
+    def __str__(self):
+        message = "Command '%s' returned non-zero exit status %d." % (
+                ' '.join(self.cmd), self.returncode)
+        if self.output is not None:
+            message += ' Last outputs:\n%s' % (
+                '\n'.join(self.output.decode('utf-8').split('\n')[-10:]))
+        return message
+
+
 # TODO: consider creating a Colmap object that holds the path and verbose flag
 def run_command(cmd, verbose=False):
-    stdout = None if verbose else subprocess.DEVNULL
-    subprocess.run(cmd, check=True, stderr=subprocess.STDOUT, stdout=stdout)
+    stdout = None if verbose else subprocess.PIPE
+    ret = subprocess.run(cmd, stderr=subprocess.STDOUT, stdout=stdout)
+    if not ret.returncode == 0:
+        raise CalledProcessError(
+                returncode=ret.returncode, cmd=cmd, output=ret.stdout)
 
 
 def create_empty_model(reference_model, empty_model):
