@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 import pprint
 import collections.abc as collections
+import sys
 from tqdm import tqdm
 import h5py
 import torch
@@ -57,7 +58,7 @@ confs = {
 
 def main(conf: Dict, pairs: Path, features: Union[Path, str],
          export_dir: Optional[Path] = None, matches: Optional[Path] = None,
-         features_ref: Optional[Path] = None, exhaustive: bool = False):
+         features_ref: Optional[Path] = None):
 
     if isinstance(features, Path) or Path(features).exists():
         features_q = features
@@ -80,16 +81,14 @@ def main(conf: Dict, pairs: Path, features: Union[Path, str],
     else:
         features_ref = [features_ref]
 
-    match_from_paths(
-        conf, pairs, matches, features_q, features_ref, exhaustive)
+    match_from_paths(conf, pairs, matches, features_q, features_ref)
 
     return matches
 
 
 @torch.no_grad()
 def match_from_paths(conf: Dict, pairs_path: Path, match_path: Path,
-                     feature_path_q: Path, feature_paths_refs: Path,
-                     exhaustive: bool = False):
+                     feature_path_q: Path, feature_paths_refs: Path):
     logging.info('Matching local features with configuration:'
                  f'\n{pprint.pformat(conf)}')
 
@@ -101,28 +100,14 @@ def match_from_paths(conf: Dict, pairs_path: Path, match_path: Path,
     name2ref = {n: i for i, p in enumerate(feature_paths_refs)
                 for n in list_h5_names(p)}
 
-    if not exhaustive:
-        assert pairs_path.exists(), pairs_path
-        pairs = parse_retrieval(pairs_path)
-        pairs = [(q, r) for q, rs in pairs.items() for r in rs]
-    else:
-        logging.info(f'Writing exhaustive match pairs to {pairs_path}.')
-        assert not pairs_path.exists(), pairs_path
-        names_q = list_h5_names(feature_path_q)
-        # TODO: move exhqustive pair generation to a standalone script
-        # detect self-matching
-        if (len(feature_paths_refs) == 1
-                and feature_path_q == feature_paths_refs[0]):
-            pairs = [(n1, n2) for i, n1 in enumerate(names_q)
-                     for n2 in names_q[:i]]
-        else:
-            pairs = [(n1, n2) for n1 in names_q for n2 in name2ref.keys()]
-        with open(pairs_path, 'w') as f:
-            f.write('\n'.join(' '.join((n1, n2)) for n1, n2 in pairs))
+    assert pairs_path.exists(), pairs_path
+    pairs = parse_retrieval(pairs_path)
+    pairs = [(q, r) for q, rs in pairs.items() for r in rs]
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     Model = dynamic_load(matchers, conf['model']['name'])
     model = Model(conf['model']).eval().to(device)
+    sys.stdout.flush()
 
     match_path.parent.mkdir(exist_ok=True, parents=True)
     skip_pairs = set(list_h5_names(match_path) if match_path.exists() else ())
@@ -171,7 +156,5 @@ if __name__ == '__main__':
     parser.add_argument('--matches', type=Path)
     parser.add_argument('--conf', type=str, default='superglue',
                         choices=list(confs.keys()))
-    parser.add_argument('--exhaustive', action='store_true')
     args = parser.parse_args()
-    main(confs[args.conf], args.pairs, args.features, args.export_dir,
-         exhaustive=args.exhaustive)
+    main(confs[args.conf], args.pairs, args.features, args.export_dir)
