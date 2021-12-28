@@ -4,7 +4,6 @@ import logging
 from pathlib import Path
 import pprint
 import collections.abc as collections
-import sys
 from tqdm import tqdm
 import h5py
 import torch
@@ -107,7 +106,6 @@ def match_from_paths(conf: Dict, pairs_path: Path, match_path: Path,
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     Model = dynamic_load(matchers, conf['model']['name'])
     model = Model(conf['model']).eval().to(device)
-    sys.stdout.flush()
 
     match_path.parent.mkdir(exist_ok=True, parents=True)
     skip_pairs = set(list_h5_names(match_path) if match_path.exists() else ())

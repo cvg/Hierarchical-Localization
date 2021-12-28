@@ -67,7 +67,7 @@ confs = {
     },
     'r2d2': {
         'output': 'feats-r2d2-n5000-r1024',
-        'model':{
+        'model': {
             'name': 'r2d2',
             'max_keypoints': 5000,
         },
