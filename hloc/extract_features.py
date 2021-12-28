@@ -142,7 +142,7 @@ class ImageDataset(torch.utils.data.Dataset):
         'grayscale': False,
         'resize_max': None,
         'resize_force': False,
-        'interpolation': 'cv2_linear',  # switch to pil_linear for accuracy
+        'interpolation': 'cv2_area',  # pil_linear is more accurate but slower
     }
 
     def __init__(self, root, conf, paths=None):
