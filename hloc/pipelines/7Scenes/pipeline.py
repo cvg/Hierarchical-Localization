@@ -53,8 +53,7 @@ def run_scene(images, gt_dir, retrieval, outputs, results, num_covis,
             images,
             sfm_pairs,
             features,
-            sfm_matches,
-            colmap_path='colmap')
+            sfm_matches)
     if use_dense_depth:
         assert depth_dir is not None
         ref_sfm_fix = outputs / 'sfm_superpoint+superglue+depth'

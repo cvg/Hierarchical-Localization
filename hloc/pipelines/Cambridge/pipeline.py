@@ -61,8 +61,7 @@ def run_scene(images, gt_dir, outputs, results, num_covis, num_loc):
         images,
         sfm_pairs,
         features,
-        sfm_matches,
-        colmap_path='colmap')
+        sfm_matches)
 
     loc_matches = match_features.main(
         matcher_conf, loc_pairs, feature_conf['output'], outputs)

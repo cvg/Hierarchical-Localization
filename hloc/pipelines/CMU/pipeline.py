@@ -56,8 +56,7 @@ def run_slice(slice_, root, outputs, num_covis, num_loc):
         ref_images,
         sfm_pairs,
         features,
-        sfm_matches,
-        colmap_path='colmap')
+        sfm_matches)
 
     generate_query_list(root, query_list, slice_)
     global_descriptors = extract_features.main(
