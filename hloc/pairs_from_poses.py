@@ -3,8 +3,10 @@ import logging
 from pathlib import Path
 import numpy as np
 import scipy.spatial
+import torch
 
 from .utils.read_write_model import read_images_binary
+from .pairs_from_retrieval import pairs_from_score_matrix
 
 DEFAULT_ROT_THRESH = 30  # in degrees
 
@@ -39,28 +41,16 @@ def main(model, output, num_matched, rotation_threshold=DEFAULT_ROT_THRESH):
     logging.info(
         f'Obtaining pairwise distances between {len(images)} images...')
     ids, dist, dR = get_pairwise_distances(images)
+    scores = torch.from_numpy(-dist)
 
-    valid = (dR < rotation_threshold)
-    np.fill_diagonal(valid, False)
-    dist = np.where(valid, dist, np.inf)
-
-    logging.info('Extracting pairs...')
-    k = num_matched
-    pairs = []
-    for i, id_ in enumerate(ids):
-        dist_i = dist[i]
-        idx = np.argpartition(dist_i, k)[:k]  # not sorted
-        idx = idx[np.argsort(dist_i[idx])]  # sorted
-        idx = idx[valid[i][idx]]
-
-        for j in idx:
-            name0 = images[id_].name
-            name1 = images[ids[j]].name
-            pairs.append((name0, name1))
+    invalid = (dR >= rotation_threshold)
+    np.fill_diagonal(invalid, True)
+    pairs = pairs_from_score_matrix(scores, invalid, num_matched)
+    pairs = [(images[ids[i]].name, images[ids[j]].name) for i, j in pairs]
 
     logging.info(f'Found {len(pairs)} pairs.')
     with open(output, 'w') as f:
-        f.write('\n'.join(' '.join([i, j]) for i, j in pairs))
+        f.write('\n'.join(' '.join(p) for p in pairs))
 
 
 if __name__ == "__main__":

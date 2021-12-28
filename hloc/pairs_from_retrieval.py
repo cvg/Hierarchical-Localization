@@ -1,6 +1,7 @@
 import argparse
 import logging
 from pathlib import Path
+from typing import Optional
 import h5py
 import numpy as np
 import torch
@@ -16,14 +17,50 @@ def parse_names(prefix, names, names_all):
         if not isinstance(prefix, str):
             prefix = tuple(prefix)
         names = [n for n in names_all if n.startswith(prefix)]
-    elif names is not None and isinstance(names, (str, Path)):
-        names = parse_image_lists(names)
-    elif names is not None and isinstance(names, collections.Iterable):
-        names = list(names)
+    elif names is not None:
+        if isinstance(names, (str, Path)):
+            names = parse_image_lists(names)
+        elif isinstance(names, collections.Iterable):
+            names = list(names)
+        else:
+            raise ValueError(f'Unknown type of image list: {names}.'
+                             'Provide either a list or a path to a list file.')
     else:
-        raise ValueError('Provide either prefixes of names, a list of '
-                         'images, or a path to list file.')
+        names = names_all
     return names
+
+
+def get_descriptors(names, path, name2idx=None, key='global_descriptor'):
+    if name2idx is None:
+        with h5py.File(str(path), 'r') as fd:
+            desc = [fd[n][key].__array__() for n in names]
+    else:
+        desc = []
+        for n in names:
+            with h5py.File(str(path[name2idx[n]]), 'r') as fd:
+                desc.append(fd[n][key].__array__())
+    return torch.from_numpy(np.stack(desc, 0)).float()
+
+
+def pairs_from_score_matrix(scores: torch.Tensor,
+                            invalid: np.array,
+                            num_select: int,
+                            min_score: Optional[float] = None):
+
+    assert scores.shape == invalid.shape
+    invalid = torch.from_numpy(invalid).to(scores.device)
+    if min_score is not None:
+        invalid |= scores < min_score
+    scores.masked_fill_(invalid, float('-inf'))
+
+    topk = torch.topk(scores, num_select, dim=1)
+    indices = topk.indices.cpu().numpy()
+    valid = topk.values.isfinite().cpu().numpy()
+
+    pairs = []
+    for i, j in zip(*np.where(valid)):
+        pairs.append((i, indices[i, j]))
+    return pairs
 
 
 def main(descriptors, output, num_matched,
@@ -52,28 +89,14 @@ def main(descriptors, output, num_matched,
     query_names = parse_names(query_prefix, query_list, query_names_h5)
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-    def get_descriptors(names, path, name2idx=None, key='global_descriptor'):
-        if name2idx is None:
-            with h5py.File(str(path), 'r') as fd:
-                desc = [fd[n][key].__array__() for n in names]
-        else:
-            desc = []
-            for n in names:
-                with h5py.File(str(path[name2idx[n]]), 'r') as fd:
-                    desc.append(fd[n][key].__array__())
-        return torch.from_numpy(np.stack(desc, 0)).to(device).float()
-
     db_desc = get_descriptors(db_names, db_descriptors, name2db)
     query_desc = get_descriptors(query_names, descriptors)
-    sim = torch.einsum('id,jd->ij', query_desc, db_desc)
-    topk = torch.topk(sim, num_matched, dim=1).indices.cpu().numpy()
+    sim = torch.einsum('id,jd->ij', query_desc.to(device), db_desc.to(device))
 
-    pairs = []
-    for query, indices in zip(query_names, topk):
-        for i in indices:
-            pair = (query, db_names[i])
-            pairs.append(pair)
+    # Avoid self-matching
+    self = np.array(query_names)[:, None] == np.array(db_names)[None]
+    pairs = pairs_from_score_matrix(sim, self, num_matched, min_score=0)
+    pairs = [(query_names[i], db_names[j]) for i, j in pairs]
 
     logging.info(f'Found {len(pairs)} pairs.')
     with open(output, 'w') as f:
