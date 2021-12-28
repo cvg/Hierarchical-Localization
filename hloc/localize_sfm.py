@@ -48,15 +48,41 @@ def do_covisibility_clustering(frame_ids: List[int],
     return clusters
 
 
-def pose_from_cluster(qname, qinfo, db_ids, reconstruction,
-                      feature_file, match_file, thresh):
+# TODO: support all options of the absolute pose estimator
+class QueryLocalizer:
+    def __init__(self, reconstruction, max_error_px):
+        self.reconstruction = reconstruction
+        self.max_error_px = max_error_px
+
+    def localize(self, points2D, points3D_id, query_camera):
+        points3D = [self.reconstruction.points3D[j].xyz for j in points3D_id]
+        ret = pycolmap.absolute_pose_estimation(
+            points2D, points3D, query_camera, self.max_error_px)
+        ret['camera'] = {
+            'model': query_camera.model_name,
+            'width': query_camera.width,
+            'height': query_camera.height,
+            'params': query_camera.params,
+        }
+        return ret
+
+
+def pose_from_cluster(
+        localizer: QueryLocalizer,
+        qname: str,
+        query_camera: pycolmap.Camera,
+        db_ids: List[int],
+        feature_file,
+        match_file,
+        **kwargs):
+
     kpq = feature_file[qname]['keypoints'].__array__()
     kp_idx_to_3D = defaultdict(list)
     kp_idx_to_3D_to_db = defaultdict(lambda: defaultdict(list))
     num_matches = 0
 
     for i, db_id in enumerate(db_ids):
-        image = reconstruction.images[db_id]
+        image = localizer.reconstruction.images[db_id]
         if image.num_points3D() == 0:
             logging.debug(f'No 3D points found for {image.name}.')
             continue
@@ -80,25 +106,15 @@ def pose_from_cluster(qname, qinfo, db_ids, reconstruction,
     mkp_idxs = [i for i in idxs for _ in kp_idx_to_3D[i]]
     mkpq = kpq[mkp_idxs]
     mkpq += 0.5  # COLMAP coordinates
-
     mp3d_ids = [j for i in idxs for j in kp_idx_to_3D[i]]
-    mp3d = [reconstruction.points3D[j].xyz for j in mp3d_ids]
-    mp3d = np.array(mp3d).reshape(-1, 3)
+    ret = localizer.localize(mkpq, mp3d_ids, query_camera, **kwargs)
 
     # mostly for logging and post-processing
     mkp_to_3D_to_db = [(j, kp_idx_to_3D_to_db[i][j])
                        for i in idxs for j in kp_idx_to_3D[i]]
 
-    camera_model, width, height, params = qinfo
-    cfg = {
-        'model': camera_model,
-        'width': width,
-        'height': height,
-        'params': params,
-    }
-    ret = pycolmap.absolute_pose_estimation(mkpq, mp3d, cfg, thresh)
-    ret['cfg'] = cfg
-    return ret, mkpq, mp3d, mp3d_ids, num_matches, (mkp_idxs, mkp_to_3D_to_db)
+    # deprecate logging 3D points because they make the log files too large
+    return ret, mkpq, None, mp3d_ids, num_matches, (mkp_idxs, mkp_to_3D_to_db)
 
 
 def main(rec: Union[Path, pycolmap.Reconstruction],
@@ -121,6 +137,7 @@ def main(rec: Union[Path, pycolmap.Reconstruction],
     logging.info('Reading the 3D model...')
     if not isinstance(rec, pycolmap.Reconstruction):
         rec = pycolmap.Reconstruction(rec)
+    localizer = QueryLocalizer(rec, ransac_thresh)
     db_name_to_id = {image.name: i for i, image in rec.images.items()}
 
     feature_file = h5py.File(features, 'r')
@@ -134,7 +151,7 @@ def main(rec: Union[Path, pycolmap.Reconstruction],
         'loc': {},
     }
     logging.info('Starting localization...')
-    for qname, qinfo in tqdm(queries):
+    for qname, qcam in tqdm(queries):
         if qname not in retrieval_dict:
             logging.warning(
                 f'No images retrieved for query image {qname}. Skipping...')
@@ -155,8 +172,8 @@ def main(rec: Union[Path, pycolmap.Reconstruction],
             for i, cluster_ids in enumerate(clusters):
                 ret, mkpq, mp3d, mp3d_ids, num_matches, map_ = (
                         pose_from_cluster(
-                            qname, qinfo, cluster_ids, rec,
-                            feature_file, match_file, thresh=ransac_thresh))
+                            localizer, qname, qcam, cluster_ids,
+                            feature_file, match_file))
                 if ret['success'] and ret['num_inliers'] > best_inliers:
                     best_cluster = i
                     best_inliers = ret['num_inliers']
@@ -180,8 +197,7 @@ def main(rec: Union[Path, pycolmap.Reconstruction],
             }
         else:
             ret, mkpq, mp3d, mp3d_ids, num_matches, map_ = pose_from_cluster(
-                qname, qinfo, db_ids, rec, feature_file, match_file,
-                thresh=ransac_thresh)
+                localizer, qname, qcam, db_ids, feature_file, match_file)
 
             if ret['success']:
                 poses[qname] = (ret['qvec'], ret['tvec'])
