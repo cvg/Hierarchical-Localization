@@ -3,7 +3,7 @@ import logging
 import numpy as np
 from pathlib import Path
 from collections import defaultdict
-from typing import List, Union
+from typing import Dict, List, Union
 import h5py
 from tqdm import tqdm
 import pickle
@@ -50,14 +50,17 @@ def do_covisibility_clustering(frame_ids: List[int],
 
 # TODO: support all options of the absolute pose estimator
 class QueryLocalizer:
-    def __init__(self, reconstruction, max_error_px):
+    def __init__(self, reconstruction, conf=None):
         self.reconstruction = reconstruction
-        self.max_error_px = max_error_px
+        self.conf = conf or {}
 
     def localize(self, points2D, points3D_id, query_camera):
         points3D = [self.reconstruction.points3D[j].xyz for j in points3D_id]
         ret = pycolmap.absolute_pose_estimation(
-            points2D, points3D, query_camera, self.max_error_px)
+            points2D, points3D, query_camera,
+            estimation_options=self.conf.get("estimation", {}),
+            refinement_options=self.conf.get("refinement", {}),
+        )
         ret['camera'] = {
             'model': query_camera.model_name,
             'width': query_camera.width,
@@ -125,7 +128,8 @@ def main(rec: Union[Path, pycolmap.Reconstruction],
          results: Path,
          ransac_thresh: int = 12,
          covisibility_clustering: bool = False,
-         prepend_camera_name: bool = False):
+         prepend_camera_name: bool = False,
+         conf: Dict = None):
 
     assert retrieval.exists(), retrieval
     assert features.exists(), features
@@ -137,8 +141,11 @@ def main(rec: Union[Path, pycolmap.Reconstruction],
     logging.info('Reading the 3D model...')
     if not isinstance(rec, pycolmap.Reconstruction):
         rec = pycolmap.Reconstruction(rec)
-    localizer = QueryLocalizer(rec, ransac_thresh)
     db_name_to_id = {image.name: i for i, image in rec.images.items()}
+
+    conf = {"estimation": {"ransac": {"max_error": ransac_thresh}},
+            **(conf or {})}
+    localizer = QueryLocalizer(rec, conf)
 
     feature_file = h5py.File(features, 'r')
     match_file = h5py.File(matches, 'r')
