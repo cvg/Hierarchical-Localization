@@ -75,11 +75,12 @@ def pose_from_cluster(
         qname: str,
         query_camera: pycolmap.Camera,
         db_ids: List[int],
-        feature_file,
-        match_file,
+        features_path: Path,
+        matches_path: Path,
         **kwargs):
 
-    kpq = feature_file[qname]['keypoints'].__array__()
+    with h5py.File(features_path, 'r') as f:
+        kpq = f[qname]['keypoints'].__array__()
     kp_idx_to_3D = defaultdict(list)
     kp_idx_to_3D_to_db = defaultdict(lambda: defaultdict(list))
     num_matches = 0
@@ -93,7 +94,8 @@ def pose_from_cluster(
                                  for p in image.points2D])
 
         pair = names_to_pair(qname, image.name)
-        matches = match_file[pair]['matches0'].__array__()
+        with h5py.File(matches_path, 'r') as f:
+            matches = f[pair]['matches0'].__array__()
         valid = np.where(matches > -1)[0]
         valid = valid[points3D_ids[matches[valid]] != -1]
         num_matches += len(valid)
@@ -116,8 +118,16 @@ def pose_from_cluster(
     mkp_to_3D_to_db = [(j, kp_idx_to_3D_to_db[i][j])
                        for i in idxs for j in kp_idx_to_3D[i]]
 
-    # deprecate logging 3D points because they make the log files too large
-    return ret, mkpq, None, mp3d_ids, num_matches, (mkp_idxs, mkp_to_3D_to_db)
+    log = {
+        'db': db_ids,
+        'PnP_ret': ret,
+        'keypoints_query': mkpq,
+        'points3D_ids': mp3d_ids,
+        'points3D_xyz': None,  # we don't log xyz anymore because of file size
+        'num_matches': num_matches,
+        'keypoint_index_to_db': (mkp_idxs, mkp_to_3D_to_db),
+    }
+    return ret, log
 
 
 def main(rec: Union[Path, pycolmap.Reconstruction],
@@ -147,9 +157,6 @@ def main(rec: Union[Path, pycolmap.Reconstruction],
             **(conf or {})}
     localizer = QueryLocalizer(rec, conf)
 
-    feature_file = h5py.File(features, 'r')
-    match_file = h5py.File(matches, 'r')
-
     poses = {}
     logs = {
         'features': features,
@@ -177,22 +184,12 @@ def main(rec: Union[Path, pycolmap.Reconstruction],
             best_cluster = None
             logs_clusters = []
             for i, cluster_ids in enumerate(clusters):
-                ret, mkpq, mp3d, mp3d_ids, num_matches, map_ = (
-                        pose_from_cluster(
-                            localizer, qname, qcam, cluster_ids,
-                            feature_file, match_file))
+                ret, log = pose_from_cluster(
+                        localizer, qname, qcam, cluster_ids, features, matches)
                 if ret['success'] and ret['num_inliers'] > best_inliers:
                     best_cluster = i
                     best_inliers = ret['num_inliers']
-                logs_clusters.append({
-                    'db': cluster_ids,
-                    'PnP_ret': ret,
-                    'keypoints_query': mkpq,
-                    'points3D_xyz': mp3d,
-                    'points3D_ids': mp3d_ids,
-                    'num_matches': num_matches,
-                    'keypoint_index_to_db': map_,
-                })
+                logs_clusters.append(log)
             if best_cluster is not None:
                 ret = logs_clusters[best_cluster]['PnP_ret']
                 poses[qname] = (ret['qvec'], ret['tvec'])
@@ -203,24 +200,15 @@ def main(rec: Union[Path, pycolmap.Reconstruction],
                 'covisibility_clustering': covisibility_clustering,
             }
         else:
-            ret, mkpq, mp3d, mp3d_ids, num_matches, map_ = pose_from_cluster(
-                localizer, qname, qcam, db_ids, feature_file, match_file)
-
+            ret, log = pose_from_cluster(
+                    localizer, qname, qcam, db_ids, features, matches)
             if ret['success']:
                 poses[qname] = (ret['qvec'], ret['tvec'])
             else:
                 closest = rec.images[db_ids[0]]
                 poses[qname] = (closest.qvec, closest.tvec)
-            logs['loc'][qname] = {
-                'db': db_ids,
-                'PnP_ret': ret,
-                'keypoints_query': mkpq,
-                'points3D_xyz': mp3d,
-                'points3D_ids': mp3d_ids,
-                'num_matches': num_matches,
-                'keypoint_index_to_db': map_,
-                'covisibility_clustering': covisibility_clustering,
-            }
+            log['covisibility_clustering'] = covisibility_clustering
+            logs['loc'][qname] = log
 
     logger.info(f'Localized {len(poses)} / {len(queries)} images.')
     logger.info(f'Writing poses to {results}...')
