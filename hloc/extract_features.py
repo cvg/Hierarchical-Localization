@@ -1,6 +1,7 @@
 import argparse
 import torch
 from pathlib import Path
+from typing import Dict, List, Union, Optional
 import h5py
 from types import SimpleNamespace
 import cv2
@@ -201,8 +202,13 @@ class ImageDataset(torch.utils.data.Dataset):
 
 
 @torch.no_grad()
-def main(conf, image_dir, export_dir=None, as_half=False,
-         image_list=None, feature_path=None):
+def main(conf: Dict,
+         image_dir: Path,
+         export_dir: Optional[Path] = None,
+         as_half: bool = False,
+         image_list: Optional[Union[Path, List[str]]] = None,
+         feature_path: Optional[Path] = None,
+         overwrite: bool = False) -> Path:
     logger.info('Extracting local features with configuration:'
                 f'\n{pprint.pformat(conf)}')
 
@@ -213,7 +219,7 @@ def main(conf, image_dir, export_dir=None, as_half=False,
         feature_path = Path(export_dir, conf['output']+'.h5')
     feature_path.parent.mkdir(exist_ok=True, parents=True)
     skip_names = set(list_h5_names(feature_path)
-                     if feature_path.exists() else ())
+                     if feature_path.exists() and not overwrite else ())
     if set(loader.dataset.names).issubset(set(skip_names)):
         logger.info('Skipping the extraction.')
         return feature_path
@@ -244,6 +250,8 @@ def main(conf, image_dir, export_dir=None, as_half=False,
 
         with h5py.File(str(feature_path), 'a') as fd:
             try:
+                if name in fd:
+                    del fd[name]
                 grp = fd.create_group(name)
                 for k, v in pred.items():
                     grp.create_dataset(k, data=v)

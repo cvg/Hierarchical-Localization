@@ -54,9 +54,12 @@ confs = {
 }
 
 
-def main(conf: Dict, pairs: Path, features: Union[Path, str],
-         export_dir: Optional[Path] = None, matches: Optional[Path] = None,
-         features_ref: Optional[Path] = None):
+def main(conf: Dict,
+         pairs: Path, features: Union[Path, str],
+         export_dir: Optional[Path] = None,
+         matches: Optional[Path] = None,
+         features_ref: Optional[Path] = None,
+         overwrite: bool = False) -> Path:
 
     if isinstance(features, Path) or Path(features).exists():
         features_q = features
@@ -79,14 +82,18 @@ def main(conf: Dict, pairs: Path, features: Union[Path, str],
     else:
         features_ref = [features_ref]
 
-    match_from_paths(conf, pairs, matches, features_q, features_ref)
+    match_from_paths(conf, pairs, matches, features_q, features_ref, overwrite)
 
     return matches
 
 
 @torch.no_grad()
-def match_from_paths(conf: Dict, pairs_path: Path, match_path: Path,
-                     feature_path_q: Path, feature_paths_refs: Path):
+def match_from_paths(conf: Dict,
+                     pairs_path: Path,
+                     match_path: Path,
+                     feature_path_q: Path,
+                     feature_paths_refs: Path,
+                     overwrite: bool = False) -> Path:
     logger.info('Matching local features with configuration:'
                 f'\n{pprint.pformat(conf)}')
 
@@ -107,7 +114,8 @@ def match_from_paths(conf: Dict, pairs_path: Path, match_path: Path,
     model = Model(conf['model']).eval().to(device)
 
     match_path.parent.mkdir(exist_ok=True, parents=True)
-    skip_pairs = set(list_h5_names(match_path) if match_path.exists() else ())
+    skip_pairs = set(list_h5_names(match_path)
+                     if match_path.exists() and not overwrite else ())
 
     for (name0, name1) in tqdm(pairs, smoothing=.1):
         pair = names_to_pair(name0, name1)
@@ -131,6 +139,8 @@ def match_from_paths(conf: Dict, pairs_path: Path, match_path: Path,
 
         pred = model(data)
         with h5py.File(str(match_path), 'a') as fd:
+            if pair in fd:
+                del fd[pair]
             grp = fd.create_group(pair)
             matches = pred['matches0'][0].cpu().short().numpy()
             grp.create_dataset('matches0', data=matches)
