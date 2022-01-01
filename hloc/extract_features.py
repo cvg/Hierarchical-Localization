@@ -2,7 +2,6 @@ import argparse
 import torch
 from pathlib import Path
 import h5py
-import logging
 from types import SimpleNamespace
 import cv2
 import numpy as np
@@ -11,7 +10,7 @@ import pprint
 import collections.abc as collections
 import PIL.Image
 
-from . import extractors
+from . import extractors, logger
 from .utils.base_model import dynamic_load
 from .utils.tools import map_tensor
 from .utils.parsers import parse_image_lists
@@ -157,7 +156,7 @@ class ImageDataset(torch.utils.data.Dataset):
                 raise ValueError(f'Could not find any image in root: {root}.')
             paths = sorted(list(set(paths)))
             self.names = [i.relative_to(root).as_posix() for i in paths]
-            logging.info(f'Found {len(self.names)} images in root {root}.')
+            logger.info(f'Found {len(self.names)} images in root {root}.')
         else:
             if isinstance(paths, (Path, str)):
                 self.names = parse_image_lists(paths)
@@ -204,8 +203,8 @@ class ImageDataset(torch.utils.data.Dataset):
 @torch.no_grad()
 def main(conf, image_dir, export_dir=None, as_half=False,
          image_list=None, feature_path=None):
-    logging.info('Extracting local features with configuration:'
-                 f'\n{pprint.pformat(conf)}')
+    logger.info('Extracting local features with configuration:'
+                f'\n{pprint.pformat(conf)}')
 
     loader = ImageDataset(image_dir, conf['preprocessing'], image_list)
     loader = torch.utils.data.DataLoader(loader, num_workers=1)
@@ -216,7 +215,7 @@ def main(conf, image_dir, export_dir=None, as_half=False,
     skip_names = set(list_h5_names(feature_path)
                      if feature_path.exists() else ())
     if set(loader.dataset.names).issubset(set(skip_names)):
-        logging.info('Skipping the extraction.')
+        logger.info('Skipping the extraction.')
         return feature_path
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -250,7 +249,7 @@ def main(conf, image_dir, export_dir=None, as_half=False,
                     grp.create_dataset(k, data=v)
             except OSError as error:
                 if 'No space left on device' in error.args[0]:
-                    logging.error(
+                    logger.error(
                         'Out of disk space: storing features on disk can take '
                         'significant space, did you enable the as_half flag?')
                     del grp, fd[name]
@@ -258,7 +257,7 @@ def main(conf, image_dir, export_dir=None, as_half=False,
 
         del pred
 
-    logging.info('Finished exporting features.')
+    logger.info('Finished exporting features.')
     return feature_path
 
 

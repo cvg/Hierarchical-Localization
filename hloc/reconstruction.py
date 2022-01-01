@@ -1,10 +1,10 @@
 import argparse
-import logging
 import shutil
 import multiprocessing
 from pathlib import Path
 import pycolmap
 
+from . import logger
 from .utils.database import COLMAPDatabase
 from .triangulation import (
     import_features, import_matches, geometric_verification, OutputCapture)
@@ -12,9 +12,9 @@ from .triangulation import (
 
 def create_empty_db(database_path):
     if database_path.exists():
-        logging.warning('The database already exists, deleting it.')
+        logger.warning('The database already exists, deleting it.')
         database_path.unlink()
-    logging.info('Creating an empty database...')
+    logger.info('Creating an empty database...')
     db = COLMAPDatabase.connect(database_path)
     db.create_tables()
     db.commit()
@@ -22,7 +22,7 @@ def create_empty_db(database_path):
 
 
 def import_images(image_dir, database_path, camera_mode):
-    logging.info('Importing images into the database...')
+    logger.info('Importing images into the database...')
     images = list(image_dir.iterdir())
     if len(images) == 0:
         raise IOError(f'No images found in {image_dir}.')
@@ -42,7 +42,7 @@ def get_image_ids(database_path):
 def run_reconstruction(sfm_dir, database_path, image_dir, verbose=False):
     models_path = sfm_dir / 'models'
     models_path.mkdir(exist_ok=True, parents=True)
-    logging.info('Running 3D reconstruction...')
+    logger.info('Running 3D reconstruction...')
     with OutputCapture(verbose):
         with pycolmap.ostream():
             reconstructions = pycolmap.incremental_mapping(
@@ -50,9 +50,9 @@ def run_reconstruction(sfm_dir, database_path, image_dir, verbose=False):
                 num_threads=min(multiprocessing.cpu_count(), 16))
 
     if len(reconstructions) == 0:
-        logging.error('Could not reconstruct any model!')
+        logger.error('Could not reconstruct any model!')
         return None
-    logging.info(f'Reconstructed {len(reconstructions)} model(s).')
+    logger.info(f'Reconstructed {len(reconstructions)} model(s).')
 
     largest_index = None
     largest_num_images = 0
@@ -62,8 +62,8 @@ def run_reconstruction(sfm_dir, database_path, image_dir, verbose=False):
             largest_index = index
             largest_num_images = num_images
     assert largest_index is not None
-    logging.info(f'Largest model is #{largest_index} '
-                 f'with {largest_num_images} images.')
+    logger.info(f'Largest model is #{largest_index} '
+                f'with {largest_num_images} images.')
 
     for filename in ['images.bin', 'cameras.bin', 'points3D.bin']:
         if (sfm_dir / filename).exists():
@@ -94,8 +94,8 @@ def main(sfm_dir, image_dir, pairs, features, matches,
         geometric_verification(database, pairs, verbose)
     reconstruction = run_reconstruction(sfm_dir, database, image_dir, verbose)
     if reconstruction is not None:
-        logging.info(f'Reconstruction statistics:\n{reconstruction.summary()}'
-                     + f'\n\tnum_input_images = {len(image_ids)}')
+        logger.info(f'Reconstruction statistics:\n{reconstruction.summary()}'
+                    + f'\n\tnum_input_images = {len(image_ids)}')
     return reconstruction
 
 

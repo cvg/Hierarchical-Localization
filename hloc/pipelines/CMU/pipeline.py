@@ -1,11 +1,11 @@
-import logging
 from pathlib import Path
 import argparse
 
-from ... import extract_features, match_features, triangulation
+from ... import extract_features, match_features, triangulation, logger
 from ... import pairs_from_covisibility, pairs_from_retrieval, localize_sfm
 
 TEST_SLICES = [2, 3, 4, 5, 6, 13, 14, 15, 16, 17, 18, 19, 20, 21]
+
 
 def generate_query_list(dataset, path, slice_):
     cameras = {}
@@ -109,7 +109,7 @@ if __name__ == '__main__':
             slices = [slices]
 
     for slice_ in slices:
-        logging.info('Working on slice %s.', slice_)
+        logger.info('Working on slice %s.', slice_)
         run_slice(
             f'slice{slice_}', args.dataset, args.outputs,
             args.num_covis, args.num_loc)

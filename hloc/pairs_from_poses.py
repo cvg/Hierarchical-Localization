@@ -1,10 +1,10 @@
 import argparse
-import logging
 from pathlib import Path
 import numpy as np
 import scipy.spatial
 import torch
 
+from . import logger
 from .utils.read_write_model import read_images_binary
 from .pairs_from_retrieval import pairs_from_score_matrix
 
@@ -35,10 +35,10 @@ def get_pairwise_distances(images):
 
 
 def main(model, output, num_matched, rotation_threshold=DEFAULT_ROT_THRESH):
-    logging.info('Reading the COLMAP model...')
+    logger.info('Reading the COLMAP model...')
     images = read_images_binary(model / 'images.bin')
 
-    logging.info(
+    logger.info(
         f'Obtaining pairwise distances between {len(images)} images...')
     ids, dist, dR = get_pairwise_distances(images)
     scores = torch.from_numpy(-dist)
@@ -48,7 +48,7 @@ def main(model, output, num_matched, rotation_threshold=DEFAULT_ROT_THRESH):
     pairs = pairs_from_score_matrix(scores, invalid, num_matched)
     pairs = [(images[ids[i]].name, images[ids[j]].name) for i, j in pairs]
 
-    logging.info(f'Found {len(pairs)} pairs.')
+    logger.info(f'Found {len(pairs)} pairs.')
     with open(output, 'w') as f:
         f.write('\n'.join(' '.join(p) for p in pairs))
 

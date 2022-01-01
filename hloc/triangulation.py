@@ -1,7 +1,6 @@
 import argparse
 import contextlib
 import io
-import logging
 import sys
 from pathlib import Path
 from tqdm import tqdm
@@ -9,6 +8,7 @@ import h5py
 import numpy as np
 import pycolmap
 
+from . import logger
 from .utils.database import COLMAPDatabase
 from .utils.parsers import names_to_pair
 
@@ -26,13 +26,13 @@ class OutputCapture:
         if not self.verbose:
             self.capture.__exit__(exc_type, *args)
             if exc_type is not None:
-                logging.error('Failed with output:\n%s', self.out.getvalue())
+                logger.error('Failed with output:\n%s', self.out.getvalue())
         sys.stdout.flush()
 
 
 def create_db_from_model(reconstruction, database_path):
     if database_path.exists():
-        logging.warning('The database already exists, deleting it.')
+        logger.warning('The database already exists, deleting it.')
         database_path.unlink()
 
     db = COLMAPDatabase.connect(database_path)
@@ -52,7 +52,7 @@ def create_db_from_model(reconstruction, database_path):
 
 
 def import_features(image_ids, database_path, features_path):
-    logging.info('Importing features into the database...')
+    logger.info('Importing features into the database...')
     hfile = h5py.File(str(features_path), 'r')
     db = COLMAPDatabase.connect(database_path)
 
@@ -68,7 +68,7 @@ def import_features(image_ids, database_path, features_path):
 
 def import_matches(image_ids, database_path, pairs_path, matches_path,
                    min_match_score=None, skip_geometric_verification=False):
-    logging.info('Importing matches into the database...')
+    logger.info('Importing matches into the database...')
 
     with open(str(pairs_path), 'r') as f:
         pairs = [p.split() for p in f.readlines()]
@@ -107,7 +107,7 @@ def import_matches(image_ids, database_path, pairs_path, matches_path,
 
 
 def geometric_verification(database_path, pairs_path, verbose=False):
-    logging.info('Performing geometric verification of the matches...')
+    logger.info('Performing geometric verification of the matches...')
     with OutputCapture(verbose):
         with pycolmap.ostream():
             pycolmap.verify_matches(
@@ -118,7 +118,7 @@ def geometric_verification(database_path, pairs_path, verbose=False):
 def run_triangulation(model_path, database_path, image_dir, reference_model,
                       verbose=False):
     model_path.mkdir(parents=True, exist_ok=True)
-    logging.info('Running 3D triangulation...')
+    logger.info('Running 3D triangulation...')
     with OutputCapture(verbose):
         with pycolmap.ostream():
             reconstruction = pycolmap.triangulate_points(
@@ -147,8 +147,8 @@ def main(sfm_dir, reference_model, image_dir, pairs, features, matches,
         geometric_verification(database, pairs, verbose)
     reconstruction = run_triangulation(sfm_dir, database, image_dir, reference,
                                        verbose)
-    logging.info('Finished the triangulation with statistics:\n%s',
-                 reconstruction.summary())
+    logger.info('Finished the triangulation with statistics:\n%s',
+                reconstruction.summary())
     return reconstruction
 
 

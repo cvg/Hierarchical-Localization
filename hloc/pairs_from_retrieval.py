@@ -1,5 +1,4 @@
 import argparse
-import logging
 from pathlib import Path
 from typing import Optional
 import h5py
@@ -7,6 +6,7 @@ import numpy as np
 import torch
 import collections.abc as collections
 
+from . import logger
 from .utils.parsers import parse_image_lists
 from .utils.read_write_model import read_images_binary
 from .utils.io import list_h5_names
@@ -66,7 +66,7 @@ def pairs_from_score_matrix(scores: torch.Tensor,
 def main(descriptors, output, num_matched,
          query_prefix=None, query_list=None,
          db_prefix=None, db_list=None, db_model=None, db_descriptors=None):
-    logging.info('Extracting image pairs from a retrieval database.')
+    logger.info('Extracting image pairs from a retrieval database.')
 
     # We handle multiple reference feature files.
     # We only assume that names are unique among them and map names to files.
@@ -98,7 +98,7 @@ def main(descriptors, output, num_matched,
     pairs = pairs_from_score_matrix(sim, self, num_matched, min_score=0)
     pairs = [(query_names[i], db_names[j]) for i, j in pairs]
 
-    logging.info(f'Found {len(pairs)} pairs.')
+    logger.info(f'Found {len(pairs)} pairs.')
     with open(output, 'w') as f:
         f.write('\n'.join(' '.join([i, j]) for i, j in pairs))
 

@@ -10,6 +10,7 @@ from scipy.io import loadmat
 
 from ..utils.base_model import BaseModel
 
+logger = logging.getLogger(__name__)
 
 netvlad_path = Path(__file__).parent / '../../third_party/netvlad'
 
@@ -65,7 +66,7 @@ class NetVLAD(BaseModel):
             checkpoint.parent.mkdir(exist_ok=True)
             link = self.dir_models[conf['model_name']]
             cmd = ['wget', link, '-O', str(checkpoint)]
-            logging.info(f'Downloading the NetVLAD model with `{cmd}`.')
+            logger.info(f'Downloading the NetVLAD model with `{cmd}`.')
             subprocess.run(cmd, check=True)
 
         # Create the network.

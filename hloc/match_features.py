@@ -1,6 +1,5 @@
 import argparse
 from typing import Union, Optional, Dict
-import logging
 from pathlib import Path
 import pprint
 import collections.abc as collections
@@ -8,7 +7,7 @@ from tqdm import tqdm
 import h5py
 import torch
 
-from . import matchers
+from . import matchers, logger
 from .utils.base_model import dynamic_load
 from .utils.parsers import names_to_pair, parse_retrieval
 from .utils.io import list_h5_names
@@ -88,8 +87,8 @@ def main(conf: Dict, pairs: Path, features: Union[Path, str],
 @torch.no_grad()
 def match_from_paths(conf: Dict, pairs_path: Path, match_path: Path,
                      feature_path_q: Path, feature_paths_refs: Path):
-    logging.info('Matching local features with configuration:'
-                 f'\n{pprint.pformat(conf)}')
+    logger.info('Matching local features with configuration:'
+                f'\n{pprint.pformat(conf)}')
 
     if not feature_path_q.exists():
         raise FileNotFoundError(f'Query feature file {feature_path_q}.')
@@ -142,7 +141,7 @@ def match_from_paths(conf: Dict, pairs_path: Path, match_path: Path,
 
         skip_pairs.add(pair)
 
-    logging.info('Finished exporting matches.')
+    logger.info('Finished exporting matches.')
 
 
 if __name__ == '__main__':

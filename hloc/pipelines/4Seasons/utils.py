@@ -7,6 +7,8 @@ from ...utils.read_write_model import qvec2rotmat, rotmat2qvec
 from ...utils.read_write_model import Image, write_model, Camera
 from ...utils.parsers import parse_retrieval
 
+logger = logging.getLogger(__name__)
+
 
 def get_timestamps(files, idx):
     """Extract timestamps from a pose or relocalization file."""
@@ -33,7 +35,7 @@ def delete_unused_images(root, timestamps):
         if ts not in timestamps:
             os.remove(image)
             deleted += 1
-    logging.info(f'Deleted {deleted} images in {root}.')
+    logger.info(f'Deleted {deleted} images in {root}.')
 
 
 def camera_from_calibration_file(id_, path):
@@ -196,7 +198,7 @@ def prepare_submission(results, relocs, poses_path, out_dir):
         out_path = out_dir / reloc.name
         with open(out_path, 'w') as f:
             f.write('\n'.join(relative_poses))
-        logging.info(f'Submission file written to {out_path}.')
+        logger.info(f'Submission file written to {out_path}.')
 
 
 def evaluate_submission(submission_dir, relocs, ths=[0.1, 0.2, 0.5]):
@@ -221,4 +223,4 @@ def evaluate_submission(submission_dir, relocs, ths=[0.1, 0.2, 0.5]):
         s = f'Relocalization evaluation {submission_dir.name}/{reloc.name}\n'
         s += ' / '.join([f'{th:>7}m' for th in ths]) + '\n'
         s += ' / '.join([f'{100*r:>7.3f}%' for r in recall])
-        logging.info(s)
+        logger.info(s)

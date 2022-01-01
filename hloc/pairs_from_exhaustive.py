@@ -1,9 +1,9 @@
 import argparse
-import logging
 import collections.abc as collections
 from pathlib import Path
 from typing import Optional, Union, List
 
+from . import logger
 from .utils.parsers import parse_image_lists
 from .utils.io import list_h5_names
 
@@ -49,7 +49,7 @@ def main(
                 continue
             pairs.append((n1, n2))
 
-    logging.info(f'Found {len(pairs)} pairs.')
+    logger.info(f'Found {len(pairs)} pairs.')
     with open(output, 'w') as f:
         f.write('\n'.join(' '.join([i, j]) for i, j in pairs))
 

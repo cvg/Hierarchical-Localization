@@ -1,5 +1,4 @@
 import argparse
-import logging
 import numpy as np
 from pathlib import Path
 from collections import defaultdict
@@ -9,6 +8,7 @@ from tqdm import tqdm
 import pickle
 import pycolmap
 
+from . import logger
 from .utils.parsers import parse_image_lists, parse_retrieval, names_to_pair
 
 
@@ -87,7 +87,7 @@ def pose_from_cluster(
     for i, db_id in enumerate(db_ids):
         image = localizer.reconstruction.images[db_id]
         if image.num_points3D() == 0:
-            logging.debug(f'No 3D points found for {image.name}.')
+            logger.debug(f'No 3D points found for {image.name}.')
             continue
         points3D_ids = np.array([p.point3D_id if p.has_point3D() else -1
                                  for p in image.points2D])
@@ -138,7 +138,7 @@ def main(rec: Union[Path, pycolmap.Reconstruction],
     queries = parse_image_lists(queries, with_intrinsics=True)
     retrieval_dict = parse_retrieval(retrieval)
 
-    logging.info('Reading the 3D model...')
+    logger.info('Reading the 3D model...')
     if not isinstance(rec, pycolmap.Reconstruction):
         rec = pycolmap.Reconstruction(rec)
     db_name_to_id = {image.name: i for i, image in rec.images.items()}
@@ -157,17 +157,17 @@ def main(rec: Union[Path, pycolmap.Reconstruction],
         'retrieval': retrieval,
         'loc': {},
     }
-    logging.info('Starting localization...')
+    logger.info('Starting localization...')
     for qname, qcam in tqdm(queries):
         if qname not in retrieval_dict:
-            logging.warning(
+            logger.warning(
                 f'No images retrieved for query image {qname}. Skipping...')
             continue
         db_names = retrieval_dict[qname]
         db_ids = []
         for n in db_names:
             if n not in db_name_to_id:
-                logging.warning(f'Image {n} was retrieved but not in database')
+                logger.warning(f'Image {n} was retrieved but not in database')
                 continue
             db_ids.append(db_name_to_id[n])
 
@@ -222,8 +222,8 @@ def main(rec: Union[Path, pycolmap.Reconstruction],
                 'covisibility_clustering': covisibility_clustering,
             }
 
-    logging.info(f'Localized {len(poses)} / {len(queries)} images.')
-    logging.info(f'Writing poses to {results}...')
+    logger.info(f'Localized {len(poses)} / {len(queries)} images.')
+    logger.info(f'Writing poses to {results}...')
     with open(results, 'w') as f:
         for q in poses:
             qvec, tvec = poses[q]
@@ -235,10 +235,10 @@ def main(rec: Union[Path, pycolmap.Reconstruction],
             f.write(f'{name} {qvec} {tvec}\n')
 
     logs_path = f'{results}_logs.pkl'
-    logging.info(f'Writing logs to {logs_path}...')
+    logger.info(f'Writing logs to {logs_path}...')
     with open(logs_path, 'wb') as f:
         pickle.dump(logs, f)
-    logging.info('Done!')
+    logger.info('Done!')
 
 
 if __name__ == '__main__':

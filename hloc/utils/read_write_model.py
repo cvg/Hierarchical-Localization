@@ -36,6 +36,8 @@ import struct
 import argparse
 import logging
 
+logger = logging.getLogger(__name__)
+
 
 CameraModel = collections.namedtuple(
     "CameraModel", ["model_id", "model_name", "num_params"])
@@ -426,7 +428,7 @@ def read_model(path, ext=""):
         else:
             try:
                 cameras, images, points3D = read_model(os.path.join(path, "model/"))
-                logging.warning(
+                logger.warning(
                     "This SfM file structure was deprecated in hloc v1.1")
                 return cameras, images, points3D
             except FileNotFoundError:

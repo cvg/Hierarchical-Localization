@@ -4,8 +4,8 @@ from tqdm import tqdm
 from collections import defaultdict
 import numpy as np
 from pathlib import Path
-import logging
 
+from . import logger
 from .utils.read_write_model import Camera, Image, Point3D, CAMERA_MODEL_NAMES
 from .utils.read_write_model import write_model
 
@@ -19,7 +19,7 @@ def recover_database_images_and_ids(database_path):
         images[name] = image_id
         cameras[name] = camera_id
     db.close()
-    logging.info(
+    logger.info(
         f'Found {len(images)} images and {len(cameras)} cameras in database.')
     return images, cameras
 
@@ -45,7 +45,7 @@ def read_nvm_model(
     with open(intrinsics_path, 'r') as f:
         raw_intrinsics = f.readlines()
 
-    logging.info(f'Reading {len(raw_intrinsics)} cameras...')
+    logger.info(f'Reading {len(raw_intrinsics)} cameras...')
     cameras = {}
     for intrinsics in raw_intrinsics:
         intrinsics = intrinsics.strip('\n').split(' ')
@@ -66,7 +66,7 @@ def read_nvm_model(
     num_images = int(line)
     assert num_images == len(cameras)
 
-    logging.info(f'Reading {num_images} images...')
+    logger.info(f'Reading {num_images} images...')
     image_idx_to_db_image_id = []
     image_data = []
     i = 0
@@ -85,10 +85,10 @@ def read_nvm_model(
     num_points = int(line)
 
     if skip_points:
-        logging.info(f'Skipping {num_points} points.')
+        logger.info(f'Skipping {num_points} points.')
         num_points = 0
     else:
-        logging.info(f'Reading {num_points} points...')
+        logger.info(f'Reading {num_points} points...')
     points3D = {}
     image_idx_to_keypoints = defaultdict(list)
     i = 0
@@ -123,7 +123,7 @@ def read_nvm_model(
         pbar.update(1)
     pbar.close()
 
-    logging.info('Parsing image data...')
+    logger.info('Parsing image data...')
     images = {}
     for i, data in enumerate(image_data):
         # Skip the focal length. Skip the distortion and terminal 0.
@@ -169,14 +169,14 @@ def main(nvm, intrinsics, database, output, skip_points=False):
 
     image_ids, camera_ids = recover_database_images_and_ids(database)
 
-    logging.info('Reading the NVM model...')
+    logger.info('Reading the NVM model...')
     model = read_nvm_model(
         nvm, intrinsics, image_ids, camera_ids, skip_points=skip_points)
 
-    logging.info('Writing the COLMAP model...')
+    logger.info('Writing the COLMAP model...')
     output.mkdir(exist_ok=True, parents=True)
     write_model(*model, path=str(output), ext='.bin')
-    logging.info('Done.')
+    logger.info('Done.')
 
 
 if __name__ == '__main__':

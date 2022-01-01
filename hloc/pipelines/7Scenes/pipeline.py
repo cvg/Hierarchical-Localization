@@ -1,4 +1,3 @@
-import logging
 from pathlib import Path
 import argparse
 
@@ -6,7 +5,7 @@ from .utils import create_reference_sfm
 from .create_gt_sfm import correct_sfm_with_gt_depth
 from ..Cambridge.utils import create_query_list_with_intrinsics, evaluate
 from ... import extract_features, match_features, pairs_from_covisibility
-from ... import triangulation, localize_sfm
+from ... import triangulation, localize_sfm, logger
 
 SCENES = ['chess', 'fire', 'heads', 'office', 'pumpkin',
           'redkitchen', 'stairs']
@@ -92,7 +91,7 @@ if __name__ == '__main__':
 
     all_results = {}
     for scene in args.scenes:
-        logging.info(f'Working on scene "{scene}".')
+        logger.info(f'Working on scene "{scene}".')
         results = args.outputs / scene / 'results_{}.txt'.format(
             "dense" if args.use_dense_depth else "sparse")
         if args.overwrite or not results.exists():
@@ -108,6 +107,6 @@ if __name__ == '__main__':
         all_results[scene] = results
 
     for scene in args.scenes:
-        logging.info(f'Evaluate scene "{scene}".')
+        logger.info(f'Evaluate scene "{scene}".')
         gt_dir = Path(str(gt_dirs).format(scene=scene))
         evaluate(gt_dir, all_results[scene], gt_dir / 'list_test.txt')
