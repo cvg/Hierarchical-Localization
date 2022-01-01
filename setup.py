@@ -8,18 +8,8 @@ with open(str(root / 'README.md'), 'r', encoding='utf-8') as f:
     readme = f.read()
 with open(str(root / 'hloc/__init__.py'), 'r') as f:
     version = eval(f.read().split('__version__ = ')[1].split()[0])
-
-dependencies = [
-    'torch>=1.1',
-    'torchvision>=0.3',
-    'opencv-python',
-    'numpy',
-    'tqdm',
-    'matplotlib',
-    'scipy',
-    'h5py',
-    'pycolmap @ git+https://github.com/mihaidusmanu/pycolmap',
-]
+with open(str(root / 'requirements.txt'), 'r') as f:
+    dependencies = f.read().split('\n')
 
 setup(
     name='hloc',

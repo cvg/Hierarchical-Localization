@@ -6,4 +6,4 @@ tqdm
 matplotlib
 scipy
 h5py
-git+https://github.com/mihaidusmanu/pycolmap
+pycolmap
