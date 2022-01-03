@@ -48,25 +48,18 @@ def do_covisibility_clustering(frame_ids: List[int],
     return clusters
 
 
-# TODO: support all options of the absolute pose estimator
 class QueryLocalizer:
-    def __init__(self, reconstruction, conf=None):
+    def __init__(self, reconstruction, config=None):
         self.reconstruction = reconstruction
-        self.conf = conf or {}
+        self.config = config or {}
 
     def localize(self, points2D, points3D_id, query_camera):
         points3D = [self.reconstruction.points3D[j].xyz for j in points3D_id]
         ret = pycolmap.absolute_pose_estimation(
             points2D, points3D, query_camera,
-            estimation_options=self.conf.get("estimation", {}),
-            refinement_options=self.conf.get("refinement", {}),
+            estimation_options=self.config.get('estimation', {}),
+            refinement_options=self.config.get('refinement', {}),
         )
-        ret['camera'] = {
-            'model': query_camera.model_name,
-            'width': query_camera.width,
-            'height': query_camera.height,
-            'params': query_camera.params,
-        }
         return ret
 
 
@@ -113,11 +106,16 @@ def pose_from_cluster(
     mkpq += 0.5  # COLMAP coordinates
     mp3d_ids = [j for i in idxs for j in kp_idx_to_3D[i]]
     ret = localizer.localize(mkpq, mp3d_ids, query_camera, **kwargs)
+    ret['camera'] = {
+        'model': query_camera.model_name,
+        'width': query_camera.width,
+        'height': query_camera.height,
+        'params': query_camera.params,
+    }
 
     # mostly for logging and post-processing
     mkp_to_3D_to_db = [(j, kp_idx_to_3D_to_db[i][j])
                        for i in idxs for j in kp_idx_to_3D[i]]
-
     log = {
         'db': db_ids,
         'PnP_ret': ret,
@@ -130,7 +128,7 @@ def pose_from_cluster(
     return ret, log
 
 
-def main(rec: Union[Path, pycolmap.Reconstruction],
+def main(reference_sfm: Union[Path, pycolmap.Reconstruction],
          queries: Path,
          retrieval: Path,
          features: Path,
@@ -139,7 +137,7 @@ def main(rec: Union[Path, pycolmap.Reconstruction],
          ransac_thresh: int = 12,
          covisibility_clustering: bool = False,
          prepend_camera_name: bool = False,
-         conf: Dict = None):
+         config: Dict = None):
 
     assert retrieval.exists(), retrieval
     assert features.exists(), features
@@ -149,13 +147,13 @@ def main(rec: Union[Path, pycolmap.Reconstruction],
     retrieval_dict = parse_retrieval(retrieval)
 
     logger.info('Reading the 3D model...')
-    if not isinstance(rec, pycolmap.Reconstruction):
-        rec = pycolmap.Reconstruction(rec)
-    db_name_to_id = {image.name: i for i, image in rec.images.items()}
+    if not isinstance(reference_sfm, pycolmap.Reconstruction):
+        reference_sfm = pycolmap.Reconstruction(reference_sfm)
+    db_name_to_id = {img.name: i for i, img in reference_sfm.images.items()}
 
-    conf = {"estimation": {"ransac": {"max_error": ransac_thresh}},
-            **(conf or {})}
-    localizer = QueryLocalizer(rec, conf)
+    config = {"estimation": {"ransac": {"max_error": ransac_thresh}},
+              **(config or {})}
+    localizer = QueryLocalizer(reference_sfm, config)
 
     poses = {}
     logs = {
@@ -179,7 +177,7 @@ def main(rec: Union[Path, pycolmap.Reconstruction],
             db_ids.append(db_name_to_id[n])
 
         if covisibility_clustering:
-            clusters = do_covisibility_clustering(db_ids, rec)
+            clusters = do_covisibility_clustering(db_ids, reference_sfm)
             best_inliers = 0
             best_cluster = None
             logs_clusters = []
@@ -205,7 +203,7 @@ def main(rec: Union[Path, pycolmap.Reconstruction],
             if ret['success']:
                 poses[qname] = (ret['qvec'], ret['tvec'])
             else:
-                closest = rec.images[db_ids[0]]
+                closest = reference_sfm.images[db_ids[0]]
                 poses[qname] = (closest.qvec, closest.tvec)
             log['covisibility_clustering'] = covisibility_clustering
             logs['loc'][qname] = log
