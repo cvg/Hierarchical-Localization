@@ -184,6 +184,14 @@ Multiple bug fixes and minor improvements.
 </details>
 
 <details>
+<summary>v1.2 (December 2021)</summary>
+
+- Bug fixes and usability improvements.
+- Support PIL backend for image resizing.
+- Add `__version__` attribute to check against future releases.
+</details>
+
+<details>
 <summary>v1.1 (July 2021)</summary>
 
 - **Breaking**: improved structure of the SfM folders (triangulation and reconstruction), see [#76](https://github.com/cvg/Hierarchical-Localization/pull/76)
