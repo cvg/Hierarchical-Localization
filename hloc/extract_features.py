@@ -205,7 +205,7 @@ class ImageDataset(torch.utils.data.Dataset):
 def main(conf: Dict,
          image_dir: Path,
          export_dir: Optional[Path] = None,
-         as_half: bool = False,
+         as_half: bool = True,
          image_list: Optional[Union[Path, List[str]]] = None,
          feature_path: Optional[Path] = None,
          overwrite: bool = False) -> Path:
