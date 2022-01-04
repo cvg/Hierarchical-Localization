@@ -11,6 +11,8 @@ from ...colmap_from_nvm import (
 from ...utils.read_write_model import Camera, Image, Point3D, CAMERA_MODEL_IDS
 from ...utils.read_write_model import write_model
 
+logger = logging.getLogger(__name__)
+
 
 def read_nvm_model(
         nvm_path, database_path, image_ids, camera_ids, skip_points=False):
@@ -36,7 +38,7 @@ def read_nvm_model(
     num_images = int(line)
     # assert num_images == len(cameras), (num_images, len(cameras))
 
-    logging.info(f'Reading {num_images} images...')
+    logger.info(f'Reading {num_images} images...')
     image_idx_to_db_image_id = []
     image_data = []
     i = 0
@@ -55,10 +57,10 @@ def read_nvm_model(
     num_points = int(line)
 
     if skip_points:
-        logging.info(f'Skipping {num_points} points.')
+        logger.info(f'Skipping {num_points} points.')
         num_points = 0
     else:
-        logging.info(f'Reading {num_points} points...')
+        logger.info(f'Reading {num_points} points...')
     points3D = {}
     image_idx_to_keypoints = defaultdict(list)
     i = 0
@@ -93,7 +95,7 @@ def read_nvm_model(
         pbar.update(1)
     pbar.close()
 
-    logging.info('Parsing image data...')
+    logger.info('Parsing image data...')
     images = {}
     for i, data in enumerate(image_data):
         # Skip the focal length. Skip the distortion and terminal 0.
@@ -138,14 +140,14 @@ def main(nvm, database, output, skip_points=False):
 
     image_ids, camera_ids = recover_database_images_and_ids(database)
 
-    logging.info('Reading the NVM model...')
+    logger.info('Reading the NVM model...')
     model = read_nvm_model(
         nvm, database, image_ids, camera_ids, skip_points=skip_points)
 
-    logging.info('Writing the COLMAP model...')
+    logger.info('Writing the COLMAP model...')
     output.mkdir(exist_ok=True, parents=True)
     write_model(*model, path=str(output), ext='.bin')
-    logging.info('Done.')
+    logger.info('Done.')
 
 
 if __name__ == '__main__':

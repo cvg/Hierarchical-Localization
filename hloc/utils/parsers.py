@@ -2,6 +2,9 @@ from pathlib import Path
 import logging
 import numpy as np
 from collections import defaultdict
+import pycolmap
+
+logger = logging.getLogger(__name__)
 
 
 def parse_image_list(path, with_intrinsics=False):
@@ -13,15 +16,15 @@ def parse_image_list(path, with_intrinsics=False):
                 continue
             name, *data = line.split()
             if with_intrinsics:
-                camera_model, width, height, *params = data
+                model, width, height, *params = data
                 params = np.array(params, float)
-                info = (camera_model, int(width), int(height), params)
-                images.append((name, info))
+                cam = pycolmap.Camera(model, int(width), int(height), params)
+                images.append((name, cam))
             else:
                 images.append(name)
 
     assert len(images) > 0
-    logging.info(f'Imported {len(images)} images from {path.name}')
+    logger.info(f'Imported {len(images)} images from {path.name}')
     return images
 
 

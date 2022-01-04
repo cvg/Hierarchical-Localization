@@ -16,20 +16,24 @@ With `hloc`, you can:
 
 ##
 
+## Quick start ➡️ [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1MrVs9b8aQYODtOGkoaGNF9Nji3sbCNMQ)
+
+Build 3D maps with Structure-from-Motion and localize any Internet image right from your browser! **You can now run `hloc` and COLMAP in Google Colab with GPU for free.** The notebook [`demo.ipynb`](https://colab.research.google.com/drive/1MrVs9b8aQYODtOGkoaGNF9Nji3sbCNMQ) shows how to run SfM and localization in just a few steps. Try it with your own data and let us know!
+
 ## Installation
 
-`hloc` requires Python >=3.6, PyTorch >=1.1, and [COLMAP](https://colmap.github.io/index.html). Installing the package locally pulls the other dependencies:
-```
+`hloc` requires Python >=3.7 and PyTorch >=1.1. Installing the package locally pulls the other dependencies:
+
+```bash
 git clone --recursive https://github.com/cvg/Hierarchical-Localization/
 cd Hierarchical-Localization/
 python -m pip install -e .
 ```
 
-All dependencies are listed in `requirements.txt`.
-This codebase includes external local features as git submodules – don't forget to pull submodules with `git submodule update --init --recursive`. Your local features are based on TensorFlow? No problem! See [below](#using-your-own-local-features-or-matcher) for the steps.
+All dependencies are listed in `requirements.txt`. **Starting with `hloc-v1.3`, installing COLMAP is not required anymore.** This repository includes external local features as git submodules – don't forget to pull submodules with `git submodule update --init --recursive`.
 
-We also provide a Docker image that includes COLMAP and other dependencies:
-```
+We also provide a Docker image:
+```bash
 docker build -t hloc:latest .
 docker run -it --rm -p 8888:8888 hloc:latest  # for GPU support, add `--runtime=nvidia`
 jupyter notebook --ip 0.0.0.0 --port 8888 --no-browser --allow-root
@@ -58,7 +62,10 @@ Strcture of the toolbox:
 - `hloc/matchers/` : interfaces for feature matchers
 - `hloc/pipelines/` : entire pipelines for multiple datasets
 
-`hloc` can be imported as an external package with `import hloc` or from the command line with `python -m hloc.script`.
+`hloc` can be imported as an external package with `import hloc` or called from the command line with:
+```bash
+python -m hloc.name_of_script --arg1 --arg2
+```
 
 ## Tasks
 
@@ -87,7 +94,7 @@ We show in [`pipeline_SfM.ipynb`](https://nbviewer.jupyter.org/github/cvg/Hierar
 ## Results
 
 - Supported local feature extractors: [SuperPoint](https://arxiv.org/abs/1712.07629), [D2-Net](https://arxiv.org/abs/1905.03561), [SIFT](https://www.cs.ubc.ca/~lowe/papers/ijcv04.pdf), and [R2D2](https://arxiv.org/abs/1906.06195).
-- Supported feature matchers: [SuperGlue](https://arxiv.org/abs/1911.11763) and nearest neighbor search with ratio test, distance test, mutual check.
+- Supported feature matchers: [SuperGlue](https://arxiv.org/abs/1911.11763) and nearest neighbor search with ratio test, distance test, and/or mutual check.
 - Supported image retrieval: [NetVLAD](https://arxiv.org/abs/1511.07247) and [AP-GeM/DIR](https://github.com/naver/deep-image-retrieval).
 
 Using NetVLAD for retrieval, we obtain the following best results:
@@ -109,7 +116,10 @@ Check out [visuallocalization.net/benchmark](https://www.visuallocalization.net/
 
 ## Supported datasets
 
-We provide in [`hloc/pipelines/`](./hloc/pipelines) scripts to run the reconstruction and the localization on the following datasets: Aachen Day-Night (v1.0 and v1.1), InLoc, Extended CMU Seasons, RobotCar Seasons, 4Seasons, Cambridge Landmarks, and 7-Scenes.
+We provide in [`hloc/pipelines/`](./hloc/pipelines) scripts to run the reconstruction and the localization on the following datasets: Aachen Day-Night (v1.0 and v1.1), InLoc, Extended CMU Seasons, RobotCar Seasons, 4Seasons, Cambridge Landmarks, and 7-Scenes. For example, after downloading the dataset [with the instructions given here](./hloc/pipelines/Aachen#installation), we can run the Aachen Day-Night pipeline with SuperPoint+SuperGlue using the command:
+```bash
+python -m hloc.pipelines.Aachen.pipeline [--outputs ./outputs/aachen]
+```
 
 ## BibTex Citation
 
@@ -178,9 +188,21 @@ In a match file, each key corresponds to the string `path0.replace('/', '-')+'_'
 ## Versions
 
 <details>
-<summary>master (development)</summary>
+<summary>v1.3 (January 2022)</summary>
 
-Multiple bug fixes and minor improvements.
+- Demo notebook in Google Colab
+- Use the new pycolmap Reconstruction objects and pipeline API
+  - Do not require an installation of COLMAP anymore - pycolmap is enough
+  - Faster model reading and writing
+  - Fine-grained control over camera sharing via the `camera_mode` parameter
+  - Localization with unknown or inaccurate focal length
+- Modular localization API with control over all estimator parameters
+- 3D visualizations or camera frustums and points with plotly
+- Package-specific logging in the hloc namespace
+- Store the extracted features by default as fp16 instead of fp32
+- Optionally fix a long-standing bug in SuperPoint descriptor sampling
+- Add script to compute exhaustive pairs for reconstruction or localization
+- Require pycolmap>=0.1.0 and Python>=3.7
 </details>
 
 <details>
@@ -211,7 +233,6 @@ Initial public version.
 
 External contributions are very much welcome. Please follow the [PEP8 style guidelines](https://www.python.org/dev/peps/pep-0008/) using a linter like flake8. This is a non-exhaustive list of features that might be valuable additions:
 
-- [ ] handle unknown query intrinsics (extraction from EXIF + refinement in PnP)
 - [ ] support for GPS (extraction from EXIF + guided retrieval)
 - [ ] covisibility clustering for InLoc
 - [ ] visualization of the raw predictions (features and matches)

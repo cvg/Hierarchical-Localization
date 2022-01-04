@@ -5,11 +5,11 @@ import h5py
 from scipy.io import loadmat
 import torch
 from tqdm import tqdm
-import logging
 import pickle
 import cv2
 import pycolmap
 
+from . import logger
 from .utils.parsers import parse_retrieval, names_to_pair
 
 
@@ -131,7 +131,7 @@ def main(dataset_dir, retrieval, features, matches, results,
         'retrieval': retrieval,
         'loc': {},
     }
-    logging.info('Starting localization...')
+    logger.info('Starting localization...')
     for q in tqdm(queries):
         db = retrieval_dict[q]
         ret, mkpq, mkpr, mkp3d, indices, num_matches = pose_from_cluster(
@@ -148,7 +148,7 @@ def main(dataset_dir, retrieval, features, matches, results,
             'num_matches': num_matches,
         }
 
-    logging.info(f'Writing poses to {results}...')
+    logger.info(f'Writing poses to {results}...')
     with open(results, 'w') as f:
         for q in queries:
             qvec, tvec = poses[q]
@@ -158,10 +158,10 @@ def main(dataset_dir, retrieval, features, matches, results,
             f.write(f'{name} {qvec} {tvec}\n')
 
     logs_path = f'{results}_logs.pkl'
-    logging.info(f'Writing logs to {logs_path}...')
+    logger.info(f'Writing logs to {logs_path}...')
     with open(logs_path, 'wb') as f:
         pickle.dump(logs, f)
-    logging.info('Done!')
+    logger.info('Done!')
 
 
 if __name__ == '__main__':

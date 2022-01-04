@@ -1,11 +1,10 @@
-import logging
 from pathlib import Path
 import argparse
 
 from .utils import (
     create_query_list_with_intrinsics, scale_sfm_images, evaluate)
 from ... import extract_features, match_features, pairs_from_covisibility
-from ... import triangulation, localize_sfm, pairs_from_retrieval
+from ... import triangulation, localize_sfm, pairs_from_retrieval, logger
 
 SCENES = ['KingsCollege', 'OldHospital', 'ShopFacade', 'StMarysChurch',
           'GreatCourt']
@@ -61,8 +60,7 @@ def run_scene(images, gt_dir, outputs, results, num_covis, num_loc):
         images,
         sfm_pairs,
         features,
-        sfm_matches,
-        colmap_path='colmap')
+        sfm_matches)
 
     loc_matches = match_features.main(
         matcher_conf, loc_pairs, feature_conf['output'], outputs)
@@ -96,7 +94,7 @@ if __name__ == '__main__':
 
     all_results = {}
     for scene in args.scenes:
-        logging.info(f'Working on scene "{scene}".')
+        logger.info(f'Working on scene "{scene}".')
         results = args.outputs / scene / 'results.txt'
         if args.overwrite or not results.exists():
             run_scene(
@@ -109,7 +107,7 @@ if __name__ == '__main__':
         all_results[scene] = results
 
     for scene in args.scenes:
-        logging.info(f'Evaluate scene "{scene}".')
+        logger.info(f'Evaluate scene "{scene}".')
         evaluate(
             gt_dirs / scene / 'empty_all', all_results[scene],
             gt_dirs / scene / 'list_query.txt', ext='.txt')

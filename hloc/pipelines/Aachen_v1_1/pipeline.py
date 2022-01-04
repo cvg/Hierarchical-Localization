@@ -50,8 +50,7 @@ triangulation.main(
     images,
     sfm_pairs,
     features,
-    sfm_matches,
-    colmap_path='colmap')
+    sfm_matches)
 
 global_descriptors = extract_features.main(retrieval_conf, images, outputs)
 pairs_from_retrieval.main(

@@ -1,3 +1,4 @@
+import sys
 from abc import ABCMeta, abstractmethod
 from torch import nn
 from copy import copy
@@ -14,6 +15,7 @@ class BaseModel(nn.Module, metaclass=ABCMeta):
         self.conf = conf = {**self.default_conf, **conf}
         self.required_inputs = copy(self.required_inputs)
         self._init(conf)
+        sys.stdout.flush()
 
     def forward(self, data):
         """Check the data and call the _forward method of the child model."""

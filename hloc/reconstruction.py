@@ -1,57 +1,35 @@
 import argparse
-import logging
-from pathlib import Path
 import shutil
+from typing import Optional, List
 import multiprocessing
-import subprocess
-import pprint
+from pathlib import Path
+import pycolmap
 
-from .utils.read_write_model import read_cameras_binary
+from . import logger
 from .utils.database import COLMAPDatabase
 from .triangulation import (
-    import_features, import_matches, geometric_verification, run_command)
+    import_features, import_matches, geometric_verification, OutputCapture)
 
 
 def create_empty_db(database_path):
     if database_path.exists():
-        logging.warning('The database already exists, deleting it.')
+        logger.warning('The database already exists, deleting it.')
         database_path.unlink()
-    logging.info('Creating an empty database...')
+    logger.info('Creating an empty database...')
     db = COLMAPDatabase.connect(database_path)
     db.create_tables()
     db.commit()
     db.close()
 
 
-def import_images(colmap_path, sfm_dir, image_dir, database_path,
-                  single_camera=False, verbose=False):
-    logging.info('Importing images into the database...')
+def import_images(image_dir, database_path, camera_mode, image_list=None):
+    logger.info('Importing images into the database...')
     images = list(image_dir.iterdir())
     if len(images) == 0:
         raise IOError(f'No images found in {image_dir}.')
-
-    # We need to create dummy features for COLMAP to import images with EXIF
-    dummy_dir = sfm_dir / 'dummy_features'
-    dummy_dir.mkdir()
-    for i in images:
-        with open(str(dummy_dir / (i.name + '.txt')), 'w') as f:
-            f.write('0 128')
-
-    cmd = [
-        str(colmap_path), 'feature_importer',
-        '--database_path', str(database_path),
-        '--image_path', str(image_dir),
-        '--import_path', str(dummy_dir),
-        '--ImageReader.single_camera',
-        str(int(single_camera))]
-    run_command(cmd, verbose)
-
-    db = COLMAPDatabase.connect(database_path)
-    db.execute("DELETE FROM keypoints;")
-    db.execute("DELETE FROM descriptors;")
-    db.commit()
-    db.close()
-    shutil.rmtree(str(dummy_dir))
+    with pycolmap.ostream():
+        pycolmap.import_images(database_path, image_dir, camera_mode,
+                               image_list=image_list or [])
 
 
 def get_image_ids(database_path):
@@ -63,67 +41,44 @@ def get_image_ids(database_path):
     return images
 
 
-def run_reconstruction(colmap_path, sfm_dir, database_path, image_dir,
-                       min_num_matches=None, verbose=False):
+def run_reconstruction(sfm_dir, database_path, image_dir, verbose=False):
     models_path = sfm_dir / 'models'
     models_path.mkdir(exist_ok=True, parents=True)
-    cmd = [
-        str(colmap_path), 'mapper',
-        '--database_path', str(database_path),
-        '--image_path', str(image_dir),
-        '--output_path', str(models_path),
-        '--Mapper.num_threads', str(min(multiprocessing.cpu_count(), 16))]
-    if min_num_matches:
-        cmd += ['--Mapper.min_num_matches', str(min_num_matches)]
-    logging.info('Running the reconstruction with command:\n%s', ' '.join(cmd))
-    run_command(cmd, verbose)
+    logger.info('Running 3D reconstruction...')
+    with OutputCapture(verbose):
+        with pycolmap.ostream():
+            reconstructions = pycolmap.incremental_mapping(
+                database_path, image_dir, models_path,
+                num_threads=min(multiprocessing.cpu_count(), 16))
 
-    models = list(models_path.iterdir())
-    if len(models) == 0:
-        logging.error('Could not reconstruct any model!')
+    if len(reconstructions) == 0:
+        logger.error('Could not reconstruct any model!')
         return None
-    logging.info(f'Reconstructed {len(models)} models.')
+    logger.info(f'Reconstructed {len(reconstructions)} model(s).')
 
-    largest_model = None
-    largest_model_num_images = 0
-    for model in models:
-        num_images = len(read_cameras_binary(str(model / 'cameras.bin')))
-        if num_images > largest_model_num_images:
-            largest_model = model
-            largest_model_num_images = num_images
-    assert largest_model_num_images > 0
-    logging.info(f'Largest model is #{largest_model.name} '
-                 f'with {largest_model_num_images} images.')
-
-    stats_raw = subprocess.check_output(
-        [str(colmap_path), 'model_analyzer',
-         '--path', str(largest_model)])
-    stats_raw = stats_raw.decode().split("\n")
-    stats = dict()
-    for stat in stats_raw:
-        if stat.startswith("Registered images"):
-            stats['num_reg_images'] = int(stat.split()[-1])
-        elif stat.startswith("Points"):
-            stats['num_sparse_points'] = int(stat.split()[-1])
-        elif stat.startswith("Observations"):
-            stats['num_observations'] = int(stat.split()[-1])
-        elif stat.startswith("Mean track length"):
-            stats['mean_track_length'] = float(stat.split()[-1])
-        elif stat.startswith("Mean observations per image"):
-            stats['num_observations_per_image'] = float(stat.split()[-1])
-        elif stat.startswith("Mean reprojection error"):
-            stats['mean_reproj_error'] = float(stat.split()[-1][:-2])
+    largest_index = None
+    largest_num_images = 0
+    for index, rec in reconstructions.items():
+        num_images = rec.num_reg_images()
+        if num_images > largest_num_images:
+            largest_index = index
+            largest_num_images = num_images
+    assert largest_index is not None
+    logger.info(f'Largest model is #{largest_index} '
+                f'with {largest_num_images} images.')
 
     for filename in ['images.bin', 'cameras.bin', 'points3D.bin']:
-        shutil.move(str(largest_model / filename), str(sfm_dir))
-
-    return stats
+        if (sfm_dir / filename).exists():
+            (sfm_dir / filename).unlink()
+        shutil.move(
+            str(models_path / str(largest_index) / filename), str(sfm_dir))
+    return reconstructions[largest_index]
 
 
 def main(sfm_dir, image_dir, pairs, features, matches,
-         colmap_path='colmap', single_camera=False,
-         skip_geometric_verification=False,
-         min_match_score=None, min_num_matches=None, verbose=False):
+         camera_mode=pycolmap.CameraMode.AUTO, verbose=False,
+         skip_geometric_verification=False, min_match_score=None,
+         image_list: Optional[List[str]] = None):
 
     assert features.exists(), features
     assert pairs.exists(), pairs
@@ -133,19 +88,18 @@ def main(sfm_dir, image_dir, pairs, features, matches,
     database = sfm_dir / 'database.db'
 
     create_empty_db(database)
-    import_images(
-        colmap_path, sfm_dir, image_dir, database, single_camera, verbose)
+    import_images(image_dir, database, camera_mode, image_list)
     image_ids = get_image_ids(database)
     import_features(image_ids, database, features)
     import_matches(image_ids, database, pairs, matches,
                    min_match_score, skip_geometric_verification)
     if not skip_geometric_verification:
-        geometric_verification(colmap_path, database, pairs, verbose)
-    stats = run_reconstruction(
-        colmap_path, sfm_dir, database, image_dir, min_num_matches, verbose)
-    if stats is not None:
-        stats['num_input_images'] = len(image_ids)
-        logging.info('Reconstruction statistics:\n%s', pprint.pformat(stats))
+        geometric_verification(database, pairs, verbose)
+    reconstruction = run_reconstruction(sfm_dir, database, image_dir, verbose)
+    if reconstruction is not None:
+        logger.info(f'Reconstruction statistics:\n{reconstruction.summary()}'
+                    + f'\n\tnum_input_images = {len(image_ids)}')
+    return reconstruction
 
 
 if __name__ == '__main__':
@@ -157,12 +111,10 @@ if __name__ == '__main__':
     parser.add_argument('--features', type=Path, required=True)
     parser.add_argument('--matches', type=Path, required=True)
 
-    parser.add_argument('--colmap_path', type=Path, default='colmap')
-
-    parser.add_argument('--single_camera', action='store_true')
+    parser.add_argument('--camera_mode', type=str, default="AUTO",
+                        choices=list(pycolmap.CameraMode.__members__.keys()))
     parser.add_argument('--skip_geometric_verification', action='store_true')
     parser.add_argument('--min_match_score', type=float)
-    parser.add_argument('--min_num_matches', type=int)
     parser.add_argument('--verbose', action='store_true')
     args = parser.parse_args()
 

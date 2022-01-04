@@ -1,8 +1,8 @@
 import argparse
 import torch
 from pathlib import Path
+from typing import Dict, List, Union, Optional
 import h5py
-import logging
 from types import SimpleNamespace
 import cv2
 import numpy as np
@@ -11,7 +11,7 @@ import pprint
 import collections.abc as collections
 import PIL.Image
 
-from . import extractors
+from . import extractors, logger
 from .utils.base_model import dynamic_load
 from .utils.tools import map_tensor
 from .utils.parsers import parse_image_lists
@@ -67,7 +67,7 @@ confs = {
     },
     'r2d2': {
         'output': 'feats-r2d2-n5000-r1024',
-        'model':{
+        'model': {
             'name': 'r2d2',
             'max_keypoints': 5000,
         },
@@ -142,7 +142,7 @@ class ImageDataset(torch.utils.data.Dataset):
         'grayscale': False,
         'resize_max': None,
         'resize_force': False,
-        'interpolation': 'cv2_linear',  # switch to pil_linear for accuracy
+        'interpolation': 'cv2_area',  # pil_linear is more accurate but slower
     }
 
     def __init__(self, root, conf, paths=None):
@@ -157,7 +157,7 @@ class ImageDataset(torch.utils.data.Dataset):
                 raise ValueError(f'Could not find any image in root: {root}.')
             paths = sorted(list(set(paths)))
             self.names = [i.relative_to(root).as_posix() for i in paths]
-            logging.info(f'Found {len(self.names)} images in root {root}.')
+            logger.info(f'Found {len(self.names)} images in root {root}.')
         else:
             if isinstance(paths, (Path, str)):
                 self.names = parse_image_lists(paths)
@@ -202,10 +202,15 @@ class ImageDataset(torch.utils.data.Dataset):
 
 
 @torch.no_grad()
-def main(conf, image_dir, export_dir=None, as_half=False,
-         image_list=None, feature_path=None):
-    logging.info('Extracting local features with configuration:'
-                 f'\n{pprint.pformat(conf)}')
+def main(conf: Dict,
+         image_dir: Path,
+         export_dir: Optional[Path] = None,
+         as_half: bool = True,
+         image_list: Optional[Union[Path, List[str]]] = None,
+         feature_path: Optional[Path] = None,
+         overwrite: bool = False) -> Path:
+    logger.info('Extracting local features with configuration:'
+                f'\n{pprint.pformat(conf)}')
 
     loader = ImageDataset(image_dir, conf['preprocessing'], image_list)
     loader = torch.utils.data.DataLoader(loader, num_workers=1)
@@ -214,9 +219,9 @@ def main(conf, image_dir, export_dir=None, as_half=False,
         feature_path = Path(export_dir, conf['output']+'.h5')
     feature_path.parent.mkdir(exist_ok=True, parents=True)
     skip_names = set(list_h5_names(feature_path)
-                     if feature_path.exists() else ())
+                     if feature_path.exists() and not overwrite else ())
     if set(loader.dataset.names).issubset(set(skip_names)):
-        logging.info('Skipping the extraction.')
+        logger.info('Skipping the extraction.')
         return feature_path
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -245,12 +250,14 @@ def main(conf, image_dir, export_dir=None, as_half=False,
 
         with h5py.File(str(feature_path), 'a') as fd:
             try:
+                if name in fd:
+                    del fd[name]
                 grp = fd.create_group(name)
                 for k, v in pred.items():
                     grp.create_dataset(k, data=v)
             except OSError as error:
                 if 'No space left on device' in error.args[0]:
-                    logging.error(
+                    logger.error(
                         'Out of disk space: storing features on disk can take '
                         'significant space, did you enable the as_half flag?')
                     del grp, fd[name]
@@ -258,7 +265,7 @@ def main(conf, image_dir, export_dir=None, as_half=False,
 
         del pred
 
-    logging.info('Finished exporting features.')
+    logger.info('Finished exporting features.')
     return feature_path
 
 

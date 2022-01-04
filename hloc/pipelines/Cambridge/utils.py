@@ -6,12 +6,14 @@ from hloc.utils.read_write_model import (
         read_cameras_binary, read_images_binary, read_model, write_model,
         qvec2rotmat, read_images_text, read_cameras_text)
 
+logger = logging.getLogger(__name__)
+
 
 def scale_sfm_images(full_model, scaled_model, image_dir):
     '''Duplicate the provided model and scale the camera intrinsics so that
        they match the original image resolution - makes everything easier.
     '''
-    logging.info('Scaling the COLMAP model to the original image size.')
+    logger.info('Scaling the COLMAP model to the original image size.')
     scaled_model.mkdir(exist_ok=True)
     cameras, images, points3D = read_model(full_model)
 
@@ -131,4 +133,4 @@ def evaluate(model, results, list_file=None, ext='.bin', only_localized=False):
     for th_t, th_R in zip(threshs_t, threshs_R):
         ratio = np.mean((errors_t < th_t) & (errors_R < th_R))
         out += f'\n\t{th_t*100:.0f}cm, {th_R:.0f}deg : {ratio*100:.2f}%'
-    logging.info(out)
+    logger.info(out)

@@ -1,8 +1,7 @@
 from pathlib import Path
-import logging
 import argparse
 
-from ... import extract_features, match_features, localize_sfm
+from ... import extract_features, match_features, localize_sfm, logger
 from .utils import get_timestamps, delete_unused_images
 from .utils import generate_query_lists, generate_localization_pairs
 from .utils import prepare_submission, evaluate_submission
@@ -71,5 +70,5 @@ prepare_submission(results_path, reloc, ref_dir / 'poses.txt', submission_dir)
 
 # If not a test sequence: evaluation the localization accuracy
 if 'test' not in sequence:
-    logging.info('Evaluating the relocalization submission...')
+    logger.info('Evaluating the relocalization submission...')
     evaluate_submission(submission_dir, reloc)

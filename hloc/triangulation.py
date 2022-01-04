@@ -1,79 +1,58 @@
 import argparse
-import logging
+import contextlib
+import io
+import sys
 from pathlib import Path
 from tqdm import tqdm
 import h5py
 import numpy as np
-import subprocess
-import pprint
-import shutil
+import pycolmap
 
-from .utils.read_write_model import (
-        read_cameras_binary, read_images_binary, CAMERA_MODEL_NAMES,
-        write_points3D_binary, write_images_binary)
+from . import logger
 from .utils.database import COLMAPDatabase
 from .utils.parsers import names_to_pair
 
 
-class CalledProcessError(subprocess.CalledProcessError):
-    def __str__(self):
-        message = "Command '%s' returned non-zero exit status %d." % (
-                ' '.join(self.cmd), self.returncode)
-        if self.output is not None:
-            message += ' Last outputs:\n%s' % (
-                '\n'.join(self.output.decode('utf-8').split('\n')[-10:]))
-        return message
+class OutputCapture:
+    def __init__(self, verbose):
+        self.verbose = verbose
+
+    def __enter__(self):
+        if not self.verbose:
+            self.capture = contextlib.redirect_stdout(io.StringIO())
+            self.out = self.capture.__enter__()
+
+    def __exit__(self, exc_type, *args):
+        if not self.verbose:
+            self.capture.__exit__(exc_type, *args)
+            if exc_type is not None:
+                logger.error('Failed with output:\n%s', self.out.getvalue())
+        sys.stdout.flush()
 
 
-# TODO: consider creating a Colmap object that holds the path and verbose flag
-def run_command(cmd, verbose=False):
-    stdout = None if verbose else subprocess.PIPE
-    ret = subprocess.run(cmd, stderr=subprocess.STDOUT, stdout=stdout)
-    if not ret.returncode == 0:
-        raise CalledProcessError(
-                returncode=ret.returncode, cmd=cmd, output=ret.stdout)
-
-
-def create_empty_model(reference_model, empty_model):
-    logging.info('Creating an empty model.')
-    empty_model.mkdir(exist_ok=True)
-    shutil.copyfile(reference_model/'cameras.bin', empty_model/'cameras.bin')
-    write_points3D_binary(dict(), empty_model / 'points3D.bin')
-    images = read_images_binary(str(reference_model / 'images.bin'))
-    images_empty = dict()
-    for id_, image in images.items():
-        images_empty[id_] = image._replace(
-            xys=np.zeros((0, 2), float), point3D_ids=np.full(0, -1, int))
-    write_images_binary(images_empty, empty_model / 'images.bin')
-
-
-def create_db_from_model(empty_model, database_path):
+def create_db_from_model(reconstruction, database_path):
     if database_path.exists():
-        logging.warning('The database already exists, deleting it.')
+        logger.warning('The database already exists, deleting it.')
         database_path.unlink()
-
-    cameras = read_cameras_binary(str(empty_model / 'cameras.bin'))
-    images = read_images_binary(str(empty_model / 'images.bin'))
 
     db = COLMAPDatabase.connect(database_path)
     db.create_tables()
 
-    for i, camera in cameras.items():
-        model_id = CAMERA_MODEL_NAMES[camera.model].model_id
+    for i, camera in reconstruction.cameras.items():
         db.add_camera(
-            model_id, camera.width, camera.height, camera.params, camera_id=i,
-            prior_focal_length=True)
+            camera.model_id, camera.width, camera.height, camera.params,
+            camera_id=i, prior_focal_length=True)
 
-    for i, image in images.items():
+    for i, image in reconstruction.images.items():
         db.add_image(image.name, image.camera_id, image_id=i)
 
     db.commit()
     db.close()
-    return {image.name: i for i, image in images.items()}
+    return {image.name: i for i, image in reconstruction.images.items()}
 
 
 def import_features(image_ids, database_path, features_path):
-    logging.info('Importing features into the database...')
+    logger.info('Importing features into the database...')
     hfile = h5py.File(str(features_path), 'r')
     db = COLMAPDatabase.connect(database_path)
 
@@ -89,7 +68,7 @@ def import_features(image_ids, database_path, features_path):
 
 def import_matches(image_ids, database_path, pairs_path, matches_path,
                    min_match_score=None, skip_geometric_verification=False):
-    logging.info('Importing matches into the database...')
+    logger.info('Importing matches into the database...')
 
     with open(str(pairs_path), 'r') as f:
         pairs = [p.split() for p in f.readlines()]
@@ -127,81 +106,50 @@ def import_matches(image_ids, database_path, pairs_path, matches_path,
     db.close()
 
 
-def geometric_verification(colmap_path, database_path, pairs_path, verbose):
-    logging.info('Performing geometric verification of the matches...')
-    cmd = [
-        str(colmap_path), 'matches_importer',
-        '--database_path', str(database_path),
-        '--match_list_path', str(pairs_path),
-        '--match_type', 'pairs',
-        '--SiftMatching.use_gpu', '0',
-        '--SiftMatching.max_num_trials', str(20000),
-        '--SiftMatching.min_inlier_ratio', str(0.1)]
-    run_command(cmd, verbose)
+def geometric_verification(database_path, pairs_path, verbose=False):
+    logger.info('Performing geometric verification of the matches...')
+    with OutputCapture(verbose):
+        with pycolmap.ostream():
+            pycolmap.verify_matches(
+                database_path, pairs_path,
+                max_num_trials=20000, min_inlier_ratio=0.1)
 
 
-def run_triangulation(colmap_path, model_path, database_path, image_dir,
-                      empty_model, verbose):
+def run_triangulation(model_path, database_path, image_dir, reference_model,
+                      verbose=False):
     model_path.mkdir(parents=True, exist_ok=True)
-    cmd = [
-        str(colmap_path), 'point_triangulator',
-        '--database_path', str(database_path),
-        '--image_path', str(image_dir),
-        '--input_path', str(empty_model),
-        '--output_path', str(model_path),
-        '--Mapper.ba_refine_focal_length', '0',
-        '--Mapper.ba_refine_principal_point', '0',
-        '--Mapper.ba_refine_extra_params', '0']
-    logging.info('Running the triangulation with command:\n%s', ' '.join(cmd))
-    run_command(cmd, verbose)
-
-    stats_raw = subprocess.check_output(
-        [str(colmap_path), 'model_analyzer', '--path', str(model_path)])
-    stats_raw = stats_raw.decode().split("\n")
-    stats = dict()
-    for stat in stats_raw:
-        if stat.startswith("Registered images"):
-            stats['num_reg_images'] = int(stat.split()[-1])
-        elif stat.startswith("Points"):
-            stats['num_sparse_points'] = int(stat.split()[-1])
-        elif stat.startswith("Observations"):
-            stats['num_observations'] = int(stat.split()[-1])
-        elif stat.startswith("Mean track length"):
-            stats['mean_track_length'] = float(stat.split()[-1])
-        elif stat.startswith("Mean observations per image"):
-            stats['num_observations_per_image'] = float(stat.split()[-1])
-        elif stat.startswith("Mean reprojection error"):
-            stats['mean_reproj_error'] = float(stat.split()[-1][:-2])
-
-    return stats
+    logger.info('Running 3D triangulation...')
+    with OutputCapture(verbose):
+        with pycolmap.ostream():
+            reconstruction = pycolmap.triangulate_points(
+                reference_model, database_path, image_dir, model_path)
+    return reconstruction
 
 
-def main(sfm_dir, reference_sfm_model, image_dir, pairs, features, matches,
-         colmap_path='colmap', skip_geometric_verification=False,
-         min_match_score=None, verbose=False):
+def main(sfm_dir, reference_model, image_dir, pairs, features, matches,
+         skip_geometric_verification=False, min_match_score=None,
+         verbose=False):
 
-    assert reference_sfm_model.exists(), reference_sfm_model
+    assert reference_model.exists(), reference_model
     assert features.exists(), features
     assert pairs.exists(), pairs
     assert matches.exists(), matches
 
     sfm_dir.mkdir(parents=True, exist_ok=True)
     database = sfm_dir / 'database.db'
-    empty_model = sfm_dir / 'empty'
+    reference = pycolmap.Reconstruction(reference_model)
 
-    create_empty_model(reference_sfm_model, empty_model)
-    image_ids = create_db_from_model(empty_model, database)
+    image_ids = create_db_from_model(reference, database)
     import_features(image_ids, database, features)
     import_matches(image_ids, database, pairs, matches,
                    min_match_score, skip_geometric_verification)
     if not skip_geometric_verification:
-        geometric_verification(colmap_path, database, pairs, verbose)
-    stats = run_triangulation(
-        colmap_path, sfm_dir, database, image_dir, empty_model, verbose)
-
-    logging.info('Finished the triangulation with statistics:\n%s',
-                 pprint.pformat(stats))
-    shutil.rmtree(empty_model)
+        geometric_verification(database, pairs, verbose)
+    reconstruction = run_triangulation(sfm_dir, database, image_dir, reference,
+                                       verbose)
+    logger.info('Finished the triangulation with statistics:\n%s',
+                reconstruction.summary())
+    return reconstruction
 
 
 if __name__ == '__main__':
@@ -213,8 +161,6 @@ if __name__ == '__main__':
     parser.add_argument('--pairs', type=Path, required=True)
     parser.add_argument('--features', type=Path, required=True)
     parser.add_argument('--matches', type=Path, required=True)
-
-    parser.add_argument('--colmap_path', type=Path, default='colmap')
 
     parser.add_argument('--skip_geometric_verification', action='store_true')
     parser.add_argument('--min_match_score', type=float)

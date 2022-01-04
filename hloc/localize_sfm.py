@@ -1,21 +1,21 @@
 import argparse
-import logging
 import numpy as np
 from pathlib import Path
 from collections import defaultdict
+from typing import Dict, List, Union
 import h5py
 from tqdm import tqdm
 import pickle
 import pycolmap
 
-from .utils.read_write_model import read_model
+from . import logger
 from .utils.parsers import parse_image_lists, parse_retrieval, names_to_pair
 
 
-def do_covisibility_clustering(frame_ids, all_images, points3D):
+def do_covisibility_clustering(frame_ids: List[int],
+                               reconstruction: pycolmap.Reconstruction):
     clusters = []
     visited = set()
-
     for frame_id in frame_ids:
         # Check if already labeled
         if frame_id in visited:
@@ -33,9 +33,13 @@ def do_covisibility_clustering(frame_ids, all_images, points3D):
             visited.add(exploration_frame)
             clusters[-1].append(exploration_frame)
 
-            observed = all_images[exploration_frame].point3D_ids
-            connected_frames = set(
-                j for i in observed if i != -1 for j in points3D[i].image_ids)
+            observed = reconstruction.images[exploration_frame].points2D
+            connected_frames = {
+                obs.image_id
+                for p2D in observed if p2D.has_point3D()
+                for obs in
+                reconstruction.points3D[p2D.point3D_id].track.elements
+            }
             connected_frames &= set(frame_ids)
             connected_frames -= visited
             queue |= connected_frames
@@ -44,22 +48,47 @@ def do_covisibility_clustering(frame_ids, all_images, points3D):
     return clusters
 
 
-def pose_from_cluster(qname, qinfo, db_ids, db_images, points3D,
-                      feature_file, match_file, thresh):
-    kpq = feature_file[qname]['keypoints'].__array__()
+class QueryLocalizer:
+    def __init__(self, reconstruction, config=None):
+        self.reconstruction = reconstruction
+        self.config = config or {}
+
+    def localize(self, points2D, points3D_id, query_camera):
+        points3D = [self.reconstruction.points3D[j].xyz for j in points3D_id]
+        ret = pycolmap.absolute_pose_estimation(
+            points2D, points3D, query_camera,
+            estimation_options=self.config.get('estimation', {}),
+            refinement_options=self.config.get('refinement', {}),
+        )
+        return ret
+
+
+def pose_from_cluster(
+        localizer: QueryLocalizer,
+        qname: str,
+        query_camera: pycolmap.Camera,
+        db_ids: List[int],
+        features_path: Path,
+        matches_path: Path,
+        **kwargs):
+
+    with h5py.File(features_path, 'r') as f:
+        kpq = f[qname]['keypoints'].__array__()
     kp_idx_to_3D = defaultdict(list)
     kp_idx_to_3D_to_db = defaultdict(lambda: defaultdict(list))
     num_matches = 0
 
     for i, db_id in enumerate(db_ids):
-        db_name = db_images[db_id].name
-        points3D_ids = db_images[db_id].point3D_ids
-        if len(points3D_ids) == 0:
-            logging.debug(f'No 3D points found for {db_name}.')
+        image = localizer.reconstruction.images[db_id]
+        if image.num_points3D() == 0:
+            logger.debug(f'No 3D points found for {image.name}.')
             continue
+        points3D_ids = np.array([p.point3D_id if p.has_point3D() else -1
+                                 for p in image.points2D])
 
-        pair = names_to_pair(qname, db_name)
-        matches = match_file[pair]['matches0'].__array__()
+        pair = names_to_pair(qname, image.name)
+        with h5py.File(matches_path, 'r') as f:
+            matches = f[pair]['matches0'].__array__()
         valid = np.where(matches > -1)[0]
         valid = valid[points3D_ids[matches[valid]] != -1]
         num_matches += len(valid)
@@ -75,32 +104,41 @@ def pose_from_cluster(qname, qinfo, db_ids, db_images, points3D,
     mkp_idxs = [i for i in idxs for _ in kp_idx_to_3D[i]]
     mkpq = kpq[mkp_idxs]
     mkpq += 0.5  # COLMAP coordinates
-
     mp3d_ids = [j for i in idxs for j in kp_idx_to_3D[i]]
-    mp3d = [points3D[j].xyz for j in mp3d_ids]
-    mp3d = np.array(mp3d).reshape(-1, 3)
+    ret = localizer.localize(mkpq, mp3d_ids, query_camera, **kwargs)
+    ret['camera'] = {
+        'model': query_camera.model_name,
+        'width': query_camera.width,
+        'height': query_camera.height,
+        'params': query_camera.params,
+    }
 
     # mostly for logging and post-processing
     mkp_to_3D_to_db = [(j, kp_idx_to_3D_to_db[i][j])
                        for i in idxs for j in kp_idx_to_3D[i]]
-
-    camera_model, width, height, params = qinfo
-    cfg = {
-        'model': camera_model,
-        'width': width,
-        'height': height,
-        'params': params,
+    log = {
+        'db': db_ids,
+        'PnP_ret': ret,
+        'keypoints_query': mkpq,
+        'points3D_ids': mp3d_ids,
+        'points3D_xyz': None,  # we don't log xyz anymore because of file size
+        'num_matches': num_matches,
+        'keypoint_index_to_db': (mkp_idxs, mkp_to_3D_to_db),
     }
-    ret = pycolmap.absolute_pose_estimation(mkpq, mp3d, cfg, thresh)
-    ret['cfg'] = cfg
-    return ret, mkpq, mp3d, mp3d_ids, num_matches, (mkp_idxs, mkp_to_3D_to_db)
+    return ret, log
 
 
-def main(reference_sfm, queries, retrieval, features, matches, results,
-         ransac_thresh=12, covisibility_clustering=False,
-         prepend_camera_name=False):
+def main(reference_sfm: Union[Path, pycolmap.Reconstruction],
+         queries: Path,
+         retrieval: Path,
+         features: Path,
+         matches: Path,
+         results: Path,
+         ransac_thresh: int = 12,
+         covisibility_clustering: bool = False,
+         prepend_camera_name: bool = False,
+         config: Dict = None):
 
-    assert reference_sfm.exists(), reference_sfm
     assert retrieval.exists(), retrieval
     assert features.exists(), features
     assert matches.exists(), matches
@@ -108,12 +146,14 @@ def main(reference_sfm, queries, retrieval, features, matches, results,
     queries = parse_image_lists(queries, with_intrinsics=True)
     retrieval_dict = parse_retrieval(retrieval)
 
-    logging.info('Reading 3D model...')
-    _, db_images, points3D = read_model(str(reference_sfm))
-    db_name_to_id = {image.name: i for i, image in db_images.items()}
+    logger.info('Reading the 3D model...')
+    if not isinstance(reference_sfm, pycolmap.Reconstruction):
+        reference_sfm = pycolmap.Reconstruction(reference_sfm)
+    db_name_to_id = {img.name: i for i, img in reference_sfm.images.items()}
 
-    feature_file = h5py.File(features, 'r')
-    match_file = h5py.File(matches, 'r')
+    config = {"estimation": {"ransac": {"max_error": ransac_thresh}},
+              **(config or {})}
+    localizer = QueryLocalizer(reference_sfm, config)
 
     poses = {}
     logs = {
@@ -122,41 +162,32 @@ def main(reference_sfm, queries, retrieval, features, matches, results,
         'retrieval': retrieval,
         'loc': {},
     }
-    logging.info('Starting localization...')
-    for qname, qinfo in tqdm(queries):
+    logger.info('Starting localization...')
+    for qname, qcam in tqdm(queries):
         if qname not in retrieval_dict:
-            logging.warning(f'No images retrieved for query image {qname}. Skipping...')
+            logger.warning(
+                f'No images retrieved for query image {qname}. Skipping...')
             continue
         db_names = retrieval_dict[qname]
         db_ids = []
         for n in db_names:
             if n not in db_name_to_id:
-                logging.warning(f'Image {n} was retrieved but not in database')
+                logger.warning(f'Image {n} was retrieved but not in database')
                 continue
             db_ids.append(db_name_to_id[n])
 
         if covisibility_clustering:
-            clusters = do_covisibility_clustering(db_ids, db_images, points3D)
+            clusters = do_covisibility_clustering(db_ids, reference_sfm)
             best_inliers = 0
             best_cluster = None
             logs_clusters = []
             for i, cluster_ids in enumerate(clusters):
-                ret, mkpq, mp3d, mp3d_ids, num_matches, map_ = (
-                        pose_from_cluster(
-                            qname, qinfo, cluster_ids, db_images, points3D,
-                            feature_file, match_file, thresh=ransac_thresh))
+                ret, log = pose_from_cluster(
+                        localizer, qname, qcam, cluster_ids, features, matches)
                 if ret['success'] and ret['num_inliers'] > best_inliers:
                     best_cluster = i
                     best_inliers = ret['num_inliers']
-                logs_clusters.append({
-                    'db': cluster_ids,
-                    'PnP_ret': ret,
-                    'keypoints_query': mkpq,
-                    'points3D_xyz': mp3d,
-                    'points3D_ids': mp3d_ids,
-                    'num_matches': num_matches,
-                    'keypoint_index_to_db': map_,
-                })
+                logs_clusters.append(log)
             if best_cluster is not None:
                 ret = logs_clusters[best_cluster]['PnP_ret']
                 poses[qname] = (ret['qvec'], ret['tvec'])
@@ -167,28 +198,18 @@ def main(reference_sfm, queries, retrieval, features, matches, results,
                 'covisibility_clustering': covisibility_clustering,
             }
         else:
-            ret, mkpq, mp3d, mp3d_ids, num_matches, map_ = pose_from_cluster(
-                qname, qinfo, db_ids, db_images, points3D,
-                feature_file, match_file, thresh=ransac_thresh)
-
+            ret, log = pose_from_cluster(
+                    localizer, qname, qcam, db_ids, features, matches)
             if ret['success']:
                 poses[qname] = (ret['qvec'], ret['tvec'])
             else:
-                closest = db_images[db_ids[0]]
+                closest = reference_sfm.images[db_ids[0]]
                 poses[qname] = (closest.qvec, closest.tvec)
-            logs['loc'][qname] = {
-                'db': db_ids,
-                'PnP_ret': ret,
-                'keypoints_query': mkpq,
-                'points3D_xyz': mp3d,
-                'points3D_ids': mp3d_ids,
-                'num_matches': num_matches,
-                'keypoint_index_to_db': map_,
-                'covisibility_clustering': covisibility_clustering,
-            }
+            log['covisibility_clustering'] = covisibility_clustering
+            logs['loc'][qname] = log
 
-    logging.info(f'Localized {len(poses)} / {len(queries)} images.')
-    logging.info(f'Writing poses to {results}...')
+    logger.info(f'Localized {len(poses)} / {len(queries)} images.')
+    logger.info(f'Writing poses to {results}...')
     with open(results, 'w') as f:
         for q in poses:
             qvec, tvec = poses[q]
@@ -200,10 +221,10 @@ def main(reference_sfm, queries, retrieval, features, matches, results,
             f.write(f'{name} {qvec} {tvec}\n')
 
     logs_path = f'{results}_logs.pkl'
-    logging.info(f'Writing logs to {logs_path}...')
+    logger.info(f'Writing logs to {logs_path}...')
     with open(logs_path, 'wb') as f:
         pickle.dump(logs, f)
-    logging.info('Done!')
+    logger.info('Done!')
 
 
 if __name__ == '__main__':
