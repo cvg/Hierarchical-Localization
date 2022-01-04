@@ -1,7 +1,7 @@
 import logging
 from packaging import version
 
-__version__ = '1.2'
+__version__ = '1.3'
 
 formatter = logging.Formatter(
     fmt='[%(asctime)s %(name)s %(levelname)s] %(message)s',
