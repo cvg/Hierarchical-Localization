@@ -4,6 +4,7 @@ numpy
 opencv-python
 tqdm
 matplotlib
+plotly
 scipy
 h5py
 pycolmap>=0.1.0
