@@ -53,7 +53,8 @@ class QueryLocalizer:
         self.reconstruction = reconstruction
         self.config = config or {}
 
-    def localize(self, points2D, points3D_id, query_camera):
+    def localize(self, points2D_all, points2D_idxs, points3D_id, query_camera):
+        points2D = points2D_all[points2D_idxs]
         points3D = [self.reconstruction.points3D[j].xyz for j in points3D_id]
         ret = pycolmap.absolute_pose_estimation(
             points2D, points3D, query_camera,
@@ -74,10 +75,11 @@ def pose_from_cluster(
 
     with h5py.File(features_path, 'r') as f:
         kpq = f[qname]['keypoints'].__array__()
+    kpq += 0.5  # COLMAP coordinates
+
     kp_idx_to_3D = defaultdict(list)
     kp_idx_to_3D_to_db = defaultdict(lambda: defaultdict(list))
     num_matches = 0
-
     for i, db_id in enumerate(db_ids):
         image = localizer.reconstruction.images[db_id]
         if image.num_points3D() == 0:
@@ -102,10 +104,8 @@ def pose_from_cluster(
 
     idxs = list(kp_idx_to_3D.keys())
     mkp_idxs = [i for i in idxs for _ in kp_idx_to_3D[i]]
-    mkpq = kpq[mkp_idxs]
-    mkpq += 0.5  # COLMAP coordinates
     mp3d_ids = [j for i in idxs for j in kp_idx_to_3D[i]]
-    ret = localizer.localize(mkpq, mp3d_ids, query_camera, **kwargs)
+    ret = localizer.localize(kpq, mkp_idxs, mp3d_ids, query_camera, **kwargs)
     ret['camera'] = {
         'model': query_camera.model_name,
         'width': query_camera.width,
@@ -119,7 +119,7 @@ def pose_from_cluster(
     log = {
         'db': db_ids,
         'PnP_ret': ret,
-        'keypoints_query': mkpq,
+        'keypoints_query': kpq[mkp_idxs],
         'points3D_ids': mp3d_ids,
         'points3D_xyz': None,  # we don't log xyz anymore because of file size
         'num_matches': num_matches,
