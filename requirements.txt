@@ -2,7 +2,7 @@ torch>=1.1
 torchvision>=0.3
 numpy
 opencv-python
-tqdm
+tqdm>=4.36.0
 matplotlib
 plotly
 scipy
