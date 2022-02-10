@@ -29,6 +29,7 @@ class SIFT(BaseModel):
         'max_keypoints': -1
     }
     required_inputs = ['image']
+    detection_noise = 1.0
 
     def _init(self, conf):
         self.root = conf['root']

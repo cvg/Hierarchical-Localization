@@ -53,6 +53,7 @@ class SuperPoint(BaseModel):
         'fix_sampling': False,
     }
     required_inputs = ['image']
+    detection_noise = 2.0
 
     def _init(self, conf):
         if conf['fix_sampling']:
