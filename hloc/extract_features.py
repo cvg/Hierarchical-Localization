@@ -241,6 +241,8 @@ def main(conf: Dict,
             size = np.array(data['image'].shape[-2:][::-1])
             scales = (original_size / size).astype(np.float32)
             pred['keypoints'] = (pred['keypoints'] + .5) * scales[None] - .5
+            # add keypoint uncertainties scaled to the original resolution
+            uncertainty = getattr(model, 'detection_noise', 1) * scales.mean()
 
         if as_half:
             for k in pred:
@@ -255,6 +257,8 @@ def main(conf: Dict,
                 grp = fd.create_group(name)
                 for k, v in pred.items():
                     grp.create_dataset(k, data=v)
+                if 'keypoints' in pred:
+                    grp['keypoints'].attrs['uncertainty'] = uncertainty
             except OSError as error:
                 if 'No space left on device' in error.args[0]:
                     logger.error(
