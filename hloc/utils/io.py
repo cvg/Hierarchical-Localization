@@ -1,4 +1,6 @@
+from typing import Tuple
 from pathlib import Path
+import numpy as np
 import cv2
 import h5py
 
@@ -44,6 +46,6 @@ def get_matches(path: Path, name0: str, name1: str) -> Tuple[np.ndarray]:
     idx = np.where(matches != -1)[0]
     matches = np.stack([idx, matches[idx]], -1)
     if reverse:
-        matches = matches[:, ::-1]
+        matches = np.flip(matches, -1)
     scores = scores[idx]
     return matches, scores
