@@ -2,7 +2,6 @@ import argparse
 from pathlib import Path
 import numpy as np
 import scipy.spatial
-import torch
 
 from . import logger
 from .utils.read_write_model import read_images_binary
@@ -41,7 +40,7 @@ def main(model, output, num_matched, rotation_threshold=DEFAULT_ROT_THRESH):
     logger.info(
         f'Obtaining pairwise distances between {len(images)} images...')
     ids, dist, dR = get_pairwise_distances(images)
-    scores = torch.from_numpy(-dist)
+    scores = -dist
 
     invalid = (dR >= rotation_threshold)
     np.fill_diagonal(invalid, True)

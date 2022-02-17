@@ -41,6 +41,8 @@ def parse_retrieval(path):
     retrieval = defaultdict(list)
     with open(path, 'r') as f:
         for p in f.read().rstrip('\n').split('\n'):
+            if len(p) == 0:
+                continue
             q, r = p.split()
             retrieval[q].append(r)
     return dict(retrieval)
