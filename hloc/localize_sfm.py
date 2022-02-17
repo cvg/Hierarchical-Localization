@@ -88,15 +88,11 @@ def pose_from_cluster(
         points3D_ids = np.array([p.point3D_id if p.has_point3D() else -1
                                  for p in image.points2D])
 
-        pair = names_to_pair(qname, image.name)
-        with h5py.File(matches_path, 'r') as f:
-            matches = f[pair]['matches0'].__array__()
-        valid = np.where(matches > -1)[0]
-        valid = valid[points3D_ids[matches[valid]] != -1]
-        num_matches += len(valid)
-
-        for idx in valid:
-            id_3D = points3D_ids[matches[idx]]
+        matches, _ = get_matches(matches_path, qname, image.name)
+        matches = matches[points3D_ids[matches[:, 1]] != -1]
+        num_matches += len(matches)
+        for idx, m in matches:
+            id_3D = points3D_ids[m]
             kp_idx_to_3D_to_db[idx][id_3D].append(i)
             # avoid duplicate observations
             if id_3D not in kp_idx_to_3D[idx]:

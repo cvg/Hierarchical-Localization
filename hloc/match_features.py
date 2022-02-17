@@ -128,7 +128,7 @@ def match_from_paths(conf: Dict,
     for (name0, name1) in tqdm(pairs, smoothing=.1):
         pair = names_to_pair(name0, name1)
         # Avoid to recompute duplicates to save time
-        if pair in skip_pairs or names_to_pair(name0, name1) in skip_pairs:
+        if pair in skip_pairs or names_to_pair(name1, name0) in skip_pairs:
             continue
 
         data = {}

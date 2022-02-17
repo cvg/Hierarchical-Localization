@@ -73,7 +73,6 @@ def import_matches(image_ids, database_path, pairs_path, matches_path,
     with open(str(pairs_path), 'r') as f:
         pairs = [p.split() for p in f.readlines()]
 
-    hfile = h5py.File(str(matches_path), 'r')
     db = COLMAPDatabase.connect(database_path)
 
     matched = set()
@@ -81,20 +80,9 @@ def import_matches(image_ids, database_path, pairs_path, matches_path,
         id0, id1 = image_ids[name0], image_ids[name1]
         if len({(id0, id1), (id1, id0)} & matched) > 0:
             continue
-        pair = names_to_pair(name0, name1)
-        if pair not in hfile:
-            raise ValueError(
-                f'Could not find pair {(name0, name1)}... '
-                'Maybe you matched with a different list of pairs? '
-                f'Reverse in file: {names_to_pair(name0, name1) in hfile}.')
-
-        matches = hfile[pair]['matches0'].__array__()
-        valid = matches > -1
+        matches, scores = get_matches(matches_path, name0, name1)
         if min_match_score:
-            scores = hfile[pair]['matching_scores0'].__array__()
-            valid = valid & (scores > min_match_score)
-        matches = np.stack([np.where(valid)[0], matches[valid]], -1)
-
+            matches = matches[scores > min_match_score]
         db.add_matches(id0, id1, matches)
         matched |= {(id0, id1), (id1, id0)}
 
