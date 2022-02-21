@@ -23,3 +23,7 @@ def list_h5_names(path):
                 names.append(obj.parent.name.strip('/'))
         fd.visititems(visit_fn)
     return list(set(names))
+
+def write_pairs(output, pairs):
+    with open(output, 'w') as f:
+      f.write('\n'.join(' '.join([i, j]) for i, j in pairs))

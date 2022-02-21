@@ -34,6 +34,7 @@ def get_pairwise_distances(images):
     return ids, dist, dR
 
 
+
 def main(model, output, num_matched, rotation_threshold=DEFAULT_ROT_THRESH):
     logger.info('Reading the COLMAP model...')
     images = read_images_binary(model / 'images.bin')

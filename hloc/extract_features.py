@@ -1,4 +1,5 @@
 import argparse
+from functools import partial
 import torch
 from pathlib import Path
 from typing import Dict, List, Union, Optional
@@ -16,6 +17,8 @@ from .utils.base_model import dynamic_load
 from .utils.tools import map_tensor
 from .utils.parsers import parse_image_lists
 from .utils.io import read_image, list_h5_names
+from .utils.work_queue import WorkQueue
+
 
 
 '''
@@ -201,6 +204,37 @@ class ImageDataset(torch.utils.data.Dataset):
         return len(self.names)
 
 
+def write_predictions(item, fd, as_half=True):
+  name, pred = item
+  original_size = pred['image_size']
+
+  if 'keypoints' in pred:
+      size = pred['scaled_size']
+      scales = (original_size / size).astype(np.float32)
+      pred['keypoints'] = (pred['keypoints'] + .5) * scales[None] - .5
+
+  if as_half:
+      for k in pred:
+        if np.issubdtype(pred[k].dtype, np.floating):
+          pred[k] = pred[k].astype(np.float16)
+
+  try:
+      if name in fd:
+          del fd[name]
+      grp = fd.create_group(name)
+      for k, v in pred.items():
+          grp.create_dataset(k, data=v)
+  except OSError as error:
+      if 'No space left on device' in error.args[0]:
+          logger.error(
+              'Out of disk space: storing features on disk can take '
+              'significant space, did you enable the as_half flag?')
+          del grp, fd[name]
+      raise error  
+
+
+
+
 @torch.no_grad()
 def main(conf: Dict,
          image_dir: Path,
@@ -208,63 +242,54 @@ def main(conf: Dict,
          as_half: bool = True,
          image_list: Optional[Union[Path, List[str]]] = None,
          feature_path: Optional[Path] = None,
-         overwrite: bool = False) -> Path:
+         overwrite: bool = False,
+         num_workers=1,
+         device=None) -> Path:
     logger.info('Extracting local features with configuration:'
                 f'\n{pprint.pformat(conf)}')
 
-    loader = ImageDataset(image_dir, conf['preprocessing'], image_list)
-    loader = torch.utils.data.DataLoader(loader, num_workers=1)
 
     if feature_path is None:
         feature_path = Path(export_dir, conf['output']+'.h5')
-    feature_path.parent.mkdir(exist_ok=True, parents=True)
+
     skip_names = set(list_h5_names(feature_path)
                      if feature_path.exists() and not overwrite else ())
-    if set(loader.dataset.names).issubset(set(skip_names)):
+    
+    image_list = list(set(image_list) - skip_names)
+    if len(image_list) == 0:
         logger.info('Skipping the extraction.')
-        return feature_path
+        return feature_path    
 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    loader = ImageDataset(image_dir, conf['preprocessing'], image_list)
+    loader = torch.utils.data.DataLoader(loader, num_workers=num_workers)
+
+    if device is None:
+      device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    
     Model = dynamic_load(extractors, conf['model']['name'])
     model = Model(conf['model']).eval().to(device)
 
-    for data in tqdm(loader):
-        name = data['name'][0]  # remove batch dimension
-        if name in skip_names:
-            continue
+    with h5py.File(str(feature_path), 'a') as fd:
+      
+      writer = WorkQueue(
+        process_item = partial(write_predictions, fd=fd, as_half=as_half),
+        num_threads=num_workers)
 
-        pred = model(map_tensor(data, lambda x: x.to(device)))
-        pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
 
-        pred['image_size'] = original_size = data['original_size'][0].numpy()
-        if 'keypoints' in pred:
-            size = np.array(data['image'].shape[-2:][::-1])
-            scales = (original_size / size).astype(np.float32)
-            pred['keypoints'] = (pred['keypoints'] + .5) * scales[None] - .5
+      for data in tqdm(loader):
+          name = data['name'][0]  # remove batch dimension
 
-        if as_half:
-            for k in pred:
-                dt = pred[k].dtype
-                if (dt == np.float32) and (dt != np.float16):
-                    pred[k] = pred[k].astype(np.float16)
+          pred = model(map_tensor(data, lambda x: x.to(device)))
+          pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
 
-        with h5py.File(str(feature_path), 'a') as fd:
-            try:
-                if name in fd:
-                    del fd[name]
-                grp = fd.create_group(name)
-                for k, v in pred.items():
-                    grp.create_dataset(k, data=v)
-            except OSError as error:
-                if 'No space left on device' in error.args[0]:
-                    logger.error(
-                        'Out of disk space: storing features on disk can take '
-                        'significant space, did you enable the as_half flag?')
-                    del grp, fd[name]
-                raise error
+          pred['scaled_size'] = np.array(data['image'].shape[-2:][::-1])
+          pred['image_size'] = data['original_size'][0].numpy()
 
-        del pred
+          writer.put(name, pred)
+        
+          del pred
 
+    writer.join()
     logger.info('Finished exporting features.')
     return feature_path
 

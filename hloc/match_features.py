@@ -1,11 +1,15 @@
 import argparse
-from typing import Union, Optional, Dict
+from functools import partial
+from typing import List, Tuple, Union, Optional, Dict
 from pathlib import Path
 import pprint
 import collections.abc as collections
 from tqdm import tqdm
 import h5py
 import torch
+
+from hloc.utils.tools import map_tensor
+from hloc.utils.work_queue import WorkQueue
 
 from . import matchers, logger
 from .utils.base_model import dynamic_load
@@ -67,7 +71,8 @@ def main(conf: Dict,
          export_dir: Optional[Path] = None,
          matches: Optional[Path] = None,
          features_ref: Optional[Path] = None,
-         overwrite: bool = False) -> Path:
+         overwrite: bool = False,
+         num_workers=1) -> Path:
 
     if isinstance(features, Path) or Path(features).exists():
         features_q = features
@@ -90,9 +95,66 @@ def main(conf: Dict,
     else:
         features_ref = [features_ref]
 
-    match_from_paths(conf, pairs, matches, features_q, features_ref, overwrite)
+    match_from_paths(conf, pairs, matches, features_q, features_ref, overwrite, num_workers=num_workers)
 
     return matches
+
+
+
+class FeaturesPairs():
+  def __init__(self, 
+    pairs : List[Tuple[str, str]],
+    feature_path_q: Path,
+    feature_paths_refs: Path):
+
+      if not feature_path_q.exists():
+        raise FileNotFoundError(f'Query feature file {feature_path_q}.')
+      for path in feature_paths_refs:
+          if not path.exists():
+              raise FileNotFoundError(f'Reference feature file {path}.')
+
+      self.name2ref = {n: i for i, p in enumerate(feature_paths_refs)
+                  for n in list_h5_names(p)}
+
+
+      self.feature_path_q = feature_path_q
+      self.feature_paths_refs = feature_paths_refs
+      self.pairs = pairs
+
+  def __len__(self):
+    return len(self.pairs)
+
+  def __getitem__(self, idx):
+      name0, name1 = self.pairs[idx]
+
+      data = {}
+      with h5py.File(str(self.feature_path_q), 'r') as fd:
+          grp = fd[name0]
+          for k, v in grp.items():
+              data[k+'0'] = torch.from_numpy(v.__array__()).float()
+          # some matchers might expect an image but only use its size
+          data['image0'] = torch.empty((1,)+tuple(grp['image_size'])[::-1])
+      with h5py.File(str(self.feature_paths_refs[self.name2ref[name1]]), 'r') as fd:
+          grp = fd[name1]
+          for k, v in grp.items():
+              data[k+'1'] = torch.from_numpy(v.__array__()).float()
+          data['image1'] = torch.empty((1,)+tuple(grp['image_size'])[::-1])
+
+      return (names_to_pair(name0, name1), data)
+
+
+def write_matches(item, fd):
+  pair, pred = item
+  if pair in fd:
+      del fd[pair]
+  grp = fd.create_group(pair)
+  matches = pred['matches0'][0].cpu().short().numpy()
+  grp.create_dataset('matches0', data=matches)
+
+  if 'matching_scores0' in pred:
+      scores = pred['matching_scores0'][0].cpu().half().numpy()
+      grp.create_dataset('matching_scores0', data=scores)
+
 
 
 @torch.no_grad()
@@ -101,23 +163,21 @@ def match_from_paths(conf: Dict,
                      match_path: Path,
                      feature_path_q: Path,
                      feature_paths_refs: Path,
-                     overwrite: bool = False) -> Path:
+                     overwrite: bool = False,
+                     
+                     device=None,
+                     num_workers=1) -> Path:
+
     logger.info('Matching local features with configuration:'
                 f'\n{pprint.pformat(conf)}')
-
-    if not feature_path_q.exists():
-        raise FileNotFoundError(f'Query feature file {feature_path_q}.')
-    for path in feature_paths_refs:
-        if not path.exists():
-            raise FileNotFoundError(f'Reference feature file {path}.')
-    name2ref = {n: i for i, p in enumerate(feature_paths_refs)
-                for n in list_h5_names(p)}
 
     assert pairs_path.exists(), pairs_path
     pairs = parse_retrieval(pairs_path)
     pairs = [(q, r) for q, rs in pairs.items() for r in rs]
 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    if device is None:
+      device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
     Model = dynamic_load(matchers, conf['model']['name'])
     model = Model(conf['model']).eval().to(device)
 
@@ -125,40 +185,25 @@ def match_from_paths(conf: Dict,
     skip_pairs = set(list_h5_names(match_path)
                      if match_path.exists() and not overwrite else ())
 
-    for (name0, name1) in tqdm(pairs, smoothing=.1):
-        pair = names_to_pair(name0, name1)
-        # Avoid to recompute duplicates to save time
-        if pair in skip_pairs or names_to_pair(name0, name1) in skip_pairs:
-            continue
+    pairs = [pair for pair in set(pairs) 
+      if names_to_pair(*pair) not in skip_pairs]
 
-        data = {}
-        with h5py.File(str(feature_path_q), 'r') as fd:
-            grp = fd[name0]
-            for k, v in grp.items():
-                data[k+'0'] = torch.from_numpy(v.__array__()).float().to(device)
-            # some matchers might expect an image but only use its size
-            data['image0'] = torch.empty((1,)+tuple(grp['image_size'])[::-1])
-        with h5py.File(str(feature_paths_refs[name2ref[name1]]), 'r') as fd:
-            grp = fd[name1]
-            for k, v in grp.items():
-                data[k+'1'] = torch.from_numpy(v.__array__()).float().to(device)
-            data['image1'] = torch.empty((1,)+tuple(grp['image_size'])[::-1])
-        data = {k: v[None] for k, v in data.items()}
+    feature_pairs = FeaturesPairs(pairs, feature_path_q, feature_paths_refs)
+    loader = torch.utils.data.DataLoader(feature_pairs, num_workers=num_workers, batch_size=1, shuffle=False, pin_memory=True)
 
-        pred = model(data)
-        with h5py.File(str(match_path), 'a') as fd:
-            if pair in fd:
-                del fd[pair]
-            grp = fd.create_group(pair)
-            matches = pred['matches0'][0].cpu().short().numpy()
-            grp.create_dataset('matches0', data=matches)
+    with h5py.File(str(match_path), 'a') as fd:
 
-            if 'matching_scores0' in pred:
-                scores = pred['matching_scores0'][0].cpu().half().numpy()
-                grp.create_dataset('matching_scores0', data=scores)
+      writer = WorkQueue(
+        process_item = partial(write_matches, fd=fd),
+        num_threads=num_workers)
 
-        skip_pairs.add(pair)
+      for pair, data in tqdm(loader, smoothing=.1):
+          data = map_tensor(data, partial(torch.Tensor.to, device=device, dtype=torch.float16))
+          pred = model(data)
 
+          writer.put(pair[0], pred)
+
+      writer.join()
     logger.info('Finished exporting matches.')
 
 
