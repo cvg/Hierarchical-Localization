@@ -46,8 +46,9 @@ def pairs_from_score_matrix(scores: torch.Tensor,
                             invalid: np.array,
                             num_select: int,
                             min_score: Optional[float] = None):
-
     assert scores.shape == invalid.shape
+    if isinstance(scores, np.ndarray):
+        scores = torch.from_numpy(scores)
     invalid = torch.from_numpy(invalid).to(scores.device)
     if min_score is not None:
         invalid |= scores < min_score
