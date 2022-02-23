@@ -8,3 +8,5 @@ plotly
 scipy
 h5py
 pycolmap>=0.1.0
+extract_patches
+kornia

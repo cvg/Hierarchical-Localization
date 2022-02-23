@@ -90,7 +90,18 @@ confs = {
     'sift': {
         'output': 'feats-sift',
         'model': {
-            'name': 'sift'
+            'name': 'dog'
+        },
+        'preprocessing': {
+            'grayscale': True,
+            'resize_max': 1600,
+        },
+    },
+    'sosnet': {
+        'output': 'feats-sosnet',
+        'model': {
+            'name': 'dog',
+            'descriptor': 'sosnet'
         },
         'preprocessing': {
             'grayscale': True,
