@@ -1,4 +1,3 @@
-import copy
 from extract_patches.core import extract_patches
 import kornia
 import numpy as np
@@ -10,9 +9,6 @@ from ..utils.base_model import BaseModel
 
 
 EPS = 1e-6
-PATCH_SIZE = 32
-MR_SIZE = 12
-BATCH_SIZE = 512
 
 
 def sift_to_rootsift(x):
@@ -24,47 +20,46 @@ def sift_to_rootsift(x):
 
 class DoG(BaseModel):
     default_conf = {
-        'num_octaves': 4,
-        'octave_resolution': 3,
-        'first_octave': 0,
-        'edge_thresh': 10,
-        'peak_thresh': 0.01,
-        'upright': False,
+        'vlfeat': {
+            'num_octaves': 4,
+            'octave_resolution': 3,
+            'first_octave': 0,
+            'edge_thresh': 10,
+            'peak_thresh': 0.01,
+            'upright': False,
+        },
         'descriptor': 'rootsift',
-        'max_keypoints': -1
+        'max_keypoints': -1,
+        'patch_size': 32,
+        'mr_size': 12,
+        'batch_size': 1024,
     }
     required_inputs = ['image']
     detection_noise = 1.0
 
     def _init(self, conf):
-        self.descriptor = conf['descriptor']
-        self.max_keypoints = conf['max_keypoints']
-        assert self.descriptor in ['sift', 'rootsift', 'sosnet'], f'Unknown descriptor {self.descriptor}.'
-
-        if self.descriptor == 'sosnet':
-            self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-            self.describe = kornia.feature.SOSNet(pretrained=True).to(self.device)
+        if conf['descriptor'] == 'sosnet':
+            self.describe = kornia.feature.SOSNet(pretrained=True)
             self.transform = transforms.ToTensor()
-
-        vlfeat_conf = copy.deepcopy(conf)
-        vlfeat_conf.pop('name', None)
-        vlfeat_conf.pop('descriptor', None)
-        vlfeat_conf.pop('device', None)
-        vlfeat_conf.pop('max_keypoints', None)
-        self.extract = lambda image: pycolmap.extract_sift(
-            image, **vlfeat_conf
-        )
+        elif conf['descriptor'] not in ['sift', 'rootsift']:
+            raise ValueError(f'Unknown descriptor: {conf["descriptor"]}')
 
     def _forward(self, data):
         image = data['image'].cpu().numpy()
         assert image.shape[1] == 1
         assert image.min() >= -EPS and image.max() <= 1 + EPS
+        image = image[0, 0]
+        device = data['image'].device
 
-        keypoints, scores, descriptors = self.extract(image[0, 0])
+        keypoints, scores, descriptors = pycolmap.extract_sift(
+            image, **self.conf['vlfeat']
+        )
 
-        if self.descriptor == 'rootsift':
-            descriptors = sift_to_rootsift(descriptors)
-        elif self.descriptor == 'sosnet':
+        if self.conf['descriptor'] in ['sift', 'rootsift']:
+            if self.conf['descriptor'] == 'rootsift':
+                descriptors = sift_to_rootsift(descriptors)
+            descriptors = torch.from_numpy(descriptors)
+        elif self.conf['descriptor'] == 'sosnet':
             # VLFeat -> xyA conversion.
             # Based on https://github.com/colmap/colmap/blob/dev/src/feature/types.cc#L43-L53.
             x = keypoints[:, 0]
@@ -77,29 +72,33 @@ class DoG(BaseModel):
             a22 = scale * np.cos(ori)
             keypoints = np.stack([x, y, a11, a12, a21, a22], axis=-1)
             # Extract patches.
-            patches = extract_patches(keypoints, image[0, 0], PATCH_SIZE, MR_SIZE, 'xyA')
+            patches = extract_patches(
+                keypoints, image, self.conf['patch_size'],
+                self.conf['mr_size'], 'xyA')
             # Extract descriptors.
-            descriptors = np.zeros((len(patches), 128))
-            for i in range(0, len(patches), BATCH_SIZE):
-                data_a = patches[i : i + BATCH_SIZE]
-                data_a = torch.stack(
-                    [self.transform(patch) for patch in data_a]
-                ).to(self.device)
-                out_a = self.describe(data_a)
-                descriptors[i : i + BATCH_SIZE] = out_a.cpu().detach().numpy()
+            batch_size = self.conf['batch_size']
+            descriptors = torch.zeros((len(patches), 128), device=device)
+            for i in range(0, len(patches), batch_size):
+                batch = patches[i:i+batch_size]
+                batch = torch.stack([self.transform(p) for p in batch])
+                descs = self.describe(batch.to(device))
+                descriptors[i:i+batch_size] = descs
+        else:
+            raise ValueError(f'Unknown descriptor: {self.conf["descriptor"]}')
 
-        keypoints = keypoints[:, : 2]  # Keep only x, y.
+        keypoints = torch.from_numpy(keypoints[:, :2])  # keep only x, y
+        scores = torch.from_numpy(scores)
 
-        if self.max_keypoints != -1:
+        if self.conf['max_keypoints'] != -1:
             # TODO: check that the scores from PyCOLMAP are 100% correct,
             # follow https://github.com/mihaidusmanu/pycolmap/issues/8
-            indices = np.argsort(scores)[:: -1][: self.max_keypoints]
-            keypoints = keypoints[indices, :]
+            indices = torch.topk(scores, self.conf['max_keypoints'])
+            keypoints = keypoints[indices]
             scores = scores[indices]
-            descriptors = descriptors[indices, :]
+            descriptors = descriptors[indices]
 
         return {
-            'keypoints': torch.from_numpy(keypoints)[None],
-            'scores': torch.from_numpy(scores)[None],
-            'descriptors': torch.from_numpy(descriptors.T)[None],
+            'keypoints': keypoints[None],
+            'scores': scores[None],
+            'descriptors': descriptors.T[None],
         }
