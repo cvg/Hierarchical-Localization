@@ -3,7 +3,6 @@ from kornia.feature.laf import (
         extract_patches_from_pyramid, laf_from_center_scale_ori)
 import numpy as np
 import torch
-import torchvision.transforms as transforms
 import pycolmap
 
 from ..utils.base_model import BaseModel
@@ -40,7 +39,6 @@ class DoG(BaseModel):
     def _init(self, conf):
         if conf['descriptor'] == 'sosnet':
             self.describe = kornia.feature.SOSNet(pretrained=True)
-            self.transform = transforms.ToTensor()
         elif conf['descriptor'] not in ['sift', 'rootsift']:
             raise ValueError(f'Unknown descriptor: {conf["descriptor"]}')
 
