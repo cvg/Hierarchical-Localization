@@ -1,5 +1,6 @@
-from extract_patches.core import extract_patches
 import kornia
+from kornia.feature.laf import (
+        extract_patches_from_pyramid, laf_from_center_scale_ori)
 import numpy as np
 import torch
 import torchvision.transforms as transforms
@@ -45,14 +46,13 @@ class DoG(BaseModel):
             raise ValueError(f'Unknown descriptor: {conf["descriptor"]}')
 
     def _forward(self, data):
-        image = data['image'].cpu().numpy()
+        image = data['image']
+        image_np = image.cpu().numpy()[0, 0]
         assert image.shape[1] == 1
-        assert image.min() >= -EPS and image.max() <= 1 + EPS
-        image = image[0, 0]
-        device = data['image'].device
+        assert image_np.min() >= -EPS and image_np.max() <= 1 + EPS
 
         keypoints, scores, descriptors = pycolmap.extract_sift(
-            image, **self.conf['vlfeat']
+            image_np, **self.conf['vlfeat']
         )
 
         if self.conf['descriptor'] in ['sift', 'rootsift']:
@@ -62,27 +62,15 @@ class DoG(BaseModel):
         elif self.conf['descriptor'] == 'sosnet':
             # VLFeat -> xyA conversion.
             # Based on https://github.com/colmap/colmap/blob/dev/src/feature/types.cc#L43-L53.
-            x = keypoints[:, 0]
-            y = keypoints[:, 1]
-            scale = keypoints[:, 2]
-            ori = keypoints[:, 3]
-            a11 = scale * np.cos(ori)
-            a12 = -scale * np.sin(ori)
-            a21 = scale * np.sin(ori)
-            a22 = scale * np.cos(ori)
-            keypoints = np.stack([x, y, a11, a12, a21, a22], axis=-1)
-            # Extract patches.
-            patches = extract_patches(
-                keypoints, image, self.conf['patch_size'],
-                self.conf['mr_size'], 'xyA')
-            # Extract descriptors.
-            batch_size = self.conf['batch_size']
-            descriptors = torch.zeros((len(patches), 128), device=device)
-            for i in range(0, len(patches), batch_size):
-                batch = patches[i:i+batch_size]
-                batch = torch.stack([self.transform(p) for p in batch])
-                descs = self.describe(batch.to(device))
-                descriptors[i:i+batch_size] = descs
+            center = keypoints[:, :2] + 0.5
+            scale = keypoints[:, 2] * self.conf['mr_size'] / 2
+            ori = -np.rad2deg(keypoints[:, 3])
+            lafs = laf_from_center_scale_ori(
+                torch.from_numpy(center)[None],
+                torch.from_numpy(scale)[None, :, None, None],
+                torch.from_numpy(ori)[None, :, None]).to(image.device)
+            patches = extract_patches_from_pyramid(image, lafs)[0]
+            descriptors = self.describe(patches).reshape(len(patches), 128)
         else:
             raise ValueError(f'Unknown descriptor: {self.conf["descriptor"]}')
 
