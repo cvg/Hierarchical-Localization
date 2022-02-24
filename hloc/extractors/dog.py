@@ -102,8 +102,6 @@ class DoG(BaseModel):
                 descriptors = sift_to_rootsift(descriptors)
             descriptors = torch.from_numpy(descriptors)
         elif self.conf['descriptor'] == 'sosnet':
-            # VLFeat -> xyA conversion.
-            # Based on https://github.com/colmap/colmap/blob/dev/src/feature/types.cc#L43-L53.
             center = keypoints[:, :2] + 0.5
             scale = keypoints[:, 2] * self.conf['mr_size'] / 2
             ori = -np.rad2deg(keypoints[:, 3])
