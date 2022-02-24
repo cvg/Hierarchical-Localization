@@ -33,7 +33,6 @@ class DoG(BaseModel):
         'max_keypoints': -1,
         'patch_size': 32,
         'mr_size': 12,
-        'batch_size': 1024,
     }
     required_inputs = ['image']
     detection_noise = 1.0
