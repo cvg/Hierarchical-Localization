@@ -95,11 +95,10 @@ def main(conf: Dict,
     else:
         features_ref = [features_ref]
 
-    match_from_paths(conf, pairs, matches, features_q, features_ref, overwrite, num_workers=num_workers)
+    match_from_paths(conf, pairs, matches, features_q, features_ref, 
+      overwrite, num_workers=num_workers, batch_size=conf.get('batch_size', 1))
 
     return matches
-
-
 
 class FeaturesPairs():
   def __init__(self, 
@@ -121,6 +120,14 @@ class FeaturesPairs():
       self.feature_paths_refs = feature_paths_refs
       self.pairs = pairs
 
+      self.fd_q = h5py.File(str(self.feature_path_q), 'r')
+      self.fd_refs = [h5py.File(ref, 'r') for ref in self.feature_paths_refs]
+
+  def close(self):
+    self.fd_q.close()
+    for fd in self.fd_refs:
+      fd.close()
+
   def __len__(self):
     return len(self.pairs)
 
@@ -128,32 +135,38 @@ class FeaturesPairs():
       name0, name1 = self.pairs[idx]
 
       data = {}
-      with h5py.File(str(self.feature_path_q), 'r') as fd:
-          grp = fd[name0]
-          for k, v in grp.items():
-              data[k+'0'] = torch.from_numpy(v.__array__()).float()
-          # some matchers might expect an image but only use its size
-          data['image0'] = torch.empty((1,)+tuple(grp['image_size'])[::-1])
-      with h5py.File(str(self.feature_paths_refs[self.name2ref[name1]]), 'r') as fd:
-          grp = fd[name1]
-          for k, v in grp.items():
-              data[k+'1'] = torch.from_numpy(v.__array__()).float()
-          data['image1'] = torch.empty((1,)+tuple(grp['image_size'])[::-1])
+      grp = self.fd_q[name0]
+      for k, v in grp.items():
+          data[k+'0'] = torch.from_numpy(v.__array__()).float()
+      # some matchers might expect an image but only use its size
+      data['image0'] = torch.empty((1,)+tuple(grp['image_size'])[::-1])
+
+      fd = self.fd_refs[self.name2ref[name1]]
+      grp = fd[name1]
+      for k, v in grp.items():
+          data[k+'1'] = torch.from_numpy(v.__array__()).float()
+      data['image1'] = torch.empty((1,)+tuple(grp['image_size'])[::-1])
 
       return (names_to_pair(name0, name1), data)
 
 
-def write_matches(item, fd):
-  pair, pred = item
-  if pair in fd:
-      del fd[pair]
-  grp = fd.create_group(pair)
-  matches = pred['matches0'][0].cpu().short().numpy()
-  grp.create_dataset('matches0', data=matches)
 
-  if 'matching_scores0' in pred:
-      scores = pred['matching_scores0'][0].cpu().half().numpy()
-      grp.create_dataset('matching_scores0', data=scores)
+def write_matches(item, fd):
+  pairs, preds = item
+  matches = preds['matches0'].cpu().short().numpy()
+
+  scores = None
+  if 'matching_scores0' in preds:
+    scores = preds['matching_scores0'].cpu().half().numpy()
+
+  for pair, match, score in zip(pairs, matches, scores):
+    if pair in fd:
+        del fd[pair]
+    grp = fd.create_group(pair)
+    grp.create_dataset('matches0', data=match)
+
+    if scores is not None:
+      grp.create_dataset('matching_scores0', data=score)
 
 
 
@@ -166,7 +179,8 @@ def match_from_paths(conf: Dict,
                      overwrite: bool = False,
                      
                      device=None,
-                     num_workers=1) -> Path:
+                     num_workers=1,
+                     batch_size=1) -> Path:
 
     logger.info('Matching local features with configuration:'
                 f'\n{pprint.pformat(conf)}')
@@ -189,7 +203,7 @@ def match_from_paths(conf: Dict,
       if names_to_pair(*pair) not in skip_pairs]
 
     feature_pairs = FeaturesPairs(pairs, feature_path_q, feature_paths_refs)
-    loader = torch.utils.data.DataLoader(feature_pairs, num_workers=num_workers, batch_size=1, shuffle=False, pin_memory=True)
+    loader = torch.utils.data.DataLoader(feature_pairs, num_workers=num_workers, batch_size=batch_size, shuffle=False, pin_memory=True)
 
     with h5py.File(str(match_path), 'a') as fd:
 
@@ -197,13 +211,17 @@ def match_from_paths(conf: Dict,
         process_item = partial(write_matches, fd=fd),
         num_threads=num_workers)
 
-      for pair, data in tqdm(loader, smoothing=.1):
-          data = map_tensor(data, partial(torch.Tensor.to, device=device, dtype=torch.float16))
-          pred = model(data)
+      with tqdm(smoothing=.1, total=len(feature_pairs)) as pbar:
+        for pairs, data in loader:
+            data = map_tensor(data, partial(torch.Tensor.to, device=device, dtype=torch.float16))
+            preds = model(data)
 
-          writer.put(pair[0], pred)
+            writer.put( (pairs, preds) )
+            pbar.update(batch_size)
 
       writer.join()
+      # feature_pairs.close()
+
     logger.info('Finished exporting matches.')
 
 

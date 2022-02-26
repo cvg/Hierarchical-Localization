@@ -12,13 +12,11 @@ class WorkQueue():
       thread.start()
 
   def join(self):
-
     for thread in self.threads:
       self.queue.put(None)
 
     for thread in self.threads:
       thread.join()
-
 
   def write_thread(self, process_item):
       item = self.queue.get()
@@ -27,5 +25,6 @@ class WorkQueue():
         process_item(item)
         item = self.queue.get()
 
-  def put(self, name, pred):
-    self.queue.put( (name, pred) )
+
+  def put(self, data):
+    self.queue.put( data )

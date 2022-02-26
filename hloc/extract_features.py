@@ -216,9 +216,9 @@ def write_predictions(item, fd, as_half=True):
       uncertainty = pred['detection_noise'] * scales.mean()
 
   if as_half:
-      for k in pred:
-        if np.issubdtype(pred[k].dtype, np.floating):
-          pred[k] = pred[k].astype(np.float16)
+      for k, x in pred.items():
+        if np.issubdtype(x.dtype, np.floating):
+          pred[k] = x.astype(np.float16)
 
   try:
       if name in fd:
@@ -268,7 +268,7 @@ def main(conf: Dict,
     loader = torch.utils.data.DataLoader(loader, num_workers=num_workers)
 
     if device is None:
-      device = 'cuda' if torch.cuda.is_available() else 'cpu'
+      device = conf.get('device', 'cuda' if torch.cuda.is_available() else 'cpu')
     
     Model = dynamic_load(extractors, conf['model']['name'])
     model = Model(conf['model']).eval().to(device)
@@ -279,8 +279,7 @@ def main(conf: Dict,
         process_item = partial(write_predictions, fd=fd, as_half=as_half),
         num_threads=num_workers)
 
-
-      for data in tqdm(loader):
+      def process_image(data):
           name = data['name'][0]  # remove batch dimension
 
           pred = model(map_tensor(data, lambda x: x.to(device)))
@@ -288,13 +287,22 @@ def main(conf: Dict,
 
           pred['scaled_size'] = np.array(data['image'].shape[-2:][::-1])
           pred['image_size'] = data['original_size'][0].numpy()
-          pred['detection_noise'] = getattr(model, 'detection_noise', 1)
+          pred['detection_noise'] = np.array([getattr(model, 'detection_noise', 1)])
 
-          writer.put(name, pred)
-        
-          del pred
+          writer.put( (name, pred) )                     
 
-    writer.join()
+      process = WorkQueue( 
+        process_item = partial(process_image), 
+        num_threads=num_workers if device == 'cpu' else 1
+      )
+
+      with tqdm(loader) as pbar:
+        for data in pbar:
+          process.put(data)
+
+      process.join()
+      writer.join()
+
     logger.info('Finished exporting features.')
     return feature_path
 

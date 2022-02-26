@@ -90,6 +90,7 @@ def import_matches(image_ids, database_path, pairs_path, matches_path,
 
         matches = hfile[pair]['matches0'].__array__()
         valid = matches > -1
+        
         if min_match_score:
             scores = hfile[pair]['matching_scores0'].__array__()
             valid = valid & (scores > min_match_score)
