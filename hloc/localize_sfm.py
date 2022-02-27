@@ -3,13 +3,13 @@ import numpy as np
 from pathlib import Path
 from collections import defaultdict
 from typing import Dict, List, Union
-import h5py
 from tqdm import tqdm
 import pickle
 import pycolmap
 
 from . import logger
-from .utils.parsers import parse_image_lists, parse_retrieval, names_to_pair
+from .utils.io import get_keypoints, get_matches
+from .utils.parsers import parse_image_lists, parse_retrieval
 
 
 def do_covisibility_clustering(frame_ids: List[int],
@@ -73,8 +73,7 @@ def pose_from_cluster(
         matches_path: Path,
         **kwargs):
 
-    with h5py.File(features_path, 'r') as f:
-        kpq = f[qname]['keypoints'].__array__()
+    kpq = get_keypoints(features_path, qname)
     kpq += 0.5  # COLMAP coordinates
 
     kp_idx_to_3D = defaultdict(list)

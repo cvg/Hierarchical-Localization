@@ -4,13 +4,11 @@ import io
 import sys
 from pathlib import Path
 from tqdm import tqdm
-import h5py
-import numpy as np
 import pycolmap
 
 from . import logger
 from .utils.database import COLMAPDatabase
-from .utils.parsers import names_to_pair
+from .utils.io import get_keypoints, get_matches
 
 
 class OutputCapture:
@@ -53,15 +51,13 @@ def create_db_from_model(reconstruction, database_path):
 
 def import_features(image_ids, database_path, features_path):
     logger.info('Importing features into the database...')
-    hfile = h5py.File(str(features_path), 'r')
     db = COLMAPDatabase.connect(database_path)
 
     for image_name, image_id in tqdm(image_ids.items()):
-        keypoints = hfile[image_name]['keypoints'].__array__()
+        keypoints = get_keypoints(features_path, image_name)
         keypoints += 0.5  # COLMAP origin
         db.add_keypoints(image_id, keypoints)
 
-    hfile.close()
     db.commit()
     db.close()
 
@@ -89,7 +85,6 @@ def import_matches(image_ids, database_path, pairs_path, matches_path,
         if skip_geometric_verification:
             db.add_two_view_geometry(id0, id1, matches)
 
-    hfile.close()
     db.commit()
     db.close()
 

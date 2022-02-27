@@ -30,6 +30,12 @@ def list_h5_names(path):
     return list(set(names))
 
 
+def get_keypoints(path: Path, name: str) -> np.ndarray:
+    with h5py.File(str(path), 'r') as hfile:
+        p = hfile[name]['keypoints'].__array__()
+    return p
+
+
 def get_matches(path: Path, name0: str, name1: str) -> Tuple[np.ndarray]:
     with h5py.File(str(path), 'r') as hfile:
         reverse = False
