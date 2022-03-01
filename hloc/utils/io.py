@@ -4,7 +4,7 @@ import numpy as np
 import cv2
 import h5py
 
-from .parsers import names_to_pair
+from .parsers import names_to_pair, names_to_pair_old
 
 
 def read_image(path, grayscale=False):
@@ -36,17 +36,28 @@ def get_keypoints(path: Path, name: str) -> np.ndarray:
     return p
 
 
+def find_pair(hfile: h5py.File, name0: str, name1: str):
+    pair = names_to_pair(name0, name1)
+    if pair in hfile:
+        return pair, False
+    pair = names_to_pair(name1, name0)
+    if pair in hfile:
+        return pair, True
+    # older, less efficient format
+    pair = names_to_pair_old(name0, name1)
+    if pair in hfile:
+        return pair, False
+    pair = names_to_pair_old(name1, name0)
+    if pair in hfile:
+        return pair, True
+    raise ValueError(
+        f'Could not find pair {(name0, name1)}... '
+        'Maybe you matched with a different list of pairs? ')
+
+
 def get_matches(path: Path, name0: str, name1: str) -> Tuple[np.ndarray]:
     with h5py.File(str(path), 'r') as hfile:
-        reverse = False
-        pair = names_to_pair(name0, name1)
-        if pair not in hfile:
-            pair = names_to_pair(name1, name0)
-            if pair not in hfile:
-                raise ValueError(
-                    f'Could not find pair {(name0, name1)}... '
-                    'Maybe you matched with a different list of pairs? ')
-            reverse = True
+        reverse, pair = find_pair(hfile, name0, name1)
         matches = hfile[pair]['matches0'].__array__()
         scores = hfile[pair]['matching_scores0'].__array__()
     idx = np.where(matches != -1)[0]
