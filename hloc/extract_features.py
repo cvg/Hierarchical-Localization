@@ -294,7 +294,10 @@ def main(conf: Dict,
               pred['image_size'] = data['original_size'][0].numpy()
               pred['detection_noise'] = np.array([getattr(model, 'detection_noise', 1)])
 
-              writer.put( (name, pred) )                     
+              writer.put( (name, pred) )    
+
+              w, h = pred['image_size']
+              pbar.set_postfix(dict(name=name, size=f"{w}x{h}", n=pred['keypoints'].shape[0]))                 
               pbar.update(1)
 
 
