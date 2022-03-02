@@ -107,13 +107,17 @@ def import_matches(image_ids, database_path, pairs_path, matches_path,
     db.close()
 
 
-def geometric_verification(database_path, pairs_path, verbose=False):
+def geometric_verification(database_path, pairs_path, 
+      max_num_trials=20000, min_inlier_ratio=0.1,
+      use_gpu = False, verbose=False):
     logger.info('Performing geometric verification of the matches...')
+
     with OutputCapture(verbose):
         with pycolmap.ostream():
             pycolmap.verify_matches(
                 database_path, pairs_path,
-                max_num_trials=20000, min_inlier_ratio=0.1)
+                max_num_trials=max_num_trials, min_inlier_ratio=min_inlier_ratio,
+                use_gpu = use_gpu)
 
 
 def run_triangulation(model_path, database_path, image_dir, reference_model,

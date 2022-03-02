@@ -1,5 +1,6 @@
 import argparse
 from functools import partial
+import os
 import torch
 from pathlib import Path
 from typing import Dict, List, Union, Optional
@@ -205,38 +206,36 @@ class ImageDataset(torch.utils.data.Dataset):
 
 
 def write_predictions(item, fd, as_half=True):
-  name, pred = item
-  original_size = pred['image_size']
+    name, pred = item
+    original_size = pred['image_size']
 
-  if 'keypoints' in pred:
-      size = pred['scaled_size']
-      scales = (original_size / size).astype(np.float32)
-      pred['keypoints'] = (pred['keypoints'] + .5) * scales[None] - .5
-      # add keypoint uncertainties scaled to the original resolution
-      uncertainty = pred['detection_noise'] * scales.mean()
+    if 'keypoints' in pred:
+        size = pred['scaled_size']
+        scales = (original_size / size).astype(np.float32)
+        pred['keypoints'] = (pred['keypoints'] + .5) * scales[None] - .5
+        # add keypoint uncertainties scaled to the original resolution
+        uncertainty = pred['detection_noise'] * scales.mean()
 
-  if as_half:
-      for k, x in pred.items():
-        if np.issubdtype(x.dtype, np.floating):
-          pred[k] = x.astype(np.float16)
+    if as_half:
+        for k, x in pred.items():
+          if np.issubdtype(x.dtype, np.floating):
+            pred[k] = x.astype(np.float16)
 
-  try:
-      if name in fd:
-          del fd[name]
-      grp = fd.create_group(name)
-      for k, v in pred.items():
-          grp.create_dataset(k, data=v)
-      if 'keypoints' in pred:
-          grp['keypoints'].attrs['uncertainty'] = uncertainty          
-  except OSError as error:
-      if 'No space left on device' in error.args[0]:
-          logger.error(
-              'Out of disk space: storing features on disk can take '
-              'significant space, did you enable the as_half flag?')
-          del grp, fd[name]
-      raise error  
-
-
+    try:
+        if name in fd:
+            del fd[name]
+        grp = fd.create_group(name)
+        for k, v in pred.items():
+            grp.create_dataset(k, data=v)
+        if 'keypoints' in pred:
+            grp['keypoints'].attrs['uncertainty'] = uncertainty          
+    except OSError as error:
+        if 'No space left on device' in error.args[0]:
+            logger.error(
+                'Out of disk space: storing features on disk can take '
+                'significant space, did you enable the as_half flag?')
+            del grp, fd[name]
+        raise error  
 
 
 @torch.no_grad()
@@ -248,7 +247,8 @@ def main(conf: Dict,
          feature_path: Optional[Path] = None,
          overwrite: bool = False,
          num_workers=1,
-         device=None) -> Path:
+         device=None,
+         autocast=True) -> Path:
     logger.info('Extracting local features with configuration:'
                 f'\n{pprint.pformat(conf)}')
 
@@ -268,7 +268,7 @@ def main(conf: Dict,
     loader = torch.utils.data.DataLoader(loader, num_workers=num_workers)
 
     if device is None:
-      device = conf.get('device', 'cuda' if torch.cuda.is_available() else 'cpu')
+        device = conf.get('device', 'cuda' if torch.cuda.is_available() else 'cpu')
     
     Model = dynamic_load(extractors, conf['model']['name'])
     model = Model(conf['model']).eval().to(device)
@@ -276,32 +276,38 @@ def main(conf: Dict,
     with h5py.File(str(feature_path), 'a') as fd:
       
       writer = WorkQueue(
-        process_item = partial(write_predictions, fd=fd, as_half=as_half),
-        num_threads=num_workers)
+          process_item = partial(write_predictions, fd=fd, as_half=as_half),
+          num_threads=num_workers)
 
-      def process_image(data):
-          name = data['name'][0]  # remove batch dimension
+      with tqdm(total=len(loader)) as pbar:
 
-          pred = model(map_tensor(data, lambda x: x.to(device)))
-          pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
+          def process_image(data):
+              name = data['name'][0]  # remove batch dimension
 
-          pred['scaled_size'] = np.array(data['image'].shape[-2:][::-1])
-          pred['image_size'] = data['original_size'][0].numpy()
-          pred['detection_noise'] = np.array([getattr(model, 'detection_noise', 1)])
+              with torch.inference_mode():
+                with torch.cuda.amp.autocast(autocast):
+                  pred = model(map_tensor(data, lambda x: x.to(device)))
+        
+              pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
 
-          writer.put( (name, pred) )                     
+              pred['scaled_size'] = np.array(data['image'].shape[-2:][::-1])
+              pred['image_size'] = data['original_size'][0].numpy()
+              pred['detection_noise'] = np.array([getattr(model, 'detection_noise', 1)])
 
-      process = WorkQueue( 
-        process_item = partial(process_image), 
-        num_threads=num_workers if device == 'cpu' else 1
-      )
+              writer.put( (name, pred) )                     
+              pbar.update(1)
 
-      with tqdm(loader) as pbar:
-        for data in pbar:
-          process.put(data)
 
-      process.join()
-      writer.join()
+          process = WorkQueue( 
+              process_item = partial(process_image), 
+              num_threads=num_workers if device == 'cpu' else 1
+          )
+
+          for data in loader:
+              process.put(data)
+
+          process.join()
+          writer.join()
 
     logger.info('Finished exporting features.')
     return feature_path

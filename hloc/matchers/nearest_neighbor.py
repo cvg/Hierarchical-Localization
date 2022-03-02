@@ -44,6 +44,7 @@ class NearestNeighbor(BaseModel):
                 'matches0': matches0,
                 'matching_scores0': torch.zeros_like(matches0)
             }
+
         ratio_threshold = self.conf['ratio_threshold']
         if data['descriptors0'].size(-1) == 1 or data['descriptors1'].size(-1) == 1:
             ratio_threshold = None

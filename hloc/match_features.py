@@ -1,5 +1,6 @@
 import argparse
 from functools import partial
+import os
 from typing import List, Tuple, Union, Optional, Dict
 from pathlib import Path
 import pprint
@@ -72,7 +73,7 @@ def main(conf: Dict,
          matches: Optional[Path] = None,
          features_ref: Optional[Path] = None,
          overwrite: bool = False,
-         num_workers=1) -> Path:
+         num_workers=os.cpu_count()) -> Path:
 
     if isinstance(features, Path) or Path(features).exists():
         features_q = features
@@ -96,7 +97,7 @@ def main(conf: Dict,
         features_ref = [features_ref]
 
     match_from_paths(conf, pairs, matches, features_q, features_ref, 
-      overwrite, num_workers=num_workers, batch_size=conf.get('batch_size', 1))
+      overwrite, num_workers=num_workers)
 
     return matches
 
@@ -177,10 +178,9 @@ def match_from_paths(conf: Dict,
                      feature_path_q: Path,
                      feature_paths_refs: Path,
                      overwrite: bool = False,
-                     
                      device=None,
                      num_workers=1,
-                     batch_size=1) -> Path:
+                     autocast=True) -> Path:
 
     logger.info('Matching local features with configuration:'
                 f'\n{pprint.pformat(conf)}')
@@ -193,7 +193,7 @@ def match_from_paths(conf: Dict,
       device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     Model = dynamic_load(matchers, conf['model']['name'])
-    model = Model(conf['model']).eval().to(device)
+    model = Model(conf['model']).eval().to(device=device)
 
     match_path.parent.mkdir(exist_ok=True, parents=True)
     skip_pairs = set(list_h5_names(match_path)
@@ -203,7 +203,8 @@ def match_from_paths(conf: Dict,
       if names_to_pair(*pair) not in skip_pairs]
 
     feature_pairs = FeaturesPairs(pairs, feature_path_q, feature_paths_refs)
-    loader = torch.utils.data.DataLoader(feature_pairs, num_workers=num_workers, batch_size=batch_size, shuffle=False, pin_memory=True)
+    loader = torch.utils.data.DataLoader(feature_pairs, num_workers=num_workers, batch_size=1, shuffle=False, pin_memory=True)
+
 
     with h5py.File(str(match_path), 'a') as fd:
 
@@ -213,14 +214,20 @@ def match_from_paths(conf: Dict,
 
       with tqdm(smoothing=.1, total=len(feature_pairs)) as pbar:
         for pairs, data in loader:
-            data = map_tensor(data, partial(torch.Tensor.to, device=device, dtype=torch.float16))
-            preds = model(data)
+
+
+            with torch.inference_mode():
+              with torch.cuda.amp.autocast(autocast):
+
+                data = map_tensor(data, partial(torch.Tensor.to, device=device))
+                preds = model(data)
 
             writer.put( (pairs, preds) )
-            pbar.update(batch_size)
 
-      writer.join()
-      # feature_pairs.close()
+            pbar.update(1)
+    
+        writer.join()
+        feature_pairs.close()
 
     logger.info('Finished exporting matches.')
 
@@ -234,5 +241,8 @@ if __name__ == '__main__':
     parser.add_argument('--matches', type=Path)
     parser.add_argument('--conf', type=str, default='superglue',
                         choices=list(confs.keys()))
+    parser.add_argument('--matches', type=Path)
+
     args = parser.parse_args()
+
     main(confs[args.conf], args.pairs, args.features, args.export_dir)
