@@ -57,7 +57,7 @@ def find_pair(hfile: h5py.File, name0: str, name1: str):
 
 def get_matches(path: Path, name0: str, name1: str) -> Tuple[np.ndarray]:
     with h5py.File(str(path), 'r') as hfile:
-        reverse, pair = find_pair(hfile, name0, name1)
+        pair, reverse = find_pair(hfile, name0, name1)
         matches = hfile[pair]['matches0'].__array__()
         scores = hfile[pair]['matching_scores0'].__array__()
     idx = np.where(matches != -1)[0]
