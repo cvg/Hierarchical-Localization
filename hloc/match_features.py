@@ -1,5 +1,5 @@
 import argparse
-from typing import Union, Optional, Dict
+from typing import Union, Optional, Dict, List, Tuple
 from pathlib import Path
 import pprint
 import collections.abc as collections
@@ -9,7 +9,7 @@ import torch
 
 from . import matchers, logger
 from .utils.base_model import dynamic_load
-from .utils.parsers import names_to_pair, parse_retrieval
+from .utils.parsers import names_to_pair, names_to_pair_old, parse_retrieval
 from .utils.io import list_h5_names
 
 
@@ -95,6 +95,27 @@ def main(conf: Dict,
     return matches
 
 
+def find_unique_new_pairs(pairs_all: List[Tuple[str]], match_path: Path = None):
+    '''Avoid to recompute duplicates to save time.'''
+    pairs = set()
+    for i, j in pairs_all:
+        if (j, i) not in pairs:
+            pairs.add((i, j))
+    pairs = list(pairs)
+    if match_path is not None and match_path.exists():
+        with h5py.File(str(match_path), 'r') as fd:
+            pairs_filtered = []
+            for i, j in pairs:
+                if (names_to_pair(i, j) in fd or
+                        names_to_pair(j, i) in fd or
+                        names_to_pair_old(i, j) in fd or
+                        names_to_pair_old(j, i) in fd):
+                    continue
+                pairs_filtered.append((i, j))
+        return pairs_filtered
+    return pairs
+
+
 @torch.no_grad()
 def match_from_paths(conf: Dict,
                      pairs_path: Path,
@@ -112,25 +133,21 @@ def match_from_paths(conf: Dict,
             raise FileNotFoundError(f'Reference feature file {path}.')
     name2ref = {n: i for i, p in enumerate(feature_paths_refs)
                 for n in list_h5_names(p)}
+    match_path.parent.mkdir(exist_ok=True, parents=True)
 
     assert pairs_path.exists(), pairs_path
     pairs = parse_retrieval(pairs_path)
     pairs = [(q, r) for q, rs in pairs.items() for r in rs]
+    pairs = find_unique_new_pairs(pairs, None if overwrite else match_path)
+    if len(pairs) == 0:
+        logger.info('Skipping the matching.')
+        return
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     Model = dynamic_load(matchers, conf['model']['name'])
     model = Model(conf['model']).eval().to(device)
 
-    match_path.parent.mkdir(exist_ok=True, parents=True)
-    skip_pairs = set(list_h5_names(match_path)
-                     if match_path.exists() and not overwrite else ())
-
     for (name0, name1) in tqdm(pairs, smoothing=.1):
-        pair = names_to_pair(name0, name1)
-        # Avoid to recompute duplicates to save time
-        if pair in skip_pairs or names_to_pair(name0, name1) in skip_pairs:
-            continue
-
         data = {}
         with h5py.File(str(feature_path_q), 'r') as fd:
             grp = fd[name0]
@@ -146,6 +163,7 @@ def match_from_paths(conf: Dict,
         data = {k: v[None] for k, v in data.items()}
 
         pred = model(data)
+        pair = names_to_pair(name0, name1)
         with h5py.File(str(match_path), 'a') as fd:
             if pair in fd:
                 del fd[pair]
@@ -156,8 +174,6 @@ def match_from_paths(conf: Dict,
             if 'matching_scores0' in pred:
                 scores = pred['matching_scores0'][0].cpu().half().numpy()
                 grp.create_dataset('matching_scores0', data=scores)
-
-        skip_pairs.add(pair)
 
     logger.info('Finished exporting matches.')
 

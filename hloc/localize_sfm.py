@@ -3,13 +3,13 @@ import numpy as np
 from pathlib import Path
 from collections import defaultdict
 from typing import Dict, List, Union
-import h5py
 from tqdm import tqdm
 import pickle
 import pycolmap
 
 from . import logger
-from .utils.parsers import parse_image_lists, parse_retrieval, names_to_pair
+from .utils.io import get_keypoints, get_matches
+from .utils.parsers import parse_image_lists, parse_retrieval
 
 
 def do_covisibility_clustering(frame_ids: List[int],
@@ -73,8 +73,7 @@ def pose_from_cluster(
         matches_path: Path,
         **kwargs):
 
-    with h5py.File(features_path, 'r') as f:
-        kpq = f[qname]['keypoints'].__array__()
+    kpq = get_keypoints(features_path, qname)
     kpq += 0.5  # COLMAP coordinates
 
     kp_idx_to_3D = defaultdict(list)
@@ -88,15 +87,11 @@ def pose_from_cluster(
         points3D_ids = np.array([p.point3D_id if p.has_point3D() else -1
                                  for p in image.points2D])
 
-        pair = names_to_pair(qname, image.name)
-        with h5py.File(matches_path, 'r') as f:
-            matches = f[pair]['matches0'].__array__()
-        valid = np.where(matches > -1)[0]
-        valid = valid[points3D_ids[matches[valid]] != -1]
-        num_matches += len(valid)
-
-        for idx in valid:
-            id_3D = points3D_ids[matches[idx]]
+        matches, _ = get_matches(matches_path, qname, image.name)
+        matches = matches[points3D_ids[matches[:, 1]] != -1]
+        num_matches += len(matches)
+        for idx, m in matches:
+            id_3D = points3D_ids[m]
             kp_idx_to_3D_to_db[idx][id_3D].append(i)
             # avoid duplicate observations
             if id_3D not in kp_idx_to_3D[idx]:

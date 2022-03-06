@@ -4,13 +4,11 @@ import io
 import sys
 from pathlib import Path
 from tqdm import tqdm
-import h5py
-import numpy as np
 import pycolmap
 
 from . import logger
 from .utils.database import COLMAPDatabase
-from .utils.parsers import names_to_pair
+from .utils.io import get_keypoints, get_matches
 
 
 class OutputCapture:
@@ -53,15 +51,13 @@ def create_db_from_model(reconstruction, database_path):
 
 def import_features(image_ids, database_path, features_path):
     logger.info('Importing features into the database...')
-    hfile = h5py.File(str(features_path), 'r')
     db = COLMAPDatabase.connect(database_path)
 
     for image_name, image_id in tqdm(image_ids.items()):
-        keypoints = hfile[image_name]['keypoints'].__array__()
+        keypoints = get_keypoints(features_path, image_name)
         keypoints += 0.5  # COLMAP origin
         db.add_keypoints(image_id, keypoints)
 
-    hfile.close()
     db.commit()
     db.close()
 
@@ -73,7 +69,6 @@ def import_matches(image_ids, database_path, pairs_path, matches_path,
     with open(str(pairs_path), 'r') as f:
         pairs = [p.split() for p in f.readlines()]
 
-    hfile = h5py.File(str(matches_path), 'r')
     db = COLMAPDatabase.connect(database_path)
 
     matched = set()
@@ -81,27 +76,15 @@ def import_matches(image_ids, database_path, pairs_path, matches_path,
         id0, id1 = image_ids[name0], image_ids[name1]
         if len({(id0, id1), (id1, id0)} & matched) > 0:
             continue
-        pair = names_to_pair(name0, name1)
-        if pair not in hfile:
-            raise ValueError(
-                f'Could not find pair {(name0, name1)}... '
-                'Maybe you matched with a different list of pairs? '
-                f'Reverse in file: {names_to_pair(name0, name1) in hfile}.')
-
-        matches = hfile[pair]['matches0'].__array__()
-        valid = matches > -1
+        matches, scores = get_matches(matches_path, name0, name1)
         if min_match_score:
-            scores = hfile[pair]['matching_scores0'].__array__()
-            valid = valid & (scores > min_match_score)
-        matches = np.stack([np.where(valid)[0], matches[valid]], -1)
-
+            matches = matches[scores > min_match_score]
         db.add_matches(id0, id1, matches)
         matched |= {(id0, id1), (id1, id0)}
 
         if skip_geometric_verification:
             db.add_two_view_geometry(id0, id1, matches)
 
-    hfile.close()
     db.commit()
     db.close()
 
