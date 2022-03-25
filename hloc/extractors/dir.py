@@ -5,6 +5,7 @@ import torch
 from zipfile import ZipFile
 import os
 import sklearn
+import gdown
 
 from ..utils.base_model import BaseModel
 
@@ -46,9 +47,7 @@ class DIR(BaseModel):
         if not checkpoint.exists():
             checkpoint.parent.mkdir(exist_ok=True)
             link = self.dir_models[conf['model_name']]
-            cmd = ['wget', '--no-check-certificate', '-r', link,
-                   '-O', str(checkpoint)+'.zip']
-            subprocess.run(cmd, check=True)
+            gdown.download(str(link), str(checkpoint)+'.zip', quiet=False)
             zf = ZipFile(str(checkpoint)+'.zip', 'r')
             zf.extractall(checkpoint.parent)
             zf.close()
