@@ -3,12 +3,15 @@ import numpy as np
 import h5py
 import torch
 from pathlib import Path
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Tuple, Union
 import pprint
 import argparse
 import torchvision.transforms.functional as F
 from omegaconf import OmegaConf
 from collections import defaultdict, Iterable
+from scipy.spatial.distance import cdist
+from scipy.spatial import KDTree
+from collections import Counter
 
 from . import matchers, logger
 from .utils.base_model import dynamic_load
@@ -29,7 +32,7 @@ confs = {
             'resize_max': 1024,
             'dfactor': 8
         },
-        'psize': 1,
+        'psize': 16,
     },
 }
 
@@ -62,22 +65,36 @@ def to_cpts(kpts, ps):
     return [tuple(cpt) for cpt in cpts]
 
 
-def quantize_keypoints(kpts, other_cpts, ps, extend=True):
-    kpt_ids = []
-    cpts = to_cpts(kpts, ps)
-    cp_to_id = {val: i for i, val in enumerate(other_cpts)}
-    for i, cpt in enumerate(cpts):
-        try:
-            kid = cp_to_id[cpt]
-        except KeyError:
-            if extend:
+def assign_keypoints(kpts: np.ndarray,
+                     other_cpts: Union[List[Tuple], np.ndarray],
+                     ps: int,
+                     update: bool = False,
+                     ref_bins: Optional[List[Counter]] = None,
+                     bs: int = 2):
+    if not update:
+        # Without update this is just a NN search
+        dist, kpt_ids = scipy.spatial.KDTree(np.array(other_cpts)).query(kpts)
+        valid = (dist <= ps / 2.0)
+        kpt_ids[~valid] = -1
+        return kpt_ids
+    else:
+        # With update we quantize and bin (optionally)
+        assert(isinstance(other_cpts, list))
+        kpt_ids = []
+        cpts = to_cpts(kpts, ps)
+        bpts = to_cpts(kpts, bs)
+        cp_to_id = {val: i for i, val in enumerate(other_cpts)}
+        for cpt, bpt in zip(cpts, bpts):
+            try:
+                kid = cp_to_id[cpt]
+            except KeyError:
                 kid = len(cp_to_id)
                 cp_to_id[cpt] = kid
                 other_cpts.append(cpt)
-            else:
-                kid = -1
-        kpt_ids.append(kid)
-    return np.array(kpt_ids)
+                if ref_bins is not None: ref_bins.append(Counter())
+            if ref_bins is not None: ref_bins[cp_to_id[cpt]][bpt]+=1
+            kpt_ids.append(kid)
+        return np.array(kpt_ids)
 
 
 def matches_to_matches0(matches, scores):
@@ -97,6 +114,13 @@ def scale_keypoints(kpts, scale):
         kpts *= kpts.new_tensor(scale)
     return kpts
 
+
+def recluster(kpts1, kpts2, ps):
+    if isinstance(kpts1, list):
+        kpts1 = np.zeros([0,2])
+    data = np.concatenate([np.array(kpts1), np.array(kpts2)], axis = 0)
+    ids = scipy.cluster.hierarchy.fclusterdata(data, criterion="distance", t=ps)
+    return np.array([np.mean(data[ids == i], axis = 0) for i in np.unique(ids)])
 
 class ImagePairDataset(torch.utils.data.Dataset):
     default_conf = {
@@ -198,11 +222,12 @@ def match_dense_from_paths(conf: Dict,
     model = Model(conf['model']).eval().to(device)
 
     # Load query keypoins
-    kpdict = defaultdict(list)
+    cpdict = defaultdict(list)
+    bindict = defaultdict(list)
+
     for name in existing_refs:
         with h5py.File(str(feature_paths_refs[name2ref[name]]), 'r') as fd:
-            kpdict[name] = to_cpts(fd[name]['keypoints'].__array__(), conf.psize)
-
+            cpdict[name] = d[name]['keypoints'].__array__()
     dataset = ImagePairDataset(image_dir, conf["preprocessing"], pairs)
     loader = torch.utils.data.DataLoader(
             dataset, num_workers=1, batch_size=1, shuffle=False)
@@ -221,10 +246,14 @@ def match_dense_from_paths(conf: Dict,
             kpts1 = kpts1.cpu().numpy()
 
             # Aggregate local features
-            q0 = name0 in required_queries
-            q1 = name1 in required_queries
-            kpt_ids0 = quantize_keypoints(kpts0, kpdict[name0], conf.psize, q0)
-            kpt_ids1 = quantize_keypoints(kpts1, kpdict[name1], conf.psize, q1)
+            up0 = name0 in required_queries
+            up1 = name1 in required_queries
+            kpt_ids0 = assign_keypoints(kpts0, cpdict[name0], conf.psize, up0,
+                                        bindict[name0], 1.0)
+            kpt_ids1 = assign_keypoints(kpts1, cpdict[name1], conf.psize, up1,
+                                        bindict[name1], 1.0)
+            # running_clusters[name0].append(kpts0)
+            # running_clusters[name1].append(kpts1)
             valid = (kpt_ids0 != -1) & (kpt_ids1 != -1)
             matches = np.dstack([kpt_ids0[valid], kpt_ids1[valid]])
             matches = matches.reshape(-1, 2)
@@ -236,16 +265,22 @@ def match_dense_from_paths(conf: Dict,
             if pair in fd:
                 del fd[pair]
             grp = fd.create_group(pair)
+            assert(kpts0.shape[0] == pred['scores'].shape[0])
+            grp.create_dataset('keypoints0', data=kpts0)
+            grp.create_dataset('keypoints1', data=kpts1)
+            grp.create_dataset('scores', data=pred['scores'].cpu().numpy())
 
             grp.create_dataset('matches0', data=matches0)
             grp.create_dataset('matching_scores0', data=scores0)
+
     if len(required_queries) > 0:
         # Save keypoints
         with h5py.File(feature_path_q, 'a') as fd:
             logger.info(f'Save keypoints of {len(required_queries)} images...')
             n_kps = 0
             for name in tqdm(required_queries, smoothing=.1):
-                kps = np.array(kpdict[name], dtype=np.float32)
+                kps = [c.most_common(1)[0][0] for c in bindict[name]]
+                kps = np.array(kps, dtype=np.float32)
                 kgrp = fd.create_group(name)
                 kgrp.create_dataset('keypoints', data=kps)
                 n_kps += kps.shape[0]
