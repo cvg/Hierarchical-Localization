@@ -1,6 +1,5 @@
 import sys
 from pathlib import Path
-import subprocess
 import torch
 from zipfile import ZipFile
 import os
