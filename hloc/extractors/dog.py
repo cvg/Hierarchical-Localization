@@ -111,8 +111,8 @@ class DoG(BaseModel):
                 torch.from_numpy(ori)[None, :, None]).to(image.device)
             patches = extract_patches_from_pyramid(
                     image, lafs, PS=self.conf['patch_size'])[0]
-            if keypoints.shape[0] == 0:
-                descriptors = torch.from_numpy(np.zeros((0, 128)))
+            if len(keypoints) == 0:
+                descriptors = torch.zeros((0, 128))
             else:
                 descriptors = self.describe(patches).reshape(len(patches), 128)
         else:
