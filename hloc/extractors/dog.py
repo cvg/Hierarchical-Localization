@@ -56,6 +56,13 @@ def extract_patches_from_pyramid(
     return out
 
 
+def sift_to_rootsift(x):
+    x = x / (np.linalg.norm(x, ord=1, axis=-1, keepdims=True) + EPS)
+    x = np.sqrt(x.clip(min=EPS))
+    x = x / (np.linalg.norm(x, axis=-1, keepdims=True) + EPS)
+    return x
+
+
 class DoG(BaseModel):
     default_conf = {
         'options': {
@@ -109,9 +116,10 @@ class DoG(BaseModel):
         keypoints, scores, descriptors = self.sift.extract(image_np)
 
         if self.conf['descriptor'] in ['sift', 'rootsift']:
-            # renormalize with L2
-            descriptors /= np.linalg.norm(
-                descriptors, axis=-1, keepdims=True).clip(min=EPS)
+            # We still renormalize because COLMAP does not normalize well,
+            # maybe due to numerical errors
+            if self.conf['descriptor'] == 'rootsift':
+                descriptors = sift_to_rootsift(descriptors)
             descriptors = torch.from_numpy(descriptors)
         elif self.conf['descriptor'] == 'sosnet':
             center = keypoints[:, :2] + 0.5
