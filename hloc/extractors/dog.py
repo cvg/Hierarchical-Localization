@@ -56,22 +56,11 @@ def extract_patches_from_pyramid(
     return out
 
 
-def sift_to_rootsift(x):
-    x = x / (np.linalg.norm(x, ord=1, axis=-1, keepdims=True) + EPS)
-    x = np.sqrt(x.clip(min=EPS))
-    x = x / (np.linalg.norm(x, axis=-1, keepdims=True) + EPS)
-    return x
-
-
 class DoG(BaseModel):
     default_conf = {
-        'vlfeat': {
-            'num_octaves': 4,
-            'octave_resolution': 3,
+        'options': {
             'first_octave': 0,
-            'edge_thresh': 10,
-            'peak_thresh': 0.01,
-            'upright': False,
+            'peak_threshold': 0.01,
         },
         'descriptor': 'rootsift',
         'max_keypoints': -1,
@@ -87,19 +76,42 @@ class DoG(BaseModel):
         elif conf['descriptor'] not in ['sift', 'rootsift']:
             raise ValueError(f'Unknown descriptor: {conf["descriptor"]}')
 
+        self.sift = None  # lazily instantiated on the first image
+        self.device = torch.device('cpu')
+
+    def to(self, *args, **kwargs):
+        device = kwargs.get('device')
+        if device is None:
+            match = [a for a in args if isinstance(a, (torch.device, str))]
+            if len(match) > 0:
+                device = match[0]
+        if device is not None:
+            self.device = torch.device(device)
+        return super().to(*args, **kwargs)
+
     def _forward(self, data):
         image = data['image']
         image_np = image.cpu().numpy()[0, 0]
         assert image.shape[1] == 1
         assert image_np.min() >= -EPS and image_np.max() <= 1 + EPS
 
-        keypoints, scores, descriptors = pycolmap.extract_sift(
-            image_np, **self.conf['vlfeat']
-        )
+        if self.sift is None:
+            use_gpu = pycolmap.has_cuda and self.device.type == 'cuda'
+            options = {**self.conf['options']}
+            if self.conf['descriptor'] == 'rootsift':
+                options['normalization'] = pycolmap.Normalization.L1_ROOT
+            else:
+                options['normalization'] = pycolmap.Normalization.L2
+            self.sift = pycolmap.Sift(
+                options=pycolmap.SiftExtractionOptions(options),
+                device=getattr(pycolmap.Device, 'cuda' if use_gpu else 'cpu'))
+
+        keypoints, scores, descriptors = self.sift.extract(image_np)
 
         if self.conf['descriptor'] in ['sift', 'rootsift']:
-            if self.conf['descriptor'] == 'rootsift':
-                descriptors = sift_to_rootsift(descriptors)
+            # renormalize with L2
+            descriptors /= np.linalg.norm(
+                descriptors, axis=-1, keepdims=True).clip(min=EPS)
             descriptors = torch.from_numpy(descriptors)
         elif self.conf['descriptor'] == 'sosnet':
             center = keypoints[:, :2] + 0.5
