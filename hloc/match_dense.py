@@ -19,6 +19,7 @@ from .match_features import find_unique_new_pairs
 from .extract_features import read_image, resize_image
 from .utils.io import list_h5_names
 
+
 confs = {
     'loftr': {
         'output': 'matches-loftr',
