@@ -9,7 +9,6 @@ import argparse
 import torchvision.transforms.functional as F
 from omegaconf import OmegaConf
 from collections import defaultdict, Iterable
-from scipy.spatial.distance import cdist
 from scipy.spatial import KDTree
 from collections import Counter
 
@@ -32,9 +31,48 @@ confs = {
             'resize_max': 1024,
             'dfactor': 8
         },
-        'psize': 16,
+        'max_error': 1,  # quantizes to 2*max_error cells, increase for coarse
+        'binsize': 1,  # binsize for robust kp selection within each cell
+        'init_ref_score': 10.0
     },
 }
+
+
+def assign_keypoints(kpts: np.ndarray,
+                     other_cpts: Union[List[Tuple], np.ndarray],
+                     max_error: float,
+                     update: bool = False,
+                     ref_bins: Optional[List[Counter]] = None,
+                     scores: Optional[np.ndarray] = None,
+                     bs: int = 2):
+    if not update:
+        # Without update this is just a NN search
+        dist, kpt_ids = KDTree(np.array(other_cpts)).query(kpts)
+        valid = (dist <= max_error)
+        kpt_ids[~valid] = -1
+        return kpt_ids
+    else:
+        ps = int(2*max_error)
+        # With update we quantize and bin (optionally)
+        assert(isinstance(other_cpts, list))
+        kpt_ids = []
+        cpts = to_cpts(kpts, ps)
+        bpts = to_cpts(kpts, bs)
+        cp_to_id = {val: i for i, val in enumerate(other_cpts)}
+        for i, (cpt, bpt) in enumerate(zip(cpts, bpts)):
+            try:
+                kid = cp_to_id[cpt]
+            except KeyError:
+                kid = len(cp_to_id)
+                cp_to_id[cpt] = kid
+                other_cpts.append(cpt)
+                if ref_bins is not None:
+                    ref_bins.append(Counter())
+            if ref_bins is not None:
+                score = scores[i] if scores is not None else 1
+                ref_bins[cp_to_id[cpt]][bpt] += score
+            kpt_ids.append(kid)
+        return np.array(kpt_ids)
 
 
 def get_grouped_ids(array):
@@ -65,38 +103,6 @@ def to_cpts(kpts, ps):
     return [tuple(cpt) for cpt in cpts]
 
 
-def assign_keypoints(kpts: np.ndarray,
-                     other_cpts: Union[List[Tuple], np.ndarray],
-                     ps: int,
-                     update: bool = False,
-                     ref_bins: Optional[List[Counter]] = None,
-                     bs: int = 2):
-    if not update:
-        # Without update this is just a NN search
-        dist, kpt_ids = scipy.spatial.KDTree(np.array(other_cpts)).query(kpts)
-        valid = (dist <= ps / 2.0)
-        kpt_ids[~valid] = -1
-        return kpt_ids
-    else:
-        # With update we quantize and bin (optionally)
-        assert(isinstance(other_cpts, list))
-        kpt_ids = []
-        cpts = to_cpts(kpts, ps)
-        bpts = to_cpts(kpts, bs)
-        cp_to_id = {val: i for i, val in enumerate(other_cpts)}
-        for cpt, bpt in zip(cpts, bpts):
-            try:
-                kid = cp_to_id[cpt]
-            except KeyError:
-                kid = len(cp_to_id)
-                cp_to_id[cpt] = kid
-                other_cpts.append(cpt)
-                if ref_bins is not None: ref_bins.append(Counter())
-            if ref_bins is not None: ref_bins[cp_to_id[cpt]][bpt]+=1
-            kpt_ids.append(kid)
-        return np.array(kpt_ids)
-
-
 def matches_to_matches0(matches, scores):
     if matches.shape[0] == 0:
         return (np.zeros([0, 2], dtype=np.uint32),
@@ -109,18 +115,22 @@ def matches_to_matches0(matches, scores):
     return matches0.astype(np.int32), scores0.astype(np.float16)
 
 
+def kpids_to_matches0(kpt_ids0, kpt_ids1, scores):
+    valid = (kpt_ids0 != -1) & (kpt_ids1 != -1)
+    matches = np.dstack([kpt_ids0[valid], kpt_ids1[valid]])
+    matches = matches.reshape(-1, 2)
+    scores = scores[valid]
+
+    # Remove n-to-1 matches
+    matches, scores = get_unique_matches(matches, scores)
+    return matches_to_matches0(matches, scores)
+
+
 def scale_keypoints(kpts, scale):
     if np.any(scale != 1.0):
         kpts *= kpts.new_tensor(scale)
     return kpts
 
-
-def recluster(kpts1, kpts2, ps):
-    if isinstance(kpts1, list):
-        kpts1 = np.zeros([0,2])
-    data = np.concatenate([np.array(kpts1), np.array(kpts2)], axis = 0)
-    ids = scipy.cluster.hierarchy.fclusterdata(data, criterion="distance", t=ps)
-    return np.array([np.mean(data[ids == i], axis = 0) for i in np.unique(ids)])
 
 class ImagePairDataset(torch.utils.data.Dataset):
     default_conf = {
@@ -192,8 +202,10 @@ def match_dense_from_paths(conf: Dict,
                            pairs_path: Path,
                            image_dir: Path,
                            match_path: Path,  # out
-                           feature_path_q: Path,
+                           feature_path_q: Path,  # out
                            feature_paths_refs: Optional[List[Path]] = [],
+                           # use reassign to reduce quant error (not in loc)
+                           reassign: Union[bool, float] = True,
                            overwrite: bool = False) -> Path:
     conf = OmegaConf.merge({'psize': 1}, conf)
     for path in feature_paths_refs:
@@ -202,16 +214,19 @@ def match_dense_from_paths(conf: Dict,
     pairs = parse_retrieval(pairs_path)
     pairs = [(q, r) for q, rs in pairs.items() for r in rs]
     pairs = find_unique_new_pairs(pairs, None if overwrite else match_path)
-    all_names = set(sum(pairs, ()))
+    required_queries = set(sum(pairs, ()))
 
     name2ref = {n: i for i, p in enumerate(feature_paths_refs)
                 for n in list_h5_names(p)}
-    existing_refs = all_names.intersection(set(name2ref.keys()))
-    required_queries = all_names - existing_refs
+    existing_refs = required_queries.intersection(set(name2ref.keys()))
 
-    if feature_path_q.exists():
-        existing_names_q = set(list_h5_names(feature_path_q))
-        required_queries = required_queries - existing_names_q
+    if feature_path_q.exists() and not overwrite:
+        feature_paths_refs.append(feature_path_q)
+        existing_refs += set(list_h5_names(feature_path_q))
+
+    # if overwrite -> update kpts in refs and write them to feature_path_q!
+    if not overwrite:
+        required_queries = required_queries - existing_refs
 
     if len(pairs) == 0 and len(required_queries) == 0:
         logger.info("All pairs exist. Skipping dense matching.")
@@ -227,51 +242,67 @@ def match_dense_from_paths(conf: Dict,
 
     for name in existing_refs:
         with h5py.File(str(feature_paths_refs[name2ref[name]]), 'r') as fd:
-            cpdict[name] = d[name]['keypoints'].__array__()
+            ref_kp_arr = fd[name]['keypoints'].__array__()
+            if name not in required_queries:
+                cpdict[name] = ref_kp_arr
+            else:
+                assign_keypoints(
+                    ref_kp_arr, cpdict[name],
+                    conf.max_error, True, bindict[name],
+                    [conf.init_ref_score for _ in range(ref_kp_arr.shape[0])],
+                    conf.binsize)
+    if len(existing_refs) > 0:
+        logger.info(f'Pre-loaded keypoints from {len(existing_refs)} images.')
+
     dataset = ImagePairDataset(image_dir, conf["preprocessing"], pairs)
     loader = torch.utils.data.DataLoader(
-            dataset, num_workers=1, batch_size=1, shuffle=False)
+            dataset, num_workers=16, batch_size=1, shuffle=False)
     logger.info("Performing dense matching...")
     with h5py.File(str(match_path), 'a') as fd:
         for data in tqdm(loader):
-            # match semi-dense
+            # load image-pair data
             image0, image1, scale0, scale1, (name0,), (name1,) = data
             scale0, scale1 = scale0[0].numpy(), scale1[0].numpy()
             data = {'image0': image0.to(device), 'image1': image1.to(device)}
+
+            # match semi-dense
             pred = model(data)
+
+            # Rescale keypoints and move to cpu
             kpts0, kpts1 = pred["keypoints0"], pred["keypoints1"]
             kpts0 = scale_keypoints(kpts0 + 0.5, scale0) - 0.5
             kpts1 = scale_keypoints(kpts1 + 0.5, scale1) - 0.5
             kpts0 = kpts0.cpu().numpy()
             kpts1 = kpts1.cpu().numpy()
+            scores = pred['scores'].cpu().numpy()
 
             # Aggregate local features
-            up0 = name0 in required_queries
-            up1 = name1 in required_queries
-            kpt_ids0 = assign_keypoints(kpts0, cpdict[name0], conf.psize, up0,
-                                        bindict[name0], 1.0)
-            kpt_ids1 = assign_keypoints(kpts1, cpdict[name1], conf.psize, up1,
-                                        bindict[name1], 1.0)
-            # running_clusters[name0].append(kpts0)
-            # running_clusters[name1].append(kpts1)
-            valid = (kpt_ids0 != -1) & (kpt_ids1 != -1)
-            matches = np.dstack([kpt_ids0[valid], kpt_ids1[valid]])
-            matches = matches.reshape(-1, 2)
-            scores = pred['scores'].cpu().numpy()[valid]
-            # Remove n-to-1 matches
-            matches, scores = get_unique_matches(matches, scores)
-            matches0, scores0 = matches_to_matches0(matches, scores)
+            update0 = name0 in required_queries
+            update1 = name1 in required_queries
+            kpt_ids0 = assign_keypoints(kpts0, cpdict[name0], conf.max_error,
+                                        update0, bindict[name0], scores,
+                                        conf.binsize)
+            kpt_ids1 = assign_keypoints(kpts1, cpdict[name1], conf.max_error,
+                                        update1, bindict[name1], scores,
+                                        conf.binsize)
+
+            # Build matches from assignments
+            matches0, scores0 = kpids_to_matches0(kpt_ids0, kpt_ids1, scores)
+
+            # Write matches and matching scores in hloc format
             pair = names_to_pair(name0, name1)
             if pair in fd:
                 del fd[pair]
             grp = fd.create_group(pair)
-            assert(kpts0.shape[0] == pred['scores'].shape[0])
-            grp.create_dataset('keypoints0', data=kpts0)
-            grp.create_dataset('keypoints1', data=kpts1)
-            grp.create_dataset('scores', data=pred['scores'].cpu().numpy())
+            assert(kpts0.shape[0] == scores.shape[0])
 
             grp.create_dataset('matches0', data=matches0)
             grp.create_dataset('matching_scores0', data=scores0)
+
+            # Write dense matching output
+            grp.create_dataset('keypoints0', data=kpts0)
+            grp.create_dataset('keypoints1', data=kpts1)
+            grp.create_dataset('scores', data=scores)
 
     if len(required_queries) > 0:
         # Save keypoints
@@ -279,14 +310,43 @@ def match_dense_from_paths(conf: Dict,
             logger.info(f'Save keypoints of {len(required_queries)} images...')
             n_kps = 0
             for name in tqdm(required_queries, smoothing=.1):
+                # The resulting keypoints are the highest voted bins
                 kps = [c.most_common(1)[0][0] for c in bindict[name]]
                 kps = np.array(kps, dtype=np.float32)
+
+                if name in fd:
+                    del fd[name]
                 kgrp = fd.create_group(name)
                 kgrp.create_dataset('keypoints', data=kps)
                 n_kps += kps.shape[0]
+                cpdict[name] = kps
         avg_kp_per_image = round(n_kps / len(required_queries), 1)
         logger.info(f'Finished assignment, found {avg_kp_per_image} '
                     f'keypoints/image (avg.), total {n_kps}.')
+
+    # Invalidate matches that are far from selected bin by reassignment
+    if reassign:
+        max_error = conf.max_error
+        if not isinstance(reassign, bool):
+            max_error = reassign
+        logger.info(f'Reassign matches with max_error={max_error}.')
+        with h5py.File(str(match_path), 'a') as fd:
+            for name0, name1 in tqdm(pairs):
+                pair = names_to_pair(name0, name1)
+                grp = fd[pair]
+                kpts0 = grp['keypoints0'].__array__()
+                kpts1 = grp['keypoints1'].__array__()
+                scores = grp['scores'].__array__()
+
+                kpids0 = assign_keypoints(kpts0, cpdict[name0], max_error)
+                kpids1 = assign_keypoints(kpts1, cpdict[name1], max_error)
+                matches0, scores0 = kpids_to_matches0(kpids0, kpids1, scores)
+
+                del grp['matches0'], grp['matching_scores0']
+
+                # overwrite matches0 and matching_scores0
+                grp.create_dataset('matches0', data=matches0)
+                grp.create_dataset('matching_scores0', data=scores0)
 
 
 @torch.no_grad()
@@ -297,8 +357,9 @@ def main(conf: Dict,
          matches: Optional[Path] = None,  # out
          features: Optional[Path] = None,  # out
          features_ref: Optional[Path] = None,
+         reassign: Union[bool, float] = True,
          overwrite: bool = False) -> Path:
-    logger.info('Extracting local features with configuration:'
+    logger.info('Extracting semi-dense features with configuration:'
                 f'\n{pprint.pformat(conf)}')
 
     if features is None:
@@ -328,7 +389,7 @@ def main(conf: Dict,
         raise TypeError(str(features_ref))
 
     match_dense_from_paths(conf, pairs, image_dir, matches,
-                           features_q, features_ref, overwrite)
+                           features_q, features_ref, reassign, overwrite)
 
     return features_q, matches
 
