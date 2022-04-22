@@ -221,13 +221,13 @@ def match_dense_from_paths(conf: Dict,
                 for n in list_h5_names(p)}
     existing_refs = required_queries.intersection(set(name2ref.keys()))
 
-    if feature_path_q.exists() and not overwrite:
-        feature_paths_refs.append(feature_path_q)
-        existing_refs += set(list_h5_names(feature_path_q))
-
     # if overwrite -> update kpts in refs and write them to feature_path_q!
     if not overwrite:
         required_queries = required_queries - existing_refs
+
+    if feature_path_q.exists() and not overwrite:
+        feature_paths_refs.append(feature_path_q)
+        existing_refs += set(list_h5_names(feature_path_q))
 
     if len(pairs) == 0 and len(required_queries) == 0:
         logger.info("All pairs exist. Skipping dense matching.")
