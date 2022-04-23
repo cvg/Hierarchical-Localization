@@ -7,6 +7,6 @@ matplotlib
 plotly
 scipy
 h5py
-pycolmap>=0.1.0
+pycolmap>=0.2.0
 kornia
 gdown
