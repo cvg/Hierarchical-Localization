@@ -11,6 +11,7 @@ from omegaconf import OmegaConf
 from collections import defaultdict, Iterable
 from scipy.spatial import KDTree
 from collections import Counter
+from itertools import chain
 
 from . import matchers, logger
 from .utils.base_model import dynamic_load
@@ -32,9 +33,24 @@ confs = {
             'resize_max': 1024,
             'dfactor': 8
         },
-        'max_error': 1,  # quantizes to 2*max_error cells, increase for coarse
-        'binsize': 1,  # binsize for robust kp selection within each cell
-        'init_ref_score': 10.0
+        'max_error': 1,  # max error for assigned keypoints (in px)
+        'cell_size': 1,  # size of quantization patch
+        'init_ref_score': 10.0,
+    },
+    'loftr_aachen': {
+        'output': 'matches-loftr_aachen',
+        'model': {
+            'name': 'loftr',
+            'weights': 'outdoor'
+        },
+        'preprocessing': {
+            'grayscale': True,
+            'resize_max': 1024,
+            'dfactor': 8
+        },
+        'max_error': 2,  # max error for assigned keypoints (in px)
+        'cell_size': 8,  # size of quantization patch
+        'init_ref_score': 10.0,
     },
 }
 
@@ -45,7 +61,7 @@ def assign_keypoints(kpts: np.ndarray,
                      update: bool = False,
                      ref_bins: Optional[List[Counter]] = None,
                      scores: Optional[np.ndarray] = None,
-                     bs: int = 2):
+                     cell_size: Optional[int] = None):
     if not update:
         # Without update this is just a NN search
         dist, kpt_ids = KDTree(np.array(other_cpts)).query(kpts)
@@ -53,12 +69,13 @@ def assign_keypoints(kpts: np.ndarray,
         kpt_ids[~valid] = -1
         return kpt_ids
     else:
-        ps = int(2*max_error)
+        ps = cell_size if cell_size is not None else max_error
+        ps = max(cell_size, max_error)
         # With update we quantize and bin (optionally)
         assert(isinstance(other_cpts, list))
         kpt_ids = []
         cpts = to_cpts(kpts, ps)
-        bpts = to_cpts(kpts, bs)
+        bpts = to_cpts(kpts, int(max_error))
         cp_to_id = {val: i for i, val in enumerate(other_cpts)}
         for i, (cpt, bpt) in enumerate(zip(cpts, bpts)):
             try:
@@ -207,6 +224,7 @@ def match_dense_from_paths(conf: Dict,
                            feature_paths_refs: Optional[List[Path]] = [],
                            # use reassign to reduce quant error (not in loc)
                            reassign: Union[bool, float] = True,
+                           max_kps: Optional[int] = None,
                            overwrite: bool = False) -> Path:
     conf = OmegaConf.merge({'psize': 1}, conf)
     for path in feature_paths_refs:
@@ -221,13 +239,13 @@ def match_dense_from_paths(conf: Dict,
                 for n in list_h5_names(p)}
     existing_refs = required_queries.intersection(set(name2ref.keys()))
 
-    # if overwrite -> update kpts in refs and write them to feature_path_q!
-    if not overwrite:
-        required_queries = required_queries - existing_refs
+    required_queries = required_queries - existing_refs
 
     if feature_path_q.exists() and not overwrite:
         feature_paths_refs.append(feature_path_q)
-        existing_refs += set(list_h5_names(feature_path_q))
+        existing_refs = set.union(existing_refs, list_h5_names(feature_path_q))
+        q_name2ref = {n: -1 for n in list_h5_names(feature_path_q)}
+        name2ref = {**name2ref, **q_name2ref}
 
     if len(pairs) == 0 and len(required_queries) == 0:
         logger.info("All pairs exist. Skipping dense matching.")
@@ -241,36 +259,54 @@ def match_dense_from_paths(conf: Dict,
     cpdict = defaultdict(list)
     bindict = defaultdict(list)
 
-    for name in existing_refs:
-        with h5py.File(str(feature_paths_refs[name2ref[name]]), 'r') as fd:
-            ref_kp_arr = fd[name]['keypoints'].__array__()
-            if name not in required_queries:
-                cpdict[name] = ref_kp_arr
-            else:
-                assign_keypoints(
-                    ref_kp_arr, cpdict[name],
-                    conf.max_error, True, bindict[name],
-                    [conf.init_ref_score for _ in range(ref_kp_arr.shape[0])],
-                    conf.binsize)
     if len(existing_refs) > 0:
         logger.info(f'Pre-loaded keypoints from {len(existing_refs)} images.')
+    if len(required_queries) > 0:
+        logger.info(f'Extracting keypoints for {len(required_queries)} images.')
+    for name in existing_refs:
+        with h5py.File(str(feature_paths_refs[name2ref[name]]), 'r') as fd:
+            kps = fd[name]['keypoints'].__array__()
+            if name not in required_queries:
+                cpdict[name] = kps
+            else:
+                if 'scores' in fd[name].keys():
+                    kp_scores = fd[name]['scores'].__array__()
+                else:
+                    kp_scores = \
+                        [conf.init_ref_score for _ in range(kps.shape[0])]
+                assign_keypoints(
+                    kps, cpdict[name], conf.max_error, True, bindict[name],
+                    kp_scores, conf.cell_size)
+
+    # sort pairs for reduced RAM
+    pairs_per_q = Counter(list(chain(*pairs)))
+    pairs_score = [min(pairs_per_q[i], pairs_per_q[j]) for i, j in pairs]
+    pairs = [p for _, p in sorted(zip(pairs_score, pairs))]
 
     dataset = ImagePairDataset(image_dir, conf["preprocessing"], pairs)
     loader = torch.utils.data.DataLoader(
             dataset, num_workers=16, batch_size=1, shuffle=False)
     logger.info("Performing dense matching...")
+    n_kps = 0
     with h5py.File(str(match_path), 'a') as fd:
-        for data in tqdm(loader):
+        for data in tqdm(loader, smoothing=.1):
             # load image-pair data
             image0, image1, scale0, scale1, (name0,), (name1,) = data
             scale0, scale1 = scale0[0].numpy(), scale1[0].numpy()
-            data = {'image0': image0.to(device), 'image1': image1.to(device)}
+            image0, image1 = image0.to(device), image1.to(device)
 
             # match semi-dense
-            pred = model(data)
+            if name1 in existing_refs:
+                # flip to enable refinement in query image
+                pred = model({'image0': image1, 'image1': image0})
+                pred = {**pred,
+                        'keypoints0': pred['keypoints1'],
+                        'keypoints1': pred['keypoints0']}
+            else:
+                pred = model({'image0': image0, 'image1': image1})
 
             # Rescale keypoints and move to cpu
-            kpts0, kpts1 = pred["keypoints0"], pred["keypoints1"]
+            kpts0, kpts1 = pred['keypoints0'], pred['keypoints1']
             kpts0 = scale_keypoints(kpts0 + 0.5, scale0) - 0.5
             kpts1 = scale_keypoints(kpts1 + 0.5, scale1) - 0.5
             kpts0 = kpts0.cpu().numpy()
@@ -282,10 +318,10 @@ def match_dense_from_paths(conf: Dict,
             update1 = name1 in required_queries
             kpt_ids0 = assign_keypoints(kpts0, cpdict[name0], conf.max_error,
                                         update0, bindict[name0], scores,
-                                        conf.binsize)
+                                        conf.cell_size)
             kpt_ids1 = assign_keypoints(kpts1, cpdict[name1], conf.max_error,
                                         update1, bindict[name1], scores,
-                                        conf.binsize)
+                                        conf.cell_size)
 
             # Build matches from assignments
             matches0, scores0 = kpids_to_matches0(kpt_ids0, kpt_ids1, scores)
@@ -305,28 +341,35 @@ def match_dense_from_paths(conf: Dict,
             grp.create_dataset('keypoints1', data=kpts1)
             grp.create_dataset('scores', data=scores)
 
-    if len(required_queries) > 0:
-        # Save keypoints
-        with h5py.File(feature_path_q, 'a') as fd:
-            logger.info(f'Save keypoints of {len(required_queries)} images...')
-            n_kps = 0
-            for name in tqdm(required_queries, smoothing=.1):
-                # The resulting keypoints are the highest voted bins
-                kps = [c.most_common(1)[0][0] for c in bindict[name]]
-                kps = np.array(kps, dtype=np.float32)
+            # Convert bins to kps if finished, and store them
+            for name in (name0, name1):
+                pairs_per_q[name] -= 1
+                if pairs_per_q[name] > 0 or name not in required_queries:
+                    continue
+                kp_score = [c.most_common(1)[0][1] for c in bindict[name]]
+                cpdict[name] = [c.most_common(1)[0][0] for c in bindict[name]]
+                cpdict[name] = np.array(cpdict[name], dtype=np.float32)
+                if max_kps:
+                    top_k = min(max_kps, cpdict[name].shape[0])
+                    top_k = np.argsort(kp_score)[::-1][:top_k]
+                    cpdict[name] = cpdict[name][top_k]
+                    kp_score = np.array(kp_score)[top_k]
+                with h5py.File(feature_path_q, 'a') as kfd:
+                    if name in kfd:
+                        del kfd[name]
+                    kgrp = kfd.create_group(name)
+                    kgrp.create_dataset('keypoints', data=cpdict[name])
+                    kgrp.create_dataset('score', data=kp_score)
+                    n_kps += cpdict[name].shape[0]
+                del bindict[name]
 
-                if name in fd:
-                    del fd[name]
-                kgrp = fd.create_group(name)
-                kgrp.create_dataset('keypoints', data=kps)
-                n_kps += kps.shape[0]
-                cpdict[name] = kps
+    if len(required_queries) > 0:
         avg_kp_per_image = round(n_kps / len(required_queries), 1)
         logger.info(f'Finished assignment, found {avg_kp_per_image} '
                     f'keypoints/image (avg.), total {n_kps}.')
 
     # Invalidate matches that are far from selected bin by reassignment
-    if reassign:
+    if reassign or conf.top_k:
         max_error = conf.max_error
         if not isinstance(reassign, bool):
             max_error = reassign
