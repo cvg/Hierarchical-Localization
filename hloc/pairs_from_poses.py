@@ -23,19 +23,19 @@ def get_pairwise_distances(images):
     Rs = np.stack(Rs, 0)
     ts = np.stack(ts, 0)
 
+    # Invert the poses from world-to-camera to camera-to-world.
     Rs = Rs.transpose(0, 2, 1)
     ts = -(Rs @ ts[:, :, None])[:, :, 0]
 
     dist = scipy.spatial.distance.squareform(scipy.spatial.distance.pdist(ts))
 
-    # Instead of computing the angle between two camera orientations compute
-    # the angle between the principal axes.
-    # (Two images observe the same scene even if they are rotated around the
-    # principal axis.)
-    principleAxis = np.array([0,0,1])
-    viewDirs = Rs @ np.tile(principleAxis, (len(ids),1))[:, :, None]
-    dots = np.einsum('nji,mji->mn', viewDirs, viewDirs, optimize=True)
-    dR = np.rad2deg(np.arccos(dots))
+    # Instead of computing the angle between two camera orientations,
+    # we compute the angle between the principal axes, as two images rotated
+    # around their principal axis still observe the same scene.
+    axes = Rs[:, :, -1]
+    dots = np.einsum('mi,ni->mn', axes, axes, optimize=True)
+    dR = np.rad2deg(np.arccos(np.clip(dots, -1., 1.)))
+
     return ids, dist, dR
 
 
