@@ -41,15 +41,19 @@ def get_image_ids(database_path):
     return images
 
 
-def run_reconstruction(sfm_dir, database_path, image_dir, verbose=False):
+def run_reconstruction(sfm_dir, database_path, image_dir, use_pba=False, verbose=False):
     models_path = sfm_dir / 'models'
     models_path.mkdir(exist_ok=True, parents=True)
     logger.info('Running 3D reconstruction...')
     with OutputCapture(verbose):
         with pycolmap.ostream():
+            opt = pycolmap.IncrementalMapperOptions()
+            opt.num_threads = min(multiprocessing.cpu_count(), 16)
+            if use_pba:
+                opt.ba_global_use_pba = True
             reconstructions = pycolmap.incremental_mapping(
                 database_path, image_dir, models_path,
-                num_threads=min(multiprocessing.cpu_count(), 16))
+                opt)
 
     if len(reconstructions) == 0:
         logger.error('Could not reconstruct any model!')
@@ -76,7 +80,7 @@ def run_reconstruction(sfm_dir, database_path, image_dir, verbose=False):
 
 
 def main(sfm_dir, image_dir, pairs, features, matches,
-         camera_mode=pycolmap.CameraMode.AUTO, verbose=False,
+         camera_mode=pycolmap.CameraMode.AUTO, verbose=False, use_pba=False,
          skip_geometric_verification=False, min_match_score=None,
          image_list: Optional[List[str]] = None):
 
@@ -95,7 +99,7 @@ def main(sfm_dir, image_dir, pairs, features, matches,
                    min_match_score, skip_geometric_verification)
     if not skip_geometric_verification:
         geometric_verification(database, pairs, verbose)
-    reconstruction = run_reconstruction(sfm_dir, database, image_dir, verbose)
+    reconstruction = run_reconstruction(sfm_dir, database, image_dir, use_pba, verbose)
     if reconstruction is not None:
         logger.info(f'Reconstruction statistics:\n{reconstruction.summary()}'
                     + f'\n\tnum_input_images = {len(image_ids)}')
@@ -116,6 +120,7 @@ if __name__ == '__main__':
     parser.add_argument('--skip_geometric_verification', action='store_true')
     parser.add_argument('--min_match_score', type=float)
     parser.add_argument('--verbose', action='store_true')
+    parser.add_argument('--use_pba', action='store_true')
     args = parser.parse_args()
 
     main(**args.__dict__)
