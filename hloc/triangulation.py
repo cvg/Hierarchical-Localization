@@ -11,7 +11,7 @@ from . import logger
 from .utils.database import COLMAPDatabase
 from .utils.io import get_keypoints, get_matches
 from .utils.parsers import parse_retrieval
-from .utils.geometry import pose_matrix_from_qvec_tvec, compute_epipolar_errors
+from .utils.geometry import compute_epipolar_errors
 
 
 class OutputCapture:
@@ -113,7 +113,6 @@ def geometric_verification(image_ids, reference, database_path, features_path, p
     for name0 in tqdm(pairs):
         id0 = image_ids[name0]
         image0 = reference.images[id0]
-        pose_w2c0 = pose_matrix_from_qvec_tvec(image0.qvec, image0.tvec)
         cam0 = reference.cameras[image0.camera_id]
         kps0, noise0 = get_keypoints(features_path, name0, return_uncertainty=True)
         kps0 = np.array([cam0.image_to_world(kp) for kp in kps0])
@@ -121,7 +120,6 @@ def geometric_verification(image_ids, reference, database_path, features_path, p
         for name1 in pairs[name0]:
             id1 = image_ids[name1]
             image1 = reference.images[id1]
-            pose_w2c1 = pose_matrix_from_qvec_tvec(image1.qvec, image1.tvec)
             cam1 = reference.cameras[image1.camera_id]
             kps1, noise1 = get_keypoints(features_path, name1, return_uncertainty=True)
             kps1 = np.array([cam1.image_to_world(kp) for kp in kps1])
@@ -136,8 +134,9 @@ def geometric_verification(image_ids, reference, database_path, features_path, p
                 db.add_two_view_geometry(id0, id1, matches)
                 continue
 
-            E, errors0, errors1 = compute_epipolar_errors(
-                pose_w2c0, pose_w2c1, kps0[matches[:, 0]], kps1[matches[:, 1]])
+            qvec_01, tvec_01 = pycolmap.relative_pose(image1.qvec, image1.tvec, image0.qvec, image0.tvec)
+            _, errors0, errors1 = compute_epipolar_errors(
+                qvec_01, tvec_01, kps0[matches[:, 0]], kps1[matches[:, 1]])
             valid_matches = np.logical_and(
                 errors0 <= max_error * noise0 / cam0.mean_focal_length(),
                 errors1 <= max_error * noise1 / cam1.mean_focal_length())

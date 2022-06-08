@@ -1,4 +1,5 @@
 import numpy as np
+import pycolmap
 
 
 def to_homogeneous(p):
@@ -13,8 +14,8 @@ def vector_to_cross_product_matrix(v):
     ])
 
 
-def compute_epipolar_errors(T_w2c_r, T_w2c_t, p2d_r, p2d_t):
-    T_r2t = T_w2c_t @ np.linalg.inv(T_w2c_r)
+def compute_epipolar_errors(qvec_01, tvec_01, p2d_r, p2d_t):
+    T_r2t = pose_matrix_from_qvec_tvec(qvec_01, tvec_01)
     # Compute errors in normalized plane to avoid distortion.
     E = vector_to_cross_product_matrix(T_r2t[: 3, -1]) @ T_r2t[: 3, : 3]
     l2d_r2t = (E @ to_homogeneous(p2d_r).T).T
@@ -28,22 +29,9 @@ def compute_epipolar_errors(T_w2c_r, T_w2c_t, p2d_r, p2d_t):
     return E, errors_r, errors_t
 
 
-def rotmat_from_qvec(qvec):
-    return np.array([
-        [1 - 2 * qvec[2]**2 - 2 * qvec[3]**2,
-         2 * qvec[1] * qvec[2] - 2 * qvec[0] * qvec[3],
-         2 * qvec[3] * qvec[1] + 2 * qvec[0] * qvec[2]],
-        [2 * qvec[1] * qvec[2] + 2 * qvec[0] * qvec[3],
-         1 - 2 * qvec[1]**2 - 2 * qvec[3]**2,
-         2 * qvec[2] * qvec[3] - 2 * qvec[0] * qvec[1]],
-        [2 * qvec[3] * qvec[1] - 2 * qvec[0] * qvec[2],
-         2 * qvec[2] * qvec[3] + 2 * qvec[0] * qvec[1],
-         1 - 2 * qvec[1]**2 - 2 * qvec[2]**2]])
-
-
 def pose_matrix_from_qvec_tvec(qvec, tvec):
     pose = np.zeros((4, 4))
-    pose[: 3, : 3] = rotmat_from_qvec(qvec)
+    pose[: 3, : 3] = pycolmap.qvec_to_rotmat(qvec)
     pose[: 3, -1] = tvec
     pose[-1, -1] = 1
     return pose
