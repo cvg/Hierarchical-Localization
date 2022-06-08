@@ -14,8 +14,8 @@ def vector_to_cross_product_matrix(v):
     ])
 
 
-def compute_epipolar_errors(qvec_01, tvec_01, p2d_r, p2d_t):
-    T_r2t = pose_matrix_from_qvec_tvec(qvec_01, tvec_01)
+def compute_epipolar_errors(qvec_r2t, tvec_r2t, p2d_r, p2d_t):
+    T_r2t = pose_matrix_from_qvec_tvec(qvec_r2t, tvec_r2t)
     # Compute errors in normalized plane to avoid distortion.
     E = vector_to_cross_product_matrix(T_r2t[: 3, -1]) @ T_r2t[: 3, : 3]
     l2d_r2t = (E @ to_homogeneous(p2d_r).T).T

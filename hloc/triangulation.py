@@ -134,7 +134,8 @@ def geometric_verification(image_ids, reference, database_path, features_path, p
                 db.add_two_view_geometry(id0, id1, matches)
                 continue
 
-            qvec_01, tvec_01 = pycolmap.relative_pose(image1.qvec, image1.tvec, image0.qvec, image0.tvec)
+            qvec_01, tvec_01 = pycolmap.relative_pose(
+                image0.qvec, image0.tvec, image1.qvec, image1.tvec)
             _, errors0, errors1 = compute_epipolar_errors(
                 qvec_01, tvec_01, kps0[matches[:, 0]], kps1[matches[:, 1]])
             valid_matches = np.logical_and(
