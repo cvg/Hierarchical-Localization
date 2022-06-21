@@ -72,7 +72,7 @@ def visualize_loc(results, image_dir, reconstruction=None, db_image_dir=None,
 
     for qname in selected:
         loc = logs['loc'][qname]
-        visualize_loc_from_log(image_dir, db_image_dir, qname, loc, reconstruction, **kwargs)
+        visualize_loc_from_log(image_dir, qname, loc, reconstruction, db_image_dir, **kwargs)
 
 
 def visualize_loc_from_log(image_dir, query_name, loc, reconstruction=None, db_image_dir=None, 
