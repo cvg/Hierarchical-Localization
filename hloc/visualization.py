@@ -82,7 +82,6 @@ def visualize_loc_from_log(image_dir, query_name, loc, reconstruction=None,
     q_image = read_image(image_dir / query_name)
     if loc.get('covisibility_clustering', False):
         # select the first, largest cluster if the localization failed
-        print('localization failed')
         loc = loc['log_clusters'][loc['best_cluster'] or 0]
 
     inliers = np.array(loc['PnP_ret']['inliers'])
@@ -128,10 +127,7 @@ def visualize_loc_from_log(image_dir, query_name, loc, reconstruction=None,
             kp_db = loc['keypoints_db'][loc['indices_db'] == db_idx]
             inliers_db = inliers[loc['indices_db'] == db_idx]
 
-        if db_image_dir is not None:
-            db_image = read_image(db_image_dir / db_name)
-        else:
-            db_image = read_image(image_dir / db_name)
+        db_image = read_image((db_image_dir or image_dir) / db_name)
         color = cm_RdGn(inliers_db).tolist()
         text = f'inliers: {sum(inliers_db)}/{len(inliers_db)}'
 
