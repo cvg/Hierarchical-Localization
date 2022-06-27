@@ -53,7 +53,7 @@ def visualize_sfm_2d(reconstruction, image_dir, color_by='visibility',
         add_text(0, name, pos=(0.01, 0.01), fs=5, lcolor=None, va='bottom')
 
 
-def visualize_loc(results, image_dir, reconstruction=None, db_image_dir=None, 
+def visualize_loc(results, image_dir, reconstruction=None, db_image_dir=None,
                   selected=[], n=1, seed=0, prefix=None, **kwargs):
     assert image_dir.exists()
 
@@ -72,11 +72,12 @@ def visualize_loc(results, image_dir, reconstruction=None, db_image_dir=None,
 
     for qname in selected:
         loc = logs['loc'][qname]
-        visualize_loc_from_log(image_dir, qname, loc, reconstruction, db_image_dir, **kwargs)
+        visualize_loc_from_log(
+            image_dir, qname, loc, reconstruction, db_image_dir, **kwargs)
 
 
-def visualize_loc_from_log(image_dir, query_name, loc, reconstruction=None, db_image_dir=None, 
-                           top_k_db=2, dpi=75):
+def visualize_loc_from_log(image_dir, query_name, loc, reconstruction=None,
+                           db_image_dir=None, top_k_db=2, dpi=75):
 
     q_image = read_image(image_dir / query_name)
     if loc.get('covisibility_clustering', False):
