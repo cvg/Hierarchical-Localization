@@ -168,7 +168,7 @@ def run_triangulation(model_path, database_path, image_dir, reference_model,
 
 
 def main(sfm_dir, reference_model, image_dir, pairs, features, matches,
-         skip_geometric_verification=False, estimate_two_view_geometries=True,
+         skip_geometric_verification=False, estimate_two_view_geometries=False,
          min_match_score=None, verbose=False):
 
     assert reference_model.exists(), reference_model
