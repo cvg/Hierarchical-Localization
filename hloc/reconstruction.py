@@ -42,15 +42,20 @@ def get_image_ids(database_path):
     return images
 
 
-def run_reconstruction(sfm_dir, database_path, image_dir, verbose=False):
+def run_reconstruction(sfm_dir, database_path, image_dir, verbose=False,
+                       ba_refine_principal_point=False):
     models_path = sfm_dir / 'models'
     models_path.mkdir(exist_ok=True, parents=True)
     logger.info('Running 3D reconstruction...')
+    reconstruction_options = pycolmap.IncrementalMapperOptions()
+    reconstruction_options.num_threads = min(multiprocessing.cpu_count(), 16)
+    reconstruction_options.ba_refine_principal_point = (
+        ba_refine_principal_point)
     with OutputCapture(verbose):
         with pycolmap.ostream():
             reconstructions = pycolmap.incremental_mapping(
                 database_path, image_dir, models_path,
-                num_threads=min(multiprocessing.cpu_count(), 16))
+                options=reconstruction_options)
 
     if len(reconstructions) == 0:
         logger.error('Could not reconstruct any model!')
@@ -79,7 +84,8 @@ def run_reconstruction(sfm_dir, database_path, image_dir, verbose=False):
 def main(sfm_dir, image_dir, pairs, features, matches,
          camera_mode=pycolmap.CameraMode.AUTO, verbose=False,
          skip_geometric_verification=False, min_match_score=None,
-         image_list: Optional[List[str]] = None):
+         image_list: Optional[List[str]] = None,
+         ba_refine_principal_point=False):
 
     assert features.exists(), features
     assert pairs.exists(), pairs
@@ -96,7 +102,8 @@ def main(sfm_dir, image_dir, pairs, features, matches,
                    min_match_score, skip_geometric_verification)
     if not skip_geometric_verification:
         estimation_and_geometric_verification(database, pairs, verbose)
-    reconstruction = run_reconstruction(sfm_dir, database, image_dir, verbose)
+    reconstruction = run_reconstruction(sfm_dir, database, image_dir, verbose,
+                                        ba_refine_principal_point)
     if reconstruction is not None:
         logger.info(f'Reconstruction statistics:\n{reconstruction.summary()}'
                     + f'\n\tnum_input_images = {len(image_ids)}')
