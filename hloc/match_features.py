@@ -103,7 +103,7 @@ def find_unique_new_pairs(pairs_all: List[Tuple[str]], match_path: Path = None):
             pairs.add((i, j))
     pairs = list(pairs)
     if match_path is not None and match_path.exists():
-        with h5py.File(str(match_path), 'r') as fd:
+        with h5py.File(str(match_path), 'r', libver='latest') as fd:
             pairs_filtered = []
             for i, j in pairs:
                 if (names_to_pair(i, j) in fd or
@@ -149,13 +149,13 @@ def match_from_paths(conf: Dict,
 
     for (name0, name1) in tqdm(pairs, smoothing=.1):
         data = {}
-        with h5py.File(str(feature_path_q), 'r') as fd:
+        with h5py.File(str(feature_path_q), 'r', libver='latest') as fd:
             grp = fd[name0]
             for k, v in grp.items():
                 data[k+'0'] = torch.from_numpy(v.__array__()).float().to(device)
             # some matchers might expect an image but only use its size
             data['image0'] = torch.empty((1,)+tuple(grp['image_size'])[::-1])
-        with h5py.File(str(feature_paths_refs[name2ref[name1]]), 'r') as fd:
+        with h5py.File(str(feature_paths_refs[name2ref[name1]]), 'r', libver='latest') as fd:
             grp = fd[name1]
             for k, v in grp.items():
                 data[k+'1'] = torch.from_numpy(v.__array__()).float().to(device)
@@ -164,7 +164,7 @@ def match_from_paths(conf: Dict,
 
         pred = model(data)
         pair = names_to_pair(name0, name1)
-        with h5py.File(str(match_path), 'a') as fd:
+        with h5py.File(str(match_path), 'a', libver='latest') as fd:
             if pair in fd:
                 del fd[pair]
             grp = fd.create_group(pair)

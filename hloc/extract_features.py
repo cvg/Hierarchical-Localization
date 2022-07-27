@@ -259,7 +259,7 @@ def main(conf: Dict,
                 if (dt == np.float32) and (dt != np.float16):
                     pred[k] = pred[k].astype(np.float16)
 
-        with h5py.File(str(feature_path), 'a') as fd:
+        with h5py.File(str(feature_path), 'a', libver='latest') as fd:
             try:
                 if name in fd:
                     del fd[name]

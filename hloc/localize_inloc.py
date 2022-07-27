@@ -121,8 +121,8 @@ def main(dataset_dir, retrieval, features, matches, results,
     retrieval_dict = parse_retrieval(retrieval)
     queries = list(retrieval_dict.keys())
 
-    feature_file = h5py.File(features, 'r')
-    match_file = h5py.File(matches, 'r')
+    feature_file = h5py.File(features, 'r', libver='latest')
+    match_file = h5py.File(matches, 'r', libver='latest')
 
     poses = {}
     logs = {

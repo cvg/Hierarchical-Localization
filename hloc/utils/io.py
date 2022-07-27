@@ -22,7 +22,7 @@ def read_image(path, grayscale=False):
 
 def list_h5_names(path):
     names = []
-    with h5py.File(str(path), 'r') as fd:
+    with h5py.File(str(path), 'r', libver='latest') as fd:
         def visit_fn(_, obj):
             if isinstance(obj, h5py.Dataset):
                 names.append(obj.parent.name.strip('/'))
@@ -32,7 +32,7 @@ def list_h5_names(path):
 
 def get_keypoints(path: Path, name: str,
                   return_uncertainty: bool = False) -> np.ndarray:
-    with h5py.File(str(path), 'r') as hfile:
+    with h5py.File(str(path), 'r', libver='latest') as hfile:
         dset = hfile[name]['keypoints']
         p = dset.__array__()
         uncertainty = dset.attrs.get('uncertainty')
@@ -61,7 +61,7 @@ def find_pair(hfile: h5py.File, name0: str, name1: str):
 
 
 def get_matches(path: Path, name0: str, name1: str) -> Tuple[np.ndarray]:
-    with h5py.File(str(path), 'r') as hfile:
+    with h5py.File(str(path), 'r', libver='latest') as hfile:
         pair, reverse = find_pair(hfile, name0, name1)
         matches = hfile[pair]['matches0'].__array__()
         scores = hfile[pair]['matching_scores0'].__array__()

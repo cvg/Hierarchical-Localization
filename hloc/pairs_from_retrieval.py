@@ -32,12 +32,12 @@ def parse_names(prefix, names, names_all):
 
 def get_descriptors(names, path, name2idx=None, key='global_descriptor'):
     if name2idx is None:
-        with h5py.File(str(path), 'r') as fd:
+        with h5py.File(str(path), 'r', libver='latest') as fd:
             desc = [fd[n][key].__array__() for n in names]
     else:
         desc = []
         for n in names:
-            with h5py.File(str(path[name2idx[n]]), 'r') as fd:
+            with h5py.File(str(path[name2idx[n]]), 'r', libver='latest') as fd:
                 desc.append(fd[n][key].__array__())
     return torch.from_numpy(np.stack(desc, 0)).float()
 
