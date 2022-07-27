@@ -1,5 +1,5 @@
 from pathlib import Path
-from setuptools import setup
+from setuptools import setup, find_packages
 
 description = ['Tools and baselines for visual localization and mapping']
 
@@ -14,7 +14,7 @@ with open(str(root / 'requirements.txt'), 'r') as f:
 setup(
     name='hloc',
     version=version,
-    packages=['hloc'],
+    packages=find_packages(),
     python_requires='>=3.6',
     install_requires=dependencies,
     author='Paul-Edouard Sarlin',
