@@ -1,5 +1,6 @@
 import argparse
 import contextlib
+from typing import Optional, List, Dict, Any
 import io
 import sys
 from pathlib import Path
@@ -157,19 +158,23 @@ def geometric_verification(image_ids, reference, database_path, features_path,
 
 
 def run_triangulation(model_path, database_path, image_dir, reference_model,
-                      verbose=False):
+                      verbose=False, options: Optional[Dict[str, Any]] = None):
     model_path.mkdir(parents=True, exist_ok=True)
     logger.info('Running 3D triangulation...')
+    if options is None:
+        options = {}
     with OutputCapture(verbose):
         with pycolmap.ostream():
             reconstruction = pycolmap.triangulate_points(
-                reference_model, database_path, image_dir, model_path)
+                reference_model, database_path, image_dir, model_path,
+                options=options)
     return reconstruction
 
 
 def main(sfm_dir, reference_model, image_dir, pairs, features, matches,
          skip_geometric_verification=False, estimate_two_view_geometries=False,
-         min_match_score=None, verbose=False):
+         min_match_score=None, verbose=False,
+         mapper_options: Optional[Dict[str, Any]] = None):
 
     assert reference_model.exists(), reference_model
     assert features.exists(), features
@@ -191,10 +196,30 @@ def main(sfm_dir, reference_model, image_dir, pairs, features, matches,
             geometric_verification(
                 image_ids, reference, database, features, pairs, matches)
     reconstruction = run_triangulation(sfm_dir, database, image_dir, reference,
-                                       verbose)
+                                       verbose, mapper_options)
     logger.info('Finished the triangulation with statistics:\n%s',
                 reconstruction.summary())
     return reconstruction
+
+
+def parse_option_args(args: List[str], default_options) -> Dict[str, Any]:
+    options = {}
+    for arg in args:
+        idx = arg.find('=')
+        if idx == -1:
+            raise ValueError('Options format: key1=value1 key2=value2 etc.')
+        key, value = arg[:idx], arg[idx+1:]
+        if not hasattr(default_options, key):
+            raise ValueError(
+                f'Unknown option "{key}", allowed options and default values'
+                f' for {default_options.summary()}')
+        value = eval(value)
+        target_type = type(getattr(default_options, key))
+        if not isinstance(value, target_type):
+            raise ValueError(f'Incorrect type for option "{key}":'
+                             f' {type(value)} vs {target_type}')
+        options[key] = value
+    return options
 
 
 if __name__ == '__main__':
@@ -210,6 +235,9 @@ if __name__ == '__main__':
     parser.add_argument('--skip_geometric_verification', action='store_true')
     parser.add_argument('--min_match_score', type=float)
     parser.add_argument('--verbose', action='store_true')
-    args = parser.parse_args()
+    args = parser.parse_args().__dict__
 
-    main(**args.__dict__)
+    mapper_options = parse_option_args(
+        args.pop("mapper_options"), pycolmap.IncrementalMapperOptions())
+
+    main(**args, mapper_options=mapper_options)

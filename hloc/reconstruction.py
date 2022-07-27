@@ -1,6 +1,6 @@
 import argparse
 import shutil
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 import multiprocessing
 from pathlib import Path
 import pycolmap
@@ -9,7 +9,7 @@ from . import logger
 from .utils.database import COLMAPDatabase
 from .triangulation import (
     import_features, import_matches, estimation_and_geometric_verification,
-    OutputCapture)
+    OutputCapture, parse_option_args)
 
 
 def create_empty_db(database_path):
@@ -23,14 +23,18 @@ def create_empty_db(database_path):
     db.close()
 
 
-def import_images(image_dir, database_path, camera_mode, image_list=None):
+def import_images(image_dir, database_path, camera_mode, image_list=None,
+                  options: Optional[Dict[str, Any]] = None):
     logger.info('Importing images into the database...')
+    if options is None:
+        options = {}
     images = list(image_dir.iterdir())
     if len(images) == 0:
         raise IOError(f'No images found in {image_dir}.')
     with pycolmap.ostream():
         pycolmap.import_images(database_path, image_dir, camera_mode,
-                               image_list=image_list or [])
+                               image_list=image_list or [],
+                               options=options)
 
 
 def get_image_ids(database_path):
@@ -42,15 +46,18 @@ def get_image_ids(database_path):
     return images
 
 
-def run_reconstruction(sfm_dir, database_path, image_dir, verbose=False):
+def run_reconstruction(sfm_dir, database_path, image_dir, verbose=False,
+                       options: Optional[Dict[str, Any]] = None):
     models_path = sfm_dir / 'models'
     models_path.mkdir(exist_ok=True, parents=True)
     logger.info('Running 3D reconstruction...')
+    if options is None:
+        options = {}
+    options = {'num_threads': min(multiprocessing.cpu_count(), 16), **options}
     with OutputCapture(verbose):
         with pycolmap.ostream():
             reconstructions = pycolmap.incremental_mapping(
-                database_path, image_dir, models_path,
-                num_threads=min(multiprocessing.cpu_count(), 16))
+                database_path, image_dir, models_path, options=options)
 
     if len(reconstructions) == 0:
         logger.error('Could not reconstruct any model!')
@@ -79,7 +86,9 @@ def run_reconstruction(sfm_dir, database_path, image_dir, verbose=False):
 def main(sfm_dir, image_dir, pairs, features, matches,
          camera_mode=pycolmap.CameraMode.AUTO, verbose=False,
          skip_geometric_verification=False, min_match_score=None,
-         image_list: Optional[List[str]] = None):
+         image_list: Optional[List[str]] = None,
+         image_options: Optional[Dict[str, Any]] = None,
+         mapper_options: Optional[Dict[str, Any]] = None):
 
     assert features.exists(), features
     assert pairs.exists(), pairs
@@ -89,14 +98,15 @@ def main(sfm_dir, image_dir, pairs, features, matches,
     database = sfm_dir / 'database.db'
 
     create_empty_db(database)
-    import_images(image_dir, database, camera_mode, image_list)
+    import_images(image_dir, database, camera_mode, image_list, image_options)
     image_ids = get_image_ids(database)
     import_features(image_ids, database, features)
     import_matches(image_ids, database, pairs, matches,
                    min_match_score, skip_geometric_verification)
     if not skip_geometric_verification:
         estimation_and_geometric_verification(database, pairs, verbose)
-    reconstruction = run_reconstruction(sfm_dir, database, image_dir, verbose)
+    reconstruction = run_reconstruction(
+        sfm_dir, database, image_dir, verbose, mapper_options)
     if reconstruction is not None:
         logger.info(f'Reconstruction statistics:\n{reconstruction.summary()}'
                     + f'\n\tnum_input_images = {len(image_ids)}')
@@ -117,6 +127,18 @@ if __name__ == '__main__':
     parser.add_argument('--skip_geometric_verification', action='store_true')
     parser.add_argument('--min_match_score', type=float)
     parser.add_argument('--verbose', action='store_true')
-    args = parser.parse_args()
 
-    main(**args.__dict__)
+    parser.add_argument('--image_options', nargs='+', default=[],
+                        help='List of key=value from {}'.format(
+                            pycolmap.ImageReaderOptions().todict()))
+    parser.add_argument('--mapper_options', nargs='+', default=[],
+                        help='List of key=value from {}'.format(
+                            pycolmap.IncrementalMapperOptions().todict()))
+    args = parser.parse_args().__dict__
+
+    image_options = parse_option_args(
+        args.pop("image_options"), pycolmap.ImageReaderOptions())
+    mapper_options = parse_option_args(
+        args.pop("mapper_options"), pycolmap.IncrementalMapperOptions())
+
+    main(**args, image_options=image_options, mapper_options=mapper_options)
