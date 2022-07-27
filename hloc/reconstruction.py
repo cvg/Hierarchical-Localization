@@ -12,7 +12,7 @@ from .triangulation import (
     OutputCapture, parse_option_args)
 
 
-def create_empty_db(database_path):
+def create_empty_db(database_path: Path):
     if database_path.exists():
         logger.warning('The database already exists, deleting it.')
         database_path.unlink()
@@ -23,7 +23,10 @@ def create_empty_db(database_path):
     db.close()
 
 
-def import_images(image_dir, database_path, camera_mode, image_list=None,
+def import_images(image_dir: Path,
+                  database_path: Path,
+                  camera_mode: pycolmap.CameraMode,
+                  image_list: Optional[List[str]] = None,
                   options: Optional[Dict[str, Any]] = None):
     logger.info('Importing images into the database...')
     if options is None:
@@ -37,7 +40,7 @@ def import_images(image_dir, database_path, camera_mode, image_list=None,
                                options=options)
 
 
-def get_image_ids(database_path):
+def get_image_ids(database_path: Path) -> Dict[str, int]:
     db = COLMAPDatabase.connect(database_path)
     images = {}
     for name, image_id in db.execute("SELECT name, image_id FROM images;"):
@@ -46,8 +49,12 @@ def get_image_ids(database_path):
     return images
 
 
-def run_reconstruction(sfm_dir, database_path, image_dir, verbose=False,
-                       options: Optional[Dict[str, Any]] = None):
+def run_reconstruction(sfm_dir: Path,
+                       database_path: Path,
+                       image_dir: Path,
+                       verbose: bool = False,
+                       options: Optional[Dict[str, Any]] = None,
+                       ) -> pycolmap.Reconstruction:
     models_path = sfm_dir / 'models'
     models_path.mkdir(exist_ok=True, parents=True)
     logger.info('Running 3D reconstruction...')
@@ -83,12 +90,19 @@ def run_reconstruction(sfm_dir, database_path, image_dir, verbose=False,
     return reconstructions[largest_index]
 
 
-def main(sfm_dir, image_dir, pairs, features, matches,
-         camera_mode=pycolmap.CameraMode.AUTO, verbose=False,
-         skip_geometric_verification=False, min_match_score=None,
+def main(sfm_dir: Path,
+         image_dir: Path,
+         pairs: Path,
+         features: Path,
+         matches: Path,
+         camera_mode: pycolmap.CameraMode = pycolmap.CameraMode.AUTO,
+         verbose: bool = False,
+         skip_geometric_verification: bool = False,
+         min_match_score: Optional[float] = None,
          image_list: Optional[List[str]] = None,
          image_options: Optional[Dict[str, Any]] = None,
-         mapper_options: Optional[Dict[str, Any]] = None):
+         mapper_options: Optional[Dict[str, Any]] = None,
+         ) -> pycolmap.Reconstruction:
 
     assert features.exists(), features
     assert pairs.exists(), pairs

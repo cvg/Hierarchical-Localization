@@ -16,7 +16,7 @@ from .utils.geometry import compute_epipolar_errors
 
 
 class OutputCapture:
-    def __init__(self, verbose):
+    def __init__(self, verbose: bool):
         self.verbose = verbose
 
     def __enter__(self):
@@ -32,7 +32,8 @@ class OutputCapture:
         sys.stdout.flush()
 
 
-def create_db_from_model(reconstruction, database_path):
+def create_db_from_model(reconstruction: pycolmap.Reconstruction,
+                         database_path: Path) -> Dict[str, int]:
     if database_path.exists():
         logger.warning('The database already exists, deleting it.')
         database_path.unlink()
@@ -53,7 +54,9 @@ def create_db_from_model(reconstruction, database_path):
     return {image.name: i for i, image in reconstruction.images.items()}
 
 
-def import_features(image_ids, database_path, features_path):
+def import_features(image_ids: Dict[str, int],
+                    database_path: Path,
+                    features_path: Path):
     logger.info('Importing features into the database...')
     db = COLMAPDatabase.connect(database_path)
 
@@ -66,8 +69,12 @@ def import_features(image_ids, database_path, features_path):
     db.close()
 
 
-def import_matches(image_ids, database_path, pairs_path, matches_path,
-                   min_match_score=None, skip_geometric_verification=False):
+def import_matches(image_ids: Dict[str, int],
+                   database_path: Path,
+                   pairs_path: Path,
+                   matches_path: Path,
+                   min_match_score: Optional[float] = None,
+                   skip_geometric_verification: bool = False):
     logger.info('Importing matches into the database...')
 
     with open(str(pairs_path), 'r') as f:
@@ -93,8 +100,9 @@ def import_matches(image_ids, database_path, pairs_path, matches_path,
     db.close()
 
 
-def estimation_and_geometric_verification(database_path, pairs_path,
-                                          verbose=False):
+def estimation_and_geometric_verification(database_path: Path,
+                                          pairs_path: Path,
+                                          verbose: bool = False):
     logger.info('Performing geometric verification of the matches...')
     with OutputCapture(verbose):
         with pycolmap.ostream():
@@ -103,8 +111,13 @@ def estimation_and_geometric_verification(database_path, pairs_path,
                 max_num_trials=20000, min_inlier_ratio=0.1)
 
 
-def geometric_verification(image_ids, reference, database_path, features_path,
-                           pairs_path, matches_path, max_error=4.0):
+def geometric_verification(image_ids: Dict[str, int],
+                           reference: pycolmap.Reconstruction,
+                           database_path: Path,
+                           features_path: Path,
+                           pairs_path: Path,
+                           matches_path: Path,
+                           max_error: float = 4.0):
     logger.info('Performing geometric verification of the matches...')
 
     pairs = parse_retrieval(pairs_path)
@@ -157,8 +170,13 @@ def geometric_verification(image_ids, reference, database_path, features_path,
     db.close()
 
 
-def run_triangulation(model_path, database_path, image_dir, reference_model,
-                      verbose=False, options: Optional[Dict[str, Any]] = None):
+def run_triangulation(model_path: Path,
+                      database_path: Path,
+                      image_dir: Path,
+                      reference_model: pycolmap.Reconstruction,
+                      verbose: bool = False,
+                      options: Optional[Dict[str, Any]] = None,
+                      ) -> pycolmap.Reconstruction:
     model_path.mkdir(parents=True, exist_ok=True)
     logger.info('Running 3D triangulation...')
     if options is None:
@@ -171,10 +189,18 @@ def run_triangulation(model_path, database_path, image_dir, reference_model,
     return reconstruction
 
 
-def main(sfm_dir, reference_model, image_dir, pairs, features, matches,
-         skip_geometric_verification=False, estimate_two_view_geometries=False,
-         min_match_score=None, verbose=False,
-         mapper_options: Optional[Dict[str, Any]] = None):
+def main(sfm_dir: Path,
+         reference_model: Path,
+         image_dir: Path,
+         pairs: Path,
+         features: Path,
+         matches: Path,
+         skip_geometric_verification: bool = False,
+         estimate_two_view_geometries: bool = False,
+         min_match_score: Optional[float] = None,
+         verbose: bool = False,
+         mapper_options: Optional[Dict[str, Any]] = None,
+         ) -> pycolmap.Reconstruction:
 
     assert reference_model.exists(), reference_model
     assert features.exists(), features
