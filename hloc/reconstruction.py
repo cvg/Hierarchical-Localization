@@ -8,7 +8,8 @@ import pycolmap
 from . import logger
 from .utils.database import COLMAPDatabase
 from .triangulation import (
-    import_features, import_matches, geometric_verification, OutputCapture)
+    import_features, import_matches, estimation_and_geometric_verification,
+    OutputCapture)
 
 
 def create_empty_db(database_path):
@@ -94,7 +95,7 @@ def main(sfm_dir, image_dir, pairs, features, matches,
     import_matches(image_ids, database, pairs, matches,
                    min_match_score, skip_geometric_verification)
     if not skip_geometric_verification:
-        geometric_verification(database, pairs, verbose)
+        estimation_and_geometric_verification(database, pairs, verbose)
     reconstruction = run_reconstruction(sfm_dir, database, image_dir, verbose)
     if reconstruction is not None:
         logger.info(f'Reconstruction statistics:\n{reconstruction.summary()}'

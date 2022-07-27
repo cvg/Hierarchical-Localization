@@ -53,7 +53,7 @@ def visualize_sfm_2d(reconstruction, image_dir, color_by='visibility',
         add_text(0, name, pos=(0.01, 0.01), fs=5, lcolor=None, va='bottom')
 
 
-def visualize_loc(results, image_dir, reconstruction=None,
+def visualize_loc(results, image_dir, reconstruction=None, db_image_dir=None,
                   selected=[], n=1, seed=0, prefix=None, **kwargs):
     assert image_dir.exists()
 
@@ -72,11 +72,12 @@ def visualize_loc(results, image_dir, reconstruction=None,
 
     for qname in selected:
         loc = logs['loc'][qname]
-        visualize_loc_from_log(image_dir, qname, loc, reconstruction, **kwargs)
+        visualize_loc_from_log(
+            image_dir, qname, loc, reconstruction, db_image_dir, **kwargs)
 
 
 def visualize_loc_from_log(image_dir, query_name, loc, reconstruction=None,
-                           top_k_db=2, dpi=75):
+                           db_image_dir=None, top_k_db=2, dpi=75):
 
     q_image = read_image(image_dir / query_name)
     if loc.get('covisibility_clustering', False):
@@ -126,7 +127,7 @@ def visualize_loc_from_log(image_dir, query_name, loc, reconstruction=None,
             kp_db = loc['keypoints_db'][loc['indices_db'] == db_idx]
             inliers_db = inliers[loc['indices_db'] == db_idx]
 
-        db_image = read_image(image_dir / db_name)
+        db_image = read_image((db_image_dir or image_dir) / db_name)
         color = cm_RdGn(inliers_db).tolist()
         text = f'inliers: {sum(inliers_db)}/{len(inliers_db)}'
 
