@@ -118,7 +118,7 @@ def geometric_verification(image_ids, reference, database_path, features_path,
         kps0, noise0 = get_keypoints(
             features_path, name0, return_uncertainty=True)
         noise0 = 1.0 if noise0 is None else noise0
-        kps0 = np.array([cam0.image_to_world(kp) for kp in kps0])
+        kps0 = np.stack(cam0.image_to_world(kps0))
 
         for name1 in pairs[name0]:
             id1 = image_ids[name1]
@@ -127,7 +127,7 @@ def geometric_verification(image_ids, reference, database_path, features_path,
             kps1, noise1 = get_keypoints(
                 features_path, name1, return_uncertainty=True)
             noise1 = 1.0 if noise1 is None else noise1
-            kps1 = np.array([cam1.image_to_world(kp) for kp in kps1])
+            kps1 = np.stack(cam1.image_to_world(kps1))
 
             matches = get_matches(matches_path, name0, name1)[0]
 
