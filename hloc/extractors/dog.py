@@ -1,59 +1,14 @@
 import kornia
 from kornia.feature.laf import (
-    laf_from_center_scale_ori, raise_error_if_laf_is_not_valid,
-    normalize_laf, denormalize_laf, get_laf_scale,
-    generate_patch_grid_from_normalized_LAF, pyrdown)
+    laf_from_center_scale_ori, extract_patches_from_pyramid)
 import numpy as np
 import torch
-import torch.nn.functional as F
 import pycolmap
 
 from ..utils.base_model import BaseModel
 
 
 EPS = 1e-6
-
-
-def extract_patches_from_pyramid(
-    img: torch.Tensor, laf: torch.Tensor, PS: int = 32,
-    normalize_lafs_before_extraction: bool = True
-) -> torch.Tensor:
-    """Extract patches defined by LAFs from image tensor.
-    Copied from kornia.feature.laf.extract_patches_from_pyramid with one minor
-    difference - highlighted below.
-    """
-    raise_error_if_laf_is_not_valid(laf)
-    if normalize_lafs_before_extraction:
-        nlaf: torch.Tensor = normalize_laf(laf, img)
-    else:
-        nlaf = laf
-    B, N, _, _ = laf.size()
-    _, ch, h, w = img.size()
-    scale = 2.0 * get_laf_scale(denormalize_laf(nlaf, img)) / float(PS)
-    pyr_idx = scale.log2().relu().long()  # diff: floor instead of round
-    cur_img = img
-    cur_pyr_level = 0
-    out = torch.zeros(B, N, ch, PS, PS).to(nlaf.dtype).to(nlaf.device)
-    while min(cur_img.size(2), cur_img.size(3)) >= PS:
-        _, ch, h, w = cur_img.size()
-        # for loop temporarily, to be refactored
-        for i in range(B):
-            scale_mask = (pyr_idx[i] == cur_pyr_level).squeeze()
-            if (scale_mask.float().sum()) == 0:
-                continue
-            scale_mask = (scale_mask > 0).view(-1)
-            grid = generate_patch_grid_from_normalized_LAF(
-                    cur_img[i: i + 1], nlaf[i: i + 1, scale_mask, :, :], PS)
-            patches = F.grid_sample(
-                cur_img[i: i + 1].expand(grid.size(0), ch, h, w),
-                grid,  # type: ignore
-                padding_mode="border",
-                align_corners=False,
-            )
-            out[i].masked_scatter_(scale_mask.view(-1, 1, 1, 1), patches)
-        cur_img = pyrdown(cur_img)
-        cur_pyr_level += 1
-    return out
 
 
 def sift_to_rootsift(x):
