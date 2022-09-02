@@ -33,13 +33,18 @@ class AdaLAM(BaseModel):
 
     def _forward(self, data):
         assert data['keypoints0'].size(0) == 1
-        matches = self.adalam.match_and_filter(
-            data['keypoints0'][0], data['keypoints1'][0],
-            data['descriptors0'][0].T, data['descriptors1'][0].T,
-            data['image0'].shape[2 :], data['image1'].shape[2 :],
-            data['oris0'][0], data['oris1'][0],
-            data['scales0'][0], data['scales1'][0]
-        )
+        if data['keypoints0'].size(1) < 2 or data['keypoints1'].size(1) < 2:
+            matches = torch.zeros(
+                (0, 2), dtype=torch.int64,
+                device=data['keypoints0'].device)
+        else:
+            matches = self.adalam.match_and_filter(
+                data['keypoints0'][0], data['keypoints1'][0],
+                data['descriptors0'][0].T, data['descriptors1'][0].T,
+                data['image0'].shape[2 :], data['image1'].shape[2 :],
+                data['oris0'][0], data['oris1'][0],
+                data['scales0'][0], data['scales1'][0]
+            )
         matches_new = torch.full(
             (data['keypoints0'].size(1),), -1,
             dtype=torch.int64, device=data['keypoints0'].device)
