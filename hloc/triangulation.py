@@ -141,6 +141,7 @@ def geometric_verification(image_ids: Dict[str, int],
             kps1, noise1 = get_keypoints(
                 features_path, name1, return_uncertainty=True)
             noise1 = 1.0 if noise1 is None else noise1
+            print(name0, name1, kps1)
             kps1 = np.stack(cam1.image_to_world(kps1))
 
             matches = get_matches(matches_path, name0, name1)[0]
