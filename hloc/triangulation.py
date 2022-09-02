@@ -132,7 +132,10 @@ def geometric_verification(image_ids: Dict[str, int],
         kps0, noise0 = get_keypoints(
             features_path, name0, return_uncertainty=True)
         noise0 = 1.0 if noise0 is None else noise0
-        kps0 = np.stack(cam0.image_to_world(kps0))
+        if len(kps0) > 0:
+            kps0 = np.stack(cam0.image_to_world(kps0))
+        else:
+            kps0 = np.zeros((0, 2))
 
         for name1 in pairs[name0]:
             id1 = image_ids[name1]
