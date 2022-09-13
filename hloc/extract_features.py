@@ -108,6 +108,17 @@ confs = {
             'resize_max': 1600,
         },
     },
+    'disk': {
+        'output': 'feats-disk',
+        'model': {
+            'name': 'disk',
+            'max_keypoints': 5000,
+        },
+        'preprocessing': {
+            'grayscale': False,
+            'resize_max': 1600,
+        },
+    },
     # Global descriptors
     'dir': {
         'output': 'global-feats-dir',
