@@ -8,8 +8,8 @@ import gdown
 
 from ..utils.base_model import BaseModel
 
-dir_path = Path(__file__).parent / '../../third_party/deep-image-retrieval'
-sys.path.append(str(dir_path))
+sys.path.append(str(
+    Path(__file__).parent / '../../third_party/deep-image-retrieval'))
 os.environ['DB_ROOT'] = ''  # required by dirtorch
 
 from dirtorch.utils import common  # noqa: E402
@@ -25,7 +25,6 @@ sys.modules['sklearn.decomposition.pca'] = sklearn.decomposition._pca
 class DIR(BaseModel):
     default_conf = {
         'model_name': 'Resnet-101-AP-GeM',
-        'checkpoint_dir': dir_path / 'dirtorch/data',
         'whiten_name': 'Landmarks_clean',
         'whiten_params': {
             'whitenp': 0.25,
@@ -42,9 +41,10 @@ class DIR(BaseModel):
     }
 
     def _init(self, conf):
-        checkpoint = conf['checkpoint_dir'] / str(conf['model_name']+'.pt')
+        checkpoint = Path(
+            torch.hub.get_dir(), 'dirtorch', conf['model_name'] + '.pt')
         if not checkpoint.exists():
-            checkpoint.parent.mkdir(exist_ok=True)
+            checkpoint.parent.mkdir(exist_ok=True, parents=True)
             link = self.dir_models[conf['model_name']]
             gdown.download(str(link), str(checkpoint)+'.zip', quiet=False)
             zf = ZipFile(str(checkpoint)+'.zip', 'r')
