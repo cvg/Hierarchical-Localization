@@ -93,10 +93,8 @@ class DoG(BaseModel):
                 descriptors = patches.new_zeros((len(patches), 128))
                 for batch_start_idx in range(0, len(patches), self.max_batch_size):
                     batch_end_idx = min(len(patches), batch_start_idx + self.max_batch_size)
-                    descriptors[batch_start_idx : batch_end_idx] = (
-                        self.describe(
-                            patches[batch_start_idx : batch_end_idx]
-                        ).reshape(batch_end_idx - batch_start_idx, 128))
+                    descriptors[batch_start_idx : batch_end_idx] = self.describe(
+                        patches[batch_start_idx : batch_end_idx])
         else:
             raise ValueError(f'Unknown descriptor: {self.conf["descriptor"]}')
 
