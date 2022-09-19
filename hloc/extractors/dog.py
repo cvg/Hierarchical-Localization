@@ -31,6 +31,7 @@ class DoG(BaseModel):
     }
     required_inputs = ['image']
     detection_noise = 1.0
+    max_batch_size = 1024
 
     def _init(self, conf):
         if conf['descriptor'] == 'sosnet':
@@ -89,7 +90,14 @@ class DoG(BaseModel):
             if len(keypoints) == 0:
                 descriptors = torch.zeros((0, 128))
             else:
-                descriptors = self.describe(patches).reshape(len(patches), 128)
+                descriptors = []
+                for batch_start_idx in range(0, len(patches), self.max_batch_size):
+                    batch_end_idx = min(len(patches), batch_start_idx + self.max_batch_size)
+                    descriptors.append(
+                        self.describe(
+                            patches[batch_start_idx : batch_end_idx]
+                        ).reshape(batch_end_idx - batch_start_idx, 128))
+                descriptors = torch.concat(descriptors, axis=0)
         else:
             raise ValueError(f'Unknown descriptor: {self.conf["descriptor"]}')
 
