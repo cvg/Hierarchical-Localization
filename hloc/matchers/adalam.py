@@ -41,7 +41,7 @@ class AdaLAM(BaseModel):
             matches = self.adalam.match_and_filter(
                 data['keypoints0'][0], data['keypoints1'][0],
                 data['descriptors0'][0].T, data['descriptors1'][0].T,
-                data['image0'].shape[2 :], data['image1'].shape[2 :],
+                data['image0'].shape[2:], data['image1'].shape[2:],
                 data['oris0'][0], data['oris1'][0],
                 data['scales0'][0], data['scales1'][0]
             )
