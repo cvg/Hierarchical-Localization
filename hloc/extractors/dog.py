@@ -36,6 +36,8 @@ class DoG(BaseModel):
     def _init(self, conf):
         if conf['descriptor'] == 'sosnet':
             self.describe = kornia.feature.SOSNet(pretrained=True)
+        elif conf['descriptor'] == 'hardnet':
+            self.describe = kornia.feature.HardNet(pretrained=True)
         elif conf['descriptor'] not in ['sift', 'rootsift']:
             raise ValueError(f'Unknown descriptor: {conf["descriptor"]}')
 
@@ -79,7 +81,7 @@ class DoG(BaseModel):
             if self.conf['descriptor'] == 'rootsift':
                 descriptors = sift_to_rootsift(descriptors)
             descriptors = torch.from_numpy(descriptors)
-        elif self.conf['descriptor'] == 'sosnet':
+        elif self.conf['descriptor'] in ('sosnet', 'hardnet'):
             center = keypoints[:, :2] + 0.5
             laf_scale = scales * self.conf['mr_size'] / 2
             laf_ori = -oris
