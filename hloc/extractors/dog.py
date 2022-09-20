@@ -87,14 +87,12 @@ class DoG(BaseModel):
                 torch.from_numpy(ori)[None, :, None]).to(image.device)
             patches = extract_patches_from_pyramid(
                     image, lafs, PS=self.conf['patch_size'])[0]
-            if len(keypoints) == 0:
-                descriptors = torch.zeros((0, 128))
-            else:
-                descriptors = patches.new_zeros((len(patches), 128))
-                for batch_start_idx in range(0, len(patches), self.max_batch_size):
-                    batch_end_idx = min(len(patches), batch_start_idx + self.max_batch_size)
-                    descriptors[batch_start_idx : batch_end_idx] = self.describe(
-                        patches[batch_start_idx : batch_end_idx])
+            descriptors = patches.new_zeros((len(patches), 128))
+            if len(patches) > 0:
+                for start_idx in range(0, len(patches), self.max_batch_size):
+                    end_idx = min(len(patches), start_idx+self.max_batch_size)
+                    descriptors[start_idx:end_idx] = self.describe(
+                        patches[start_idx:end_idx])
         else:
             raise ValueError(f'Unknown descriptor: {self.conf["descriptor"]}')
 
