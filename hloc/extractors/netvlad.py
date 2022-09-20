@@ -12,8 +12,6 @@ from ..utils.base_model import BaseModel
 
 logger = logging.getLogger(__name__)
 
-netvlad_path = Path(__file__).parent / '../../third_party/netvlad'
-
 EPS = 1e-6
 
 
@@ -45,7 +43,6 @@ class NetVLADLayer(nn.Module):
 class NetVLAD(BaseModel):
     default_conf = {
         'model_name': 'VGG16-NetVLAD-Pitts30K',
-        'checkpoint_dir': netvlad_path,
         'whiten': True
     }
     required_inputs = ['image']
@@ -61,9 +58,10 @@ class NetVLAD(BaseModel):
         assert conf['model_name'] in self.dir_models.keys()
 
         # Download the checkpoint.
-        checkpoint = conf['checkpoint_dir'] / str(conf['model_name'] + '.mat')
+        checkpoint = Path(
+            torch.hub.get_dir(), 'netvlad', conf['model_name'] + '.mat')
         if not checkpoint.exists():
-            checkpoint.parent.mkdir(exist_ok=True)
+            checkpoint.parent.mkdir(exist_ok=True, parents=True)
             link = self.dir_models[conf['model_name']]
             cmd = ['wget', link, '-O', str(checkpoint)]
             logger.info(f'Downloading the NetVLAD model with `{cmd}`.')
