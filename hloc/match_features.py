@@ -58,6 +58,12 @@ confs = {
             'name': 'nearest_neighbor',
             'do_mutual_check': True,
         },
+    },
+    'adalam': {
+        'output': 'matches-adalam',
+        'model': {
+            'name': 'adalam'
+        },
     }
 }
 

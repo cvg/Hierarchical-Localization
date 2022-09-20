@@ -70,6 +70,8 @@ class DoG(BaseModel):
                 device=getattr(pycolmap.Device, 'cuda' if use_gpu else 'cpu'))
 
         keypoints, scores, descriptors = self.sift.extract(image_np)
+        scales = keypoints[:, 2]
+        oris = np.rad2deg(keypoints[:, 3])
 
         if self.conf['descriptor'] in ['sift', 'rootsift']:
             # We still renormalize because COLMAP does not normalize well,
@@ -79,12 +81,12 @@ class DoG(BaseModel):
             descriptors = torch.from_numpy(descriptors)
         elif self.conf['descriptor'] == 'sosnet':
             center = keypoints[:, :2] + 0.5
-            scale = keypoints[:, 2] * self.conf['mr_size'] / 2
-            ori = -np.rad2deg(keypoints[:, 3])
+            laf_scale = scales * self.conf['mr_size'] / 2
+            laf_ori = -oris
             lafs = laf_from_center_scale_ori(
                 torch.from_numpy(center)[None],
-                torch.from_numpy(scale)[None, :, None, None],
-                torch.from_numpy(ori)[None, :, None]).to(image.device)
+                torch.from_numpy(laf_scale)[None, :, None, None],
+                torch.from_numpy(laf_ori)[None, :, None]).to(image.device)
             patches = extract_patches_from_pyramid(
                     image, lafs, PS=self.conf['patch_size'])[0]
             descriptors = patches.new_zeros((len(patches), 128))
@@ -97,6 +99,8 @@ class DoG(BaseModel):
             raise ValueError(f'Unknown descriptor: {self.conf["descriptor"]}')
 
         keypoints = torch.from_numpy(keypoints[:, :2])  # keep only x, y
+        scales = torch.from_numpy(scales)
+        oris = torch.from_numpy(oris)
         scores = torch.from_numpy(scores)
 
         if self.conf['max_keypoints'] != -1:
@@ -104,11 +108,15 @@ class DoG(BaseModel):
             # follow https://github.com/mihaidusmanu/pycolmap/issues/8
             indices = torch.topk(scores, self.conf['max_keypoints'])
             keypoints = keypoints[indices]
+            scales = scales[indices]
+            oris = oris[indices]
             scores = scores[indices]
             descriptors = descriptors[indices]
 
         return {
             'keypoints': keypoints[None],
+            'scales': scales[None],
+            'oris': oris[None],
             'scores': scores[None],
             'descriptors': descriptors.T[None],
         }
