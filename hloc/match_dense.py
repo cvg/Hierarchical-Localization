@@ -7,8 +7,8 @@ from typing import Dict, Optional, List, Tuple, Union
 import pprint
 import argparse
 import torchvision.transforms.functional as F
-from omegaconf import OmegaConf
-from collections import defaultdict, Iterable
+from types import SimpleNamespace
+from collections import defaultdict
 from scipy.spatial import KDTree
 from collections import Counter
 from itertools import chain
@@ -21,7 +21,22 @@ from .extract_features import read_image, resize_image
 from .utils.io import list_h5_names
 
 
+# Default usage:
+# dense_conf = confs['loftr']
+# features, matches = main(dense_conf, pairs, images, max_kps=8192)
+
+# Use SuperPoint keypoints as anchors:
+# feature_conf = extract_features.confs['superpoint_aachen']
+# features_sp = extract_features.main(feature_conf, images)
+# features, matches = main(dense_conf, pairs, images,
+#                          features_ref=features_sp)
+
+# Localization:
+# loc_features, loc_matches = main(matcher_conf, loc_pairs,
+#      images, features_ref=features, max_kps=None)
+
 confs = {
+    # Best quality but loads of points. Only use for small scenes
     'loftr': {
         'output': 'matches-loftr',
         'model': {
@@ -34,9 +49,9 @@ confs = {
             'dfactor': 8
         },
         'max_error': 1,  # max error for assigned keypoints (in px)
-        'cell_size': 1,  # size of quantization patch
-        'init_ref_score': 10.0,
+        'cell_size': 1,  # size of quantization patch (max 1 kp/patch)
     },
+    # Semi-scalable loftr which limits detected keypoints
     'loftr_aachen': {
         'output': 'matches-loftr_aachen',
         'model': {
@@ -49,10 +64,30 @@ confs = {
             'dfactor': 8
         },
         'max_error': 2,  # max error for assigned keypoints (in px)
-        'cell_size': 8,  # size of quantization patch
-        'init_ref_score': 10.0,
+        'cell_size': 8,  # size of quantization patch (max 1 kp/patch)
+    },
+    # Use for matching superpoint feats with loftr
+    'loftr_superpoint': {
+        'output': 'matches-loftr_aachen',
+        'model': {
+            'name': 'loftr',
+            'weights': 'outdoor'
+        },
+        'preprocessing': {
+            'grayscale': True,
+            'resize_max': 1024,
+            'dfactor': 8
+        },
+        'max_error': 4,  # max error for assigned keypoints (in px)
+        'cell_size': 4,  # size of quantization patch (max 1 kp/patch)
     },
 }
+
+
+def to_cpts(kpts, ps):
+    if ps > 0.0:
+        cpts = np.round(np.round((kpts + 0.5) / ps) * ps - 0.5, 2)
+    return [tuple(cpt) for cpt in cpts]
 
 
 def assign_keypoints(kpts: np.ndarray,
@@ -72,7 +107,7 @@ def assign_keypoints(kpts: np.ndarray,
         ps = cell_size if cell_size is not None else max_error
         ps = max(cell_size, max_error)
         # With update we quantize and bin (optionally)
-        assert(isinstance(other_cpts, list))
+        assert isinstance(other_cpts, list)
         kpt_ids = []
         cpts = to_cpts(kpts, ps)
         bpts = to_cpts(kpts, int(max_error))
@@ -116,11 +151,6 @@ def get_unique_matches(match_ids, scores):
     return match_ids[uids], scores[uids]
 
 
-def to_cpts(kpts, ps):
-    cpts = np.round(np.round((kpts + 0.5) / ps) * ps - 0.5, 2)
-    return [tuple(cpt) for cpt in cpts]
-
-
 def matches_to_matches0(matches, scores):
     if matches.shape[0] == 0:
         return (np.zeros([0, 2], dtype=np.uint32),
@@ -160,7 +190,7 @@ class ImagePairDataset(torch.utils.data.Dataset):
 
     def __init__(self, image_dir, conf, pairs):
         self.image_dir = image_dir
-        self.conf = OmegaConf.merge(self.default_conf, conf)
+        self.conf = conf = SimpleNamespace(**{**self.default_conf, **conf})
         self.pairs = pairs
         if self.conf.cache_images:
             image_names = set(sum(pairs, ()))  # unique image names in pairs
@@ -222,11 +252,8 @@ def match_dense_from_paths(conf: Dict,
                            match_path: Path,  # out
                            feature_path_q: Path,  # out
                            feature_paths_refs: Optional[List[Path]] = [],
-                           # use reassign to reduce quant error (not in loc)
-                           reassign: Union[bool, float] = True,
-                           max_kps: Optional[int] = None,
+                           max_kps: Optional[int] = 16384,
                            overwrite: bool = False) -> Path:
-    conf = OmegaConf.merge({'psize': 1}, conf)
     for path in feature_paths_refs:
         if not path.exists():
             raise FileNotFoundError(f'Reference feature file {path}.')
@@ -239,13 +266,13 @@ def match_dense_from_paths(conf: Dict,
                 for n in list_h5_names(p)}
     existing_refs = required_queries.intersection(set(name2ref.keys()))
 
-    required_queries = required_queries - existing_refs
-
     if feature_path_q.exists() and not overwrite:
         feature_paths_refs.append(feature_path_q)
         existing_refs = set.union(existing_refs, list_h5_names(feature_path_q))
         q_name2ref = {n: -1 for n in list_h5_names(feature_path_q)}
         name2ref = {**name2ref, **q_name2ref}
+
+    required_queries = required_queries - existing_refs
 
     if len(pairs) == 0 and len(required_queries) == 0:
         logger.info("All pairs exist. Skipping dense matching.")
@@ -272,11 +299,15 @@ def match_dense_from_paths(conf: Dict,
                 if 'scores' in fd[name].keys():
                     kp_scores = fd[name]['scores'].__array__()
                 else:
+                    # we set the score to 1.0 if not provided
+                    # increase for more weight on reference keypoints for
+                    # stronger anchoring
                     kp_scores = \
-                        [conf.init_ref_score for _ in range(kps.shape[0])]
+                        [1.0 for _ in range(kps.shape[0])]
+                # bin existing keypoints of reference images for association
                 assign_keypoints(
-                    kps, cpdict[name], conf.max_error, True, bindict[name],
-                    kp_scores, conf.cell_size)
+                    kps, cpdict[name], conf['max_error'], True, bindict[name],
+                    kp_scores, conf['cell_size'])
 
     # sort pairs for reduced RAM
     pairs_per_q = Counter(list(chain(*pairs)))
@@ -316,23 +347,30 @@ def match_dense_from_paths(conf: Dict,
             # Aggregate local features
             update0 = name0 in required_queries
             update1 = name1 in required_queries
-            kpt_ids0 = assign_keypoints(kpts0, cpdict[name0], conf.max_error,
+
+            # in localization we do not want to bin the query kp
+            if update1 and not update0 and max_kps is None:
+                max_error1 = 0.0
+            else:
+                max_error1 = conf['max_error']
+
+            # Get match ids and extend query keypoints (cpdict)
+            mkp_ids0 = assign_keypoints(kpts0, cpdict[name0], conf['max_error'],
                                         update0, bindict[name0], scores,
-                                        conf.cell_size)
-            kpt_ids1 = assign_keypoints(kpts1, cpdict[name1], conf.max_error,
+                                        conf['cell_size'])
+            mkp_ids1 = assign_keypoints(kpts1, cpdict[name1], max_error1,
                                         update1, bindict[name1], scores,
-                                        conf.cell_size)
+                                        conf['cell_size'])
 
             # Build matches from assignments
-            matches0, scores0 = kpids_to_matches0(kpt_ids0, kpt_ids1, scores)
+            matches0, scores0 = kpids_to_matches0(mkp_ids0, mkp_ids1, scores)
 
             # Write matches and matching scores in hloc format
             pair = names_to_pair(name0, name1)
             if pair in fd:
                 del fd[pair]
             grp = fd.create_group(pair)
-            assert(kpts0.shape[0] == scores.shape[0])
-
+            assert kpts0.shape[0] == scores.shape[0]
             grp.create_dataset('matches0', data=matches0)
             grp.create_dataset('matching_scores0', data=scores0)
 
@@ -349,11 +387,15 @@ def match_dense_from_paths(conf: Dict,
                 kp_score = [c.most_common(1)[0][1] for c in bindict[name]]
                 cpdict[name] = [c.most_common(1)[0][0] for c in bindict[name]]
                 cpdict[name] = np.array(cpdict[name], dtype=np.float32)
+
+                # Select top-k query kps by score (reassign matches later)
                 if max_kps:
                     top_k = min(max_kps, cpdict[name].shape[0])
                     top_k = np.argsort(kp_score)[::-1][:top_k]
                     cpdict[name] = cpdict[name][top_k]
                     kp_score = np.array(kp_score)[top_k]
+
+                # Write query keypoints
                 with h5py.File(feature_path_q, 'a') as kfd:
                     if name in kfd:
                         del kfd[name]
@@ -369,10 +411,8 @@ def match_dense_from_paths(conf: Dict,
                     f'keypoints/image (avg.), total {n_kps}.')
 
     # Invalidate matches that are far from selected bin by reassignment
-    if reassign or conf.top_k:
-        max_error = conf.max_error
-        if not isinstance(reassign, bool):
-            max_error = reassign
+    if max_kps is not None:
+        max_error = conf['max_error']
         logger.info(f'Reassign matches with max_error={max_error}.')
         with h5py.File(str(match_path), 'a') as fd:
             for name0, name1 in tqdm(pairs):
@@ -382,13 +422,15 @@ def match_dense_from_paths(conf: Dict,
                 kpts1 = grp['keypoints1'].__array__()
                 scores = grp['scores'].__array__()
 
-                kpids0 = assign_keypoints(kpts0, cpdict[name0], max_error)
-                kpids1 = assign_keypoints(kpts1, cpdict[name1], max_error)
-                matches0, scores0 = kpids_to_matches0(kpids0, kpids1, scores)
+                # NN search across cell boundaries
+                mkp_ids0 = assign_keypoints(kpts0, cpdict[name0], max_error)
+                mkp_ids1 = assign_keypoints(kpts1, cpdict[name1], max_error)
 
-                del grp['matches0'], grp['matching_scores0']
+                matches0, scores0 = kpids_to_matches0(mkp_ids0, mkp_ids1,
+                                                      scores)
 
                 # overwrite matches0 and matching_scores0
+                del grp['matches0'], grp['matching_scores0']
                 grp.create_dataset('matches0', data=matches0)
                 grp.create_dataset('matching_scores0', data=scores0)
 
@@ -401,7 +443,7 @@ def main(conf: Dict,
          matches: Optional[Path] = None,  # out
          features: Optional[Path] = None,  # out
          features_ref: Optional[Path] = None,
-         reassign: Union[bool, float] = True,
+         max_kps: Optional[int] = 16384,
          overwrite: bool = False) -> Path:
     logger.info('Extracting semi-dense features with configuration:'
                 f'\n{pprint.pformat(conf)}')
@@ -425,7 +467,7 @@ def main(conf: Dict,
 
     if features_ref is None:
         features_ref = []
-    if isinstance(features_ref, Iterable):
+    elif isinstance(features_ref, list):
         features_ref = list(features_ref)
     elif isinstance(features_ref, Path):
         features_ref = [features_ref]
@@ -433,7 +475,8 @@ def main(conf: Dict,
         raise TypeError(str(features_ref))
 
     match_dense_from_paths(conf, pairs, image_dir, matches,
-                           features_q, features_ref, reassign, overwrite)
+                           features_q, features_ref,
+                           max_kps, overwrite)
 
     return features_q, matches
 
