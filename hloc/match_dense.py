@@ -23,17 +23,18 @@ from .utils.io import list_h5_names
 
 # Default usage:
 # dense_conf = confs['loftr']
-# features, matches = main(dense_conf, pairs, images, max_kps=8192)
+# features, matches = main(dense_conf, pairs, images, export_dir=outputs)
 
 # Use SuperPoint keypoints as anchors:
 # feature_conf = extract_features.confs['superpoint_aachen']
 # features_sp = extract_features.main(feature_conf, images)
 # features, matches = main(dense_conf, pairs, images,
+#                           export_dir=outputs,
 #                          features_ref=features_sp)
 
 # Localization:
 # loc_features, loc_matches = main(matcher_conf, loc_pairs,
-#      images, features_ref=features, max_kps=None)
+#      images, export_dir=outputs, features_ref=features, max_kps=None)
 
 confs = {
     # Best quality but loads of points. Only use for small scenes
@@ -252,7 +253,7 @@ def match_dense_from_paths(conf: Dict,
                            match_path: Path,  # out
                            feature_path_q: Path,  # out
                            feature_paths_refs: Optional[List[Path]] = [],
-                           max_kps: Optional[int] = 16384,
+                           max_kps: Optional[int] = 8192,
                            overwrite: bool = False) -> Path:
     for path in feature_paths_refs:
         if not path.exists():
@@ -266,59 +267,35 @@ def match_dense_from_paths(conf: Dict,
                 for n in list_h5_names(p)}
     existing_refs = required_queries.intersection(set(name2ref.keys()))
 
-    if feature_path_q.exists() and not overwrite:
-        feature_paths_refs.append(feature_path_q)
-        existing_refs = set.union(existing_refs, list_h5_names(feature_path_q))
+    # images which require feature extraction
+    required_queries = required_queries - existing_refs
+
+    if feature_path_q.exists():
         q_name2ref = {n: -1 for n in list_h5_names(feature_path_q)}
         name2ref = {**name2ref, **q_name2ref}
-
-    required_queries = required_queries - existing_refs
+        feature_paths_refs.append(feature_path_q)
+        existing_refs = set.union(existing_refs, list_h5_names(feature_path_q))
+        if not overwrite:
+            required_queries = required_queries - existing_refs
 
     if len(pairs) == 0 and len(required_queries) == 0:
         logger.info("All pairs exist. Skipping dense matching.")
         return
-
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    Model = dynamic_load(matchers, conf['model']['name'])
-    model = Model(conf['model']).eval().to(device)
-
-    # Load query keypoins
-    cpdict = defaultdict(list)
-    bindict = defaultdict(list)
-
-    if len(existing_refs) > 0:
-        logger.info(f'Pre-loaded keypoints from {len(existing_refs)} images.')
-    if len(required_queries) > 0:
-        logger.info(f'Extracting keypoints for {len(required_queries)} images.')
-    for name in existing_refs:
-        with h5py.File(str(feature_paths_refs[name2ref[name]]), 'r') as fd:
-            kps = fd[name]['keypoints'].__array__()
-            if name not in required_queries:
-                cpdict[name] = kps
-            else:
-                if 'scores' in fd[name].keys():
-                    kp_scores = fd[name]['scores'].__array__()
-                else:
-                    # we set the score to 1.0 if not provided
-                    # increase for more weight on reference keypoints for
-                    # stronger anchoring
-                    kp_scores = \
-                        [1.0 for _ in range(kps.shape[0])]
-                # bin existing keypoints of reference images for association
-                assign_keypoints(
-                    kps, cpdict[name], conf['max_error'], True, bindict[name],
-                    kp_scores, conf['cell_size'])
 
     # sort pairs for reduced RAM
     pairs_per_q = Counter(list(chain(*pairs)))
     pairs_score = [min(pairs_per_q[i], pairs_per_q[j]) for i, j in pairs]
     pairs = [p for _, p in sorted(zip(pairs_score, pairs))]
 
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    Model = dynamic_load(matchers, conf['model']['name'])
+    model = Model(conf['model']).eval().to(device)
+
     dataset = ImagePairDataset(image_dir, conf["preprocessing"], pairs)
     loader = torch.utils.data.DataLoader(
             dataset, num_workers=16, batch_size=1, shuffle=False)
+
     logger.info("Performing dense matching...")
-    n_kps = 0
     with h5py.File(str(match_path), 'a') as fd:
         for data in tqdm(loader, smoothing=.1):
             # load image-pair data
@@ -344,6 +321,57 @@ def match_dense_from_paths(conf: Dict,
             kpts1 = kpts1.cpu().numpy()
             scores = pred['scores'].cpu().numpy()
 
+            # Write matches and matching scores in hloc format
+            pair = names_to_pair(name0, name1)
+            if pair in fd:
+                del fd[pair]
+            grp = fd.create_group(pair)
+
+            # Write dense matching output
+            grp.create_dataset('keypoints0', data=kpts0)
+            grp.create_dataset('keypoints1', data=kpts1)
+            grp.create_dataset('scores', data=scores)
+    del model, loader
+
+    # Load query keypoins
+    cpdict = defaultdict(list)
+    bindict = defaultdict(list)
+
+    logger.info("Assigning matches...")
+
+    if len(existing_refs) > 0:
+        logger.info(f'Pre-loading keypoints from {len(existing_refs)} images.')
+
+    for name in existing_refs:
+        with h5py.File(str(feature_paths_refs[name2ref[name]]), 'r') as fd:
+            kps = fd[name]['keypoints'].__array__()
+            if name not in required_queries:
+                cpdict[name] = kps
+            else:
+                if 'scores' in fd[name].keys():
+                    kp_scores = fd[name]['scores'].__array__()
+                else:
+                    # we set the score to 1.0 if not provided
+                    # increase for more weight on reference keypoints for
+                    # stronger anchoring
+                    kp_scores = \
+                        [1.0 for _ in range(kps.shape[0])]
+                # bin existing keypoints of reference images for association
+                assign_keypoints(
+                    kps, cpdict[name], conf['max_error'], True, bindict[name],
+                    kp_scores, conf['cell_size'])
+
+    if len(required_queries) > 0:
+        logger.info(f'Aggregating keypoints for {len(required_queries)} images.')
+    n_kps = 0
+    with h5py.File(str(match_path), 'a') as fd:
+        for name0, name1 in pairs:
+            pair = names_to_pair(name0, name1)
+            grp = fd[pair]
+            kpts0 = grp['keypoints0'].__array__()
+            kpts1 = grp['keypoints1'].__array__()
+            scores = grp['scores'].__array__()
+
             # Aggregate local features
             update0 = name0 in required_queries
             update1 = name1 in required_queries
@@ -365,19 +393,9 @@ def match_dense_from_paths(conf: Dict,
             # Build matches from assignments
             matches0, scores0 = kpids_to_matches0(mkp_ids0, mkp_ids1, scores)
 
-            # Write matches and matching scores in hloc format
-            pair = names_to_pair(name0, name1)
-            if pair in fd:
-                del fd[pair]
-            grp = fd.create_group(pair)
             assert kpts0.shape[0] == scores.shape[0]
             grp.create_dataset('matches0', data=matches0)
             grp.create_dataset('matching_scores0', data=scores0)
-
-            # Write dense matching output
-            grp.create_dataset('keypoints0', data=kpts0)
-            grp.create_dataset('keypoints1', data=kpts1)
-            grp.create_dataset('scores', data=scores)
 
             # Convert bins to kps if finished, and store them
             for name in (name0, name1):
@@ -443,7 +461,7 @@ def main(conf: Dict,
          matches: Optional[Path] = None,  # out
          features: Optional[Path] = None,  # out
          features_ref: Optional[Path] = None,
-         max_kps: Optional[int] = 16384,
+         max_kps: Optional[int] = 8192,
          overwrite: bool = False) -> Path:
     logger.info('Extracting semi-dense features with configuration:'
                 f'\n{pprint.pformat(conf)}')
@@ -460,7 +478,8 @@ def main(conf: Dict,
         if export_dir is None:
             raise ValueError('Provide an export_dir if features and matches'
                              f' are not file paths: {features}, {matches}.')
-        features_q = Path(export_dir, f'{features}_{conf["output"]}_.h5')
+        features_q = Path(export_dir,
+                          f'{features}{conf["output"]}.h5')
         if matches is None:
             matches = Path(
                 export_dir, f'{conf["output"]}_{pairs.stem}.h5')
