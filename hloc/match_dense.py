@@ -3,7 +3,7 @@ import numpy as np
 import h5py
 import torch
 from pathlib import Path
-from typing import Dict, Optional, List, Tuple, Union
+from typing import Dict, Iterable, Optional, List, Tuple, Union, Set
 import pprint
 import argparse
 import torchvision.transforms.functional as F
@@ -247,45 +247,11 @@ class ImagePairDataset(torch.utils.data.Dataset):
 
 
 @torch.no_grad()
-def match_dense_from_paths(conf: Dict,
-                           pairs_path: Path,
-                           image_dir: Path,
-                           match_path: Path,  # out
-                           feature_path_q: Path,  # out
-                           feature_paths_refs: Optional[List[Path]] = [],
-                           max_kps: Optional[int] = 8192,
-                           overwrite: bool = False) -> Path:
-    for path in feature_paths_refs:
-        if not path.exists():
-            raise FileNotFoundError(f'Reference feature file {path}.')
-    pairs = parse_retrieval(pairs_path)
-    pairs = [(q, r) for q, rs in pairs.items() for r in rs]
-    pairs = find_unique_new_pairs(pairs, None if overwrite else match_path)
-    required_queries = set(sum(pairs, ()))
-
-    name2ref = {n: i for i, p in enumerate(feature_paths_refs)
-                for n in list_h5_names(p)}
-    existing_refs = required_queries.intersection(set(name2ref.keys()))
-
-    # images which require feature extraction
-    required_queries = required_queries - existing_refs
-
-    if feature_path_q.exists():
-        q_name2ref = {n: -1 for n in list_h5_names(feature_path_q)}
-        name2ref = {**name2ref, **q_name2ref}
-        feature_paths_refs.append(feature_path_q)
-        existing_refs = set.union(existing_refs, list_h5_names(feature_path_q))
-        if not overwrite:
-            required_queries = required_queries - existing_refs
-
-    if len(pairs) == 0 and len(required_queries) == 0:
-        logger.info("All pairs exist. Skipping dense matching.")
-        return
-
-    # sort pairs for reduced RAM
-    pairs_per_q = Counter(list(chain(*pairs)))
-    pairs_score = [min(pairs_per_q[i], pairs_per_q[j]) for i, j in pairs]
-    pairs = [p for _, p in sorted(zip(pairs_score, pairs))]
+def match_dense(conf: Dict,
+                pairs: List[Tuple[str, str]],
+                image_dir: Path,
+                match_path: Path,  # out
+                existing_refs: Optional[List] = []):
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     Model = dynamic_load(matchers, conf['model']['name'])
@@ -333,19 +299,27 @@ def match_dense_from_paths(conf: Dict,
             grp.create_dataset('scores', data=scores)
     del model, loader
 
-    # Load query keypoins
+
+# default: quantize all!
+def load_keypoints(conf: Dict,
+                   feature_paths_refs: List[Path],
+                   quantize: Optional[set] = None):
+    name2ref = {n: i for i, p in enumerate(feature_paths_refs)
+                for n in list_h5_names(p)}
+
+    existing_refs = set(name2ref.keys())
+    if quantize is None:
+        quantize = existing_refs  # quantize all
+    if len(existing_refs) > 0:
+        logger.info(f'Loading keypoints from {len(existing_refs)} images.')
+
+    # Load query keypoints
     cpdict = defaultdict(list)
     bindict = defaultdict(list)
-
-    logger.info("Assigning matches...")
-
-    if len(existing_refs) > 0:
-        logger.info(f'Pre-loading keypoints from {len(existing_refs)} images.')
-
     for name in existing_refs:
         with h5py.File(str(feature_paths_refs[name2ref[name]]), 'r') as fd:
             kps = fd[name]['keypoints'].__array__()
-            if name not in required_queries:
+            if name not in quantize:
                 cpdict[name] = kps
             else:
                 if 'scores' in fd[name].keys():
@@ -360,12 +334,37 @@ def match_dense_from_paths(conf: Dict,
                 assign_keypoints(
                     kps, cpdict[name], conf['max_error'], True, bindict[name],
                     kp_scores, conf['cell_size'])
+    return cpdict, bindict
+
+
+def aggregate_matches(
+        conf: Dict,
+        pairs: List[Tuple[str, str]],
+        match_path: Path,
+        feature_path: Path,
+        required_queries: Optional[Set[str]] = None,
+        max_kps: Optional[int] = None,
+        cpdict: Dict[str, Iterable] = defaultdict(list),
+        bindict: Dict[str, List[Counter]] = defaultdict(list)):
+    if required_queries is None:
+        required_queries = set(sum(pairs, ()))
+        # default: do not overwrite existing features in feature_path!
+        required_queries -= set(list_h5_names(feature_path))
+
+    # if an entry in cpdict is provided as np.ndarray we assume it is fixed
+    required_queries -= set(
+        [k for k, v in cpdict.items() if isinstance(v, np.ndarray)])
+
+    # sort pairs for reduced RAM
+    pairs_per_q = Counter(list(chain(*pairs)))
+    pairs_score = [min(pairs_per_q[i], pairs_per_q[j]) for i, j in pairs]
+    pairs = [p for _, p in sorted(zip(pairs_score, pairs))]
 
     if len(required_queries) > 0:
         logger.info(f'Aggregating keypoints for {len(required_queries)} images.')
     n_kps = 0
     with h5py.File(str(match_path), 'a') as fd:
-        for name0, name1 in pairs:
+        for name0, name1 in tqdm(pairs, smoothing=.1):
             pair = names_to_pair(name0, name1)
             grp = fd[pair]
             kpts0 = grp['keypoints0'].__array__()
@@ -414,7 +413,7 @@ def match_dense_from_paths(conf: Dict,
                     kp_score = np.array(kp_score)[top_k]
 
                 # Write query keypoints
-                with h5py.File(feature_path_q, 'a') as kfd:
+                with h5py.File(feature_path, 'a') as kfd:
                     if name in kfd:
                         del kfd[name]
                     kgrp = kfd.create_group(name)
@@ -427,30 +426,95 @@ def match_dense_from_paths(conf: Dict,
         avg_kp_per_image = round(n_kps / len(required_queries), 1)
         logger.info(f'Finished assignment, found {avg_kp_per_image} '
                     f'keypoints/image (avg.), total {n_kps}.')
+    return cpdict
+
+
+def assign_matches(
+        pairs: List[Tuple[str, str]],
+        match_path: Path,
+        keypoints: Union[List[Path], Dict[str, np.array]],
+        max_error: float):
+    if isinstance(keypoints, list):
+        keypoints = load_keypoints({}, keypoints, kpts_as_bin=set([]))
+    assert len(set(sum(pairs, ())) - set(keypoints.keys())) == 0
+    with h5py.File(str(match_path), 'a') as fd:
+        for name0, name1 in tqdm(pairs):
+            pair = names_to_pair(name0, name1)
+            grp = fd[pair]
+            kpts0 = grp['keypoints0'].__array__()
+            kpts1 = grp['keypoints1'].__array__()
+            scores = grp['scores'].__array__()
+
+            # NN search across cell boundaries
+            mkp_ids0 = assign_keypoints(kpts0, keypoints[name0], max_error)
+            mkp_ids1 = assign_keypoints(kpts1, keypoints[name1], max_error)
+
+            matches0, scores0 = kpids_to_matches0(mkp_ids0, mkp_ids1,
+                                                  scores)
+
+            # overwrite matches0 and matching_scores0
+            del grp['matches0'], grp['matching_scores0']
+            grp.create_dataset('matches0', data=matches0)
+            grp.create_dataset('matching_scores0', data=scores0)
+
+
+@torch.no_grad()
+def match_and_assign(conf: Dict,
+                     pairs_path: Path,
+                     image_dir: Path,
+                     match_path: Path,  # out
+                     feature_path_q: Path,  # out
+                     feature_paths_refs: Optional[List[Path]] = [],
+                     max_kps: Optional[int] = 8192,
+                     overwrite: bool = False) -> Path:
+    for path in feature_paths_refs:
+        if not path.exists():
+            raise FileNotFoundError(f'Reference feature file {path}.')
+    pairs = parse_retrieval(pairs_path)
+    pairs = [(q, r) for q, rs in pairs.items() for r in rs]
+    pairs = find_unique_new_pairs(pairs, None if overwrite else match_path)
+    required_queries = set(sum(pairs, ()))
+
+    name2ref = {n: i for i, p in enumerate(feature_paths_refs)
+                for n in list_h5_names(p)}
+    existing_refs = required_queries.intersection(set(name2ref.keys()))
+
+    # images which require feature extraction
+    required_queries = required_queries - existing_refs
+
+    if feature_path_q.exists():
+        existing_queries = set(list_h5_names(feature_path_q))
+        feature_paths_refs.append(feature_path_q)
+        existing_refs = set.union(existing_refs, existing_queries)
+        if not overwrite:
+            required_queries = required_queries - existing_queries
+
+    if len(pairs) == 0 and len(required_queries) == 0:
+        logger.info("All pairs exist. Skipping dense matching.")
+        return
+
+    # extract semi-dense matches
+    match_dense(conf, pairs, image_dir, match_path,
+                existing_refs=existing_refs)
+
+    logger.info("Assigning matches...")
+
+    # Pre-load existing keypoints
+    cpdict, bindict = load_keypoints(
+        conf, feature_paths_refs,
+        quantize=required_queries)
+
+    # Reassign matches by aggregation
+    cpdict = aggregate_matches(
+        conf, pairs, match_path, feature_path=feature_path_q,
+        required_queries=required_queries, max_kps=max_kps, cpdict=cpdict,
+        bindict=bindict)
 
     # Invalidate matches that are far from selected bin by reassignment
     if max_kps is not None:
-        max_error = conf['max_error']
-        logger.info(f'Reassign matches with max_error={max_error}.')
-        with h5py.File(str(match_path), 'a') as fd:
-            for name0, name1 in tqdm(pairs):
-                pair = names_to_pair(name0, name1)
-                grp = fd[pair]
-                kpts0 = grp['keypoints0'].__array__()
-                kpts1 = grp['keypoints1'].__array__()
-                scores = grp['scores'].__array__()
-
-                # NN search across cell boundaries
-                mkp_ids0 = assign_keypoints(kpts0, cpdict[name0], max_error)
-                mkp_ids1 = assign_keypoints(kpts1, cpdict[name1], max_error)
-
-                matches0, scores0 = kpids_to_matches0(mkp_ids0, mkp_ids1,
-                                                      scores)
-
-                # overwrite matches0 and matching_scores0
-                del grp['matches0'], grp['matching_scores0']
-                grp.create_dataset('matches0', data=matches0)
-                grp.create_dataset('matching_scores0', data=scores0)
+        logger.info(f'Reassign matches with max_error={conf["max_error"]}.')
+        assign_matches(pairs, match_path, cpdict,
+                       max_error=conf['max_error'])
 
 
 @torch.no_grad()
@@ -493,9 +557,9 @@ def main(conf: Dict,
     else:
         raise TypeError(str(features_ref))
 
-    match_dense_from_paths(conf, pairs, image_dir, matches,
-                           features_q, features_ref,
-                           max_kps, overwrite)
+    match_and_assign(conf, pairs, image_dir, matches,
+                     features_q, features_ref,
+                     max_kps, overwrite)
 
     return features_q, matches
 
