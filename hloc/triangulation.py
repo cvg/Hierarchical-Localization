@@ -90,8 +90,10 @@ def import_matches(image_ids: Dict[str, int],
         matches, scores = get_matches(matches_path, name0, name1)
         if min_match_score:
             matches = matches[scores > min_match_score]
-        db.add_matches(id0, id1, matches)
         matched |= {(id0, id1), (id1, id0)}
+        if matches.size == 0:
+            continue
+        db.add_matches(id0, id1, matches)
 
         if skip_geometric_verification:
             db.add_two_view_geometry(id0, id1, matches)
