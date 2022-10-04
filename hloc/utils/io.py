@@ -61,6 +61,8 @@ def get_matches(path: Path, name0: str, name1: str) -> Tuple[np.ndarray]:
         matches = hfile[pair]['matches0'].__array__()
         scores = hfile[pair]['matching_scores0'].__array__()
     idx = np.where(matches != -1)[0]
+    if idx.size == 0:
+        return matches[:0], scores[:0]
     matches = np.stack([idx, matches[idx]], -1)
     if reverse:
         matches = np.flip(matches, -1)
