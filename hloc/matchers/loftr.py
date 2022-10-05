@@ -23,9 +23,19 @@ class LoFTR(BaseModel):
         self.net = LoFTR_(pretrained=conf['weights'], config=cfg)
 
     def _forward(self, data):
+        # For consistency with hloc pairs, we refine kpts in image0!
+        rename = {
+            'keypoints0': 'keypoints1',
+            'keypoints1': 'keypoints0',
+            'image0': 'image1',
+            'image1': 'image0',
+            'mask0': 'mask1',
+            'mask1': 'mask0',
+        }
+        data_ = {rename[k]: v for k, v in data.items()}
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            pred = self.net(data)
+            pred = self.net(data_)
 
         scores = pred['confidence']
 
@@ -36,6 +46,8 @@ class LoFTR(BaseModel):
                 pred['keypoints0'][keep], pred['keypoints1'][keep]
             scores = scores[keep]
 
+        # Switch back indices
+        pred = {(rename[k] if k in rename else k): v for k, v in pred.items()}
         pred['scores'] = scores
         del pred['confidence']
         return pred
