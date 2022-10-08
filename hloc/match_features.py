@@ -2,7 +2,6 @@ import argparse
 from typing import Union, Optional, Dict, List, Tuple
 from pathlib import Path
 import pprint
-import collections.abc as collections
 from tqdm import tqdm
 import h5py
 import torch
@@ -10,7 +9,6 @@ import torch
 from . import matchers, logger
 from .utils.base_model import dynamic_load
 from .utils.parsers import names_to_pair, names_to_pair_old, parse_retrieval
-from .utils.io import list_h5_names
 
 
 '''
@@ -91,11 +89,6 @@ def main(conf: Dict,
 
     if features_ref is None:
         features_ref = features_q
-    if isinstance(features_ref, collections.Iterable):
-        features_ref = list(features_ref)
-    else:
-        features_ref = [features_ref]
-
     match_from_paths(conf, pairs, matches, features_q, features_ref, overwrite)
 
     return matches
@@ -127,18 +120,15 @@ def match_from_paths(conf: Dict,
                      pairs_path: Path,
                      match_path: Path,
                      feature_path_q: Path,
-                     feature_paths_refs: Path,
+                     feature_path_ref: Path,
                      overwrite: bool = False) -> Path:
     logger.info('Matching local features with configuration:'
                 f'\n{pprint.pformat(conf)}')
 
     if not feature_path_q.exists():
         raise FileNotFoundError(f'Query feature file {feature_path_q}.')
-    for path in feature_paths_refs:
-        if not path.exists():
-            raise FileNotFoundError(f'Reference feature file {path}.')
-    name2ref = {n: i for i, p in enumerate(feature_paths_refs)
-                for n in list_h5_names(p)}
+    if not feature_path_ref.exists():
+        raise FileNotFoundError(f'Reference feature file {feature_path_ref}.')
     match_path.parent.mkdir(exist_ok=True, parents=True)
 
     assert pairs_path.exists(), pairs_path
@@ -161,7 +151,7 @@ def match_from_paths(conf: Dict,
                 data[k+'0'] = torch.from_numpy(v.__array__()).float().to(device)
             # some matchers might expect an image but only use its size
             data['image0'] = torch.empty((1,)+tuple(grp['image_size'])[::-1])
-        with h5py.File(str(feature_paths_refs[name2ref[name1]]), 'r', libver='latest') as fd:
+        with h5py.File(str(feature_path_ref), 'r', libver='latest') as fd:
             grp = fd[name1]
             for k, v in grp.items():
                 data[k+'1'] = torch.from_numpy(v.__array__()).float().to(device)
