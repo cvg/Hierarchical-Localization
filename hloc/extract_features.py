@@ -13,7 +13,6 @@ import PIL.Image
 
 from . import extractors, logger
 from .utils.base_model import dynamic_load
-from .utils.tools import map_tensor
 from .utils.parsers import parse_image_lists
 from .utils.io import read_image, list_h5_names
 
@@ -211,7 +210,6 @@ class ImageDataset(torch.utils.data.Dataset):
         image = image / 255.
 
         data = {
-            'name': name,
             'image': image,
             'original_size': np.array(size),
         }
@@ -232,15 +230,14 @@ def main(conf: Dict,
     logger.info('Extracting local features with configuration:'
                 f'\n{pprint.pformat(conf)}')
 
-    loader = ImageDataset(image_dir, conf['preprocessing'], image_list)
-    loader = torch.utils.data.DataLoader(loader, num_workers=1)
-
+    dataset = ImageDataset(image_dir, conf['preprocessing'], image_list)
     if feature_path is None:
         feature_path = Path(export_dir, conf['output']+'.h5')
     feature_path.parent.mkdir(exist_ok=True, parents=True)
     skip_names = set(list_h5_names(feature_path)
                      if feature_path.exists() and not overwrite else ())
-    if set(loader.dataset.names).issubset(set(skip_names)):
+    dataset.names = [n for n in dataset.names if n not in skip_names]
+    if len(dataset.names) == 0:
         logger.info('Skipping the extraction.')
         return feature_path
 
@@ -248,12 +245,11 @@ def main(conf: Dict,
     Model = dynamic_load(extractors, conf['model']['name'])
     model = Model(conf['model']).eval().to(device)
 
-    for data in tqdm(loader):
-        name = data['name'][0]  # remove batch dimension
-        if name in skip_names:
-            continue
-
-        pred = model(map_tensor(data, lambda x: x.to(device)))
+    loader = torch.utils.data.DataLoader(
+        dataset, num_workers=1, shuffle=False, pin_memory=True)
+    for idx, data in enumerate(tqdm(loader)):
+        name = dataset.names[idx]
+        pred = model({'image': data['image'].to(device, non_blocking=True)})
         pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
 
         pred['image_size'] = original_size = data['original_size'][0].numpy()
