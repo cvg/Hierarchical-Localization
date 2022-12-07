@@ -153,9 +153,8 @@ def get_unique_matches(match_ids, scores):
 
 
 def matches_to_matches0(matches, scores):
-    if matches.shape[0] == 0:
-        return (np.zeros([0, 2], dtype=np.uint32),
-                np.zeros([0], dtype=np.float32))
+    if len(matches) == 0:
+        return np.zeros(0, dtype=np.int32), np.zeros(0, dtype=np.float16)
     n_kps0 = np.max(matches[:, 0]) + 1
     matches0 = -np.ones((n_kps0,))
     scores0 = np.zeros((n_kps0,))
