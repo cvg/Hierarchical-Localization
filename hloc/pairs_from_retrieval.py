@@ -17,6 +17,9 @@ def parse_names(prefix, names, names_all):
         if not isinstance(prefix, str):
             prefix = tuple(prefix)
         names = [n for n in names_all if n.startswith(prefix)]
+        if len(names) == 0:
+            raise ValueError(
+                f'Could not find any image with the prefix `{prefix}`.')
     elif names is not None:
         if isinstance(names, (str, Path)):
             names = parse_image_lists(names)
