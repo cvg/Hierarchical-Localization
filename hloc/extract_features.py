@@ -133,6 +133,11 @@ confs = {
         'output': 'global-feats-openibl',
         'model': {'name': 'openibl'},
         'preprocessing': {'resize_max': 1024},
+    },
+    'cosplace': {
+        'output': 'global-feats-cosplace',
+        'model': {'name': 'cosplace'},
+        'preprocessing': {'resize_max': 1024},
     }
 }
 
