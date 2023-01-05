@@ -133,6 +133,21 @@ confs = {
         'output': 'global-feats-openibl',
         'model': {'name': 'openibl'},
         'preprocessing': {'resize_max': 1024},
+    },
+    'dir-ms': {
+        'output': 'global-feats-dir-ms',
+        'model': {'name': 'msretrieval', 'backbone': {'name': 'dir'}},
+        'preprocessing': {'resize_max': 1024},
+    },
+    'netvlad-ms': {
+        'output': 'global-feats-netvlad-ms',
+        'model': {'name': 'msretrieval', 'backbone': {'name': 'netvlad'}},
+        'preprocessing': {'resize_max': 1024},
+    },
+    'openibl-ms': {
+        'output': 'global-feats-openibl-ms',
+        'model': {'name': 'msretrieval', 'backbone': {'name': 'openibl'}},
+        'preprocessing': {'resize_max': 1024},
     }
 }
 
