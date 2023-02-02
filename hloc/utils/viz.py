@@ -91,14 +91,12 @@ def plot_matches(kpts0, kpts1, color=None, lw=1.5, ps=4, indices=(0, 1), a=1.):
 
     if lw > 0:
         # transform the points into the figure coordinate system
-        transFigure = fig.transFigure.inverted()
-        fkpts0 = transFigure.transform(ax0.transData.transform(kpts0))
-        fkpts1 = transFigure.transform(ax1.transData.transform(kpts1))
-        fig.lines += [matplotlib.lines.Line2D(
-            (fkpts0[i, 0], fkpts1[i, 0]), (fkpts0[i, 1], fkpts1[i, 1]),
-            zorder=1, transform=fig.transFigure, c=color[i], linewidth=lw,
-            alpha=a)
-            for i in range(len(kpts0))]
+        for i in range(len(kpts0)):
+            fig.add_artist(matplotlib.patches.ConnectionPatch(
+                xyA=(kpts0[i, 0], kpts0[i, 1]), coordsA=ax0.transData,
+                xyB=(kpts1[i, 0], kpts1[i, 1]), coordsB=ax1.transData,
+                zorder=1, color=color[i], linewidth=lw,
+                alpha=a))
 
     # freeze the axes to prevent the transform to change
     ax0.autoscale(enable=False)
