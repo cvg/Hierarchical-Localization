@@ -19,7 +19,7 @@ args = parser.parse_args()
 
 # Setup the paths
 dataset = args.dataset
-images = dataset / 'images/images_upright/'
+images = dataset / 'images_upright/'
 sift_sfm = dataset / '3D-models/aachen_v_1_1'
 
 outputs = args.outputs  # where everything will be saved
