@@ -19,3 +19,6 @@
 [submodule "third_party/ASpanFormer"]
 	path = third_party/ASpanFormer
 	url = https://github.com/Vincentqyw/ml-aspanformer.git
+[submodule "third_party/TopicFM"]
+	path = third_party/TopicFM
+	url = https://github.com/Vincentqyw/TopicFM
