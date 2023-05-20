@@ -16,3 +16,6 @@
 [submodule "third_party/fire"]
 	path = third_party/fire
 	url = https://github.com/Vincentqyw/fire
+[submodule "third_party/ASpanFormer"]
+	path = third_party/ASpanFormer
+	url = https://github.com/Vincentqyw/ml-aspanformer.git
