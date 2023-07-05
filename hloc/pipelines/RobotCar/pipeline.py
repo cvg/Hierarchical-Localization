@@ -1,5 +1,6 @@
 from pathlib import Path
 import argparse
+import glob
 
 from . import colmap_from_nvm
 from ... import extract_features, match_features, triangulation
@@ -24,7 +25,7 @@ def generate_query_list(dataset, image_dir, path):
             params = ['SIMPLE_RADIAL', w, h, fx, cx, cy, 0.0]
             cameras[side] = [str(p) for p in params]
 
-    queries = sorted(image_dir.glob('**/*.jpg'))
+    queries = sorted(list(map(Path, glob.glob((image_dir / '**/*.jpg').as_posix(), recursive=True))))
     queries = [str(q.relative_to(image_dir.parents[0])) for q in queries]
 
     out = [[q] + cameras[Path(q).parent.name] for q in queries]

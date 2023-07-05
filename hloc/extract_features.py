@@ -10,6 +10,7 @@ from tqdm import tqdm
 import pprint
 import collections.abc as collections
 import PIL.Image
+import glob
 
 from . import extractors, logger
 from .utils.base_model import dynamic_load
@@ -176,7 +177,7 @@ class ImageDataset(torch.utils.data.Dataset):
         if paths is None:
             paths = []
             for g in conf.globs:
-                paths += list(Path(root).glob('**/'+g))
+                paths += list(map(Path, glob.glob((Path(root) / '**' / g).as_posix(), recursive=True)))
             if len(paths) == 0:
                 raise ValueError(f'Could not find any image in root: {root}.')
             paths = sorted(list(set(paths)))
