@@ -156,16 +156,22 @@ def plot_reconstruction(
         min_track_length: int = 2,
         points: bool = True,
         cameras: bool = True,
+        points_rgb: bool = True,
         cs: float = 1.0):
     # Filter outliers
     bbs = rec.compute_bounding_box(0.001, 0.999)
     # Filter points, use original reproj error here
-    xyzs = [p3D.xyz for _, p3D in rec.points3D.items() if (
+    p3Ds = [p3D for _, p3D in rec.points3D.items() if (
                             (p3D.xyz >= bbs[0]).all() and
                             (p3D.xyz <= bbs[1]).all() and
                             p3D.error <= max_reproj_error and
                             p3D.track.length() >= min_track_length)]
+    xyzs = [p3D.xyz for p3D in p3Ds]
+    if points_rgb:
+        pcolor = [p3D.color for p3D in p3Ds]
+    else:
+        pcolor = color
     if points:
-        plot_points(fig, np.array(xyzs), color=color, ps=1, name=name)
+        plot_points(fig, np.array(xyzs), color=pcolor, ps=1, name=name)
     if cameras:
         plot_cameras(fig, rec, color=color, legendgroup=name, size=cs)
