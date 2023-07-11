@@ -42,17 +42,7 @@ class DoG(BaseModel):
             raise ValueError(f'Unknown descriptor: {conf["descriptor"]}')
 
         self.sift = None  # lazily instantiated on the first image
-        self.device = torch.device('cpu')
-
-    def to(self, *args, **kwargs):
-        device = kwargs.get('device')
-        if device is None:
-            match = [a for a in args if isinstance(a, (torch.device, str))]
-            if len(match) > 0:
-                device = match[0]
-        if device is not None:
-            self.device = torch.device(device)
-        return super().to(*args, **kwargs)
+        self.dummy_param = torch.nn.Parameter(torch.empty(0))
 
     def _forward(self, data):
         image = data['image']
@@ -61,7 +51,8 @@ class DoG(BaseModel):
         assert image_np.min() >= -EPS and image_np.max() <= 1 + EPS
 
         if self.sift is None:
-            use_gpu = pycolmap.has_cuda and self.device.type == 'cuda'
+            device = self.dummy_param.device
+            use_gpu = pycolmap.has_cuda and device.type == 'cuda'
             options = {**self.conf['options']}
             if self.conf['descriptor'] == 'rootsift':
                 options['normalization'] = pycolmap.Normalization.L1_ROOT
