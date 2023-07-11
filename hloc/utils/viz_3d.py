@@ -82,7 +82,7 @@ def plot_camera(
         legendgroup: Optional[str] = None,
         fill: bool = False,
         size: float = 1.0,
-        text=None):
+        text: Optional[str] = None):
     """Plot a camera frustum from pose and intrinsic matrix."""
     W, H = K[0, 2]*2, K[1, 2]*2
     corners = np.array([[0, 0], [W, 0], [W, H], [0, H], [0, 0]])
