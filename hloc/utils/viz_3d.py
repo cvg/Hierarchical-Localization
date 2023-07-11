@@ -80,7 +80,9 @@ def plot_camera(
         color: str = 'rgb(0, 0, 255)',
         name: Optional[str] = None,
         legendgroup: Optional[str] = None,
-        size: float = 1.0):
+        fill: bool = False,
+        size: float = 1.0,
+        text=None):
     """Plot a camera frustum from pose and intrinsic matrix."""
     W, H = K[0, 2]*2, K[1, 2]*2
     corners = np.array([[0, 0], [W, 0], [W, H], [0, H], [0, 0]])
@@ -92,32 +94,31 @@ def plot_camera(
         scale = 1.0
     corners = to_homogeneous(corners) @ np.linalg.inv(K).T
     corners = (corners / 2 * scale) @ R.T + t
-
-    x, y, z = corners.T
-    rect = go.Scatter3d(
-        x=x, y=y, z=z, line=dict(color=color), legendgroup=legendgroup,
-        name=name, marker=dict(size=0.0001), showlegend=False)
-    fig.add_trace(rect)
+    legendgroup = legendgroup if legendgroup is not None else name
 
     x, y, z = np.concatenate(([t], corners)).T
     i = [0, 0, 0, 0]
     j = [1, 2, 3, 4]
     k = [2, 3, 4, 1]
 
-    pyramid = go.Mesh3d(
-        x=x, y=y, z=z, color=color, i=i, j=j, k=k,
-        legendgroup=legendgroup, name=name, showlegend=False)
-    fig.add_trace(pyramid)
+    if fill:
+        pyramid = go.Mesh3d(
+            x=x, y=y, z=z, color=color, i=i, j=j, k=k,
+            legendgroup=legendgroup, name=name, showlegend=False,
+            hovertemplate=text.replace('\n', '<br>'))
+        fig.add_trace(pyramid)
+
     triangles = np.vstack((i, j, k)).T
     vertices = np.concatenate(([t], corners))
     tri_points = np.array([
         vertices[i] for i in triangles.reshape(-1)
     ])
-
     x, y, z = tri_points.T
+
     pyramid = go.Scatter3d(
         x=x, y=y, z=z, mode='lines', legendgroup=legendgroup,
-        name=name, line=dict(color=color, width=1), showlegend=False)
+        name=name, line=dict(color=color, width=1), showlegend=False,
+        hovertemplate=text.replace('\n', '<br>'))
     fig.add_trace(pyramid)
 
 
@@ -134,6 +135,7 @@ def plot_camera_colmap(
         image.projection_center(),
         camera.calibration_matrix(),
         name=name or str(image.image_id),
+        text=image.summary(),
         **kwargs)
 
 
