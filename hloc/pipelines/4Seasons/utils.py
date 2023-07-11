@@ -2,6 +2,7 @@ import os
 import numpy as np
 import logging
 from pathlib import Path
+import glob
 
 from ...utils.read_write_model import qvec2rotmat, rotmat2qvec
 from ...utils.read_write_model import Image, write_model, Camera
@@ -28,10 +29,10 @@ def get_timestamps(files, idx):
 
 def delete_unused_images(root, timestamps):
     """Delete all images in root if they are not contained in timestamps."""
-    images = list(root.glob('**/*.png'))
+    images = glob.glob((root / '**/*.png').as_posix(), recursive=True)
     deleted = 0
     for image in images:
-        ts = image.stem
+        ts = Path(image).stem
         if ts not in timestamps:
             os.remove(image)
             deleted += 1
