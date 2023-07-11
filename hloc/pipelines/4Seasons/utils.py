@@ -29,10 +29,10 @@ def get_timestamps(files, idx):
 
 def delete_unused_images(root, timestamps):
     """Delete all images in root if they are not contained in timestamps."""
-    images = list(map(Path, glob.glob((root / '**/*.png').as_posix(), recursive=True)))
+    images = glob.glob((root / '**/*.png').as_posix(), recursive=True)
     deleted = 0
     for image in images:
-        ts = image.stem
+        ts = Path(image).stem
         if ts not in timestamps:
             os.remove(image)
             deleted += 1

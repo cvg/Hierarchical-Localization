@@ -177,11 +177,12 @@ class ImageDataset(torch.utils.data.Dataset):
         if paths is None:
             paths = []
             for g in conf.globs:
-                paths += list(map(Path, glob.glob((Path(root) / '**' / g).as_posix(), recursive=True)))
+                paths += glob.glob(
+                    (Path(root) / '**' / g).as_posix(), recursive=True)
             if len(paths) == 0:
                 raise ValueError(f'Could not find any image in root: {root}.')
-            paths = sorted(list(set(paths)))
-            self.names = [i.relative_to(root).as_posix() for i in paths]
+            paths = sorted(set(paths))
+            self.names = [Path(p).relative_to(root).as_posix() for p in paths]
             logger.info(f'Found {len(self.names)} images in root {root}.')
         else:
             if isinstance(paths, (Path, str)):

@@ -25,8 +25,9 @@ def generate_query_list(dataset, image_dir, path):
             params = ['SIMPLE_RADIAL', w, h, fx, cx, cy, 0.0]
             cameras[side] = [str(p) for p in params]
 
-    queries = sorted(list(map(Path, glob.glob((image_dir / '**/*.jpg').as_posix(), recursive=True))))
-    queries = [str(q.relative_to(image_dir.parents[0])) for q in queries]
+    queries = glob.glob((image_dir / '**/*.jpg').as_posix(), recursive=True)
+    queries = [Path(q).relative_to(image_dir.parents[0]).as_posix()
+               for q in sorted(queries)]
 
     out = [[q] + cameras[Path(q).parent.name] for q in queries]
     with open(path, 'w') as f:
