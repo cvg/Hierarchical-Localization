@@ -20,7 +20,7 @@ args = parser.parse_args()
 
 # Setup the paths
 dataset = args.dataset
-images = dataset / 'images/images_upright/'
+images = dataset / 'images_upright/'
 
 outputs = args.outputs  # where everything will be saved
 sift_sfm = outputs / 'sfm_sift'  # from which we extract the reference poses
