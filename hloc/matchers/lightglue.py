@@ -8,8 +8,8 @@ class LightGlue(BaseModel):
         'width_confidence': 0.99,
     }
     required_inputs = [
-        'image0', 'keypoints0', 'scores0', 'descriptors0',
-        'image1', 'keypoints1', 'scores1', 'descriptors1',
+        'image0', 'keypoints0', 'descriptors0',
+        'image1', 'keypoints1', 'descriptors1',
     ]
 
     def _init(self, conf):
