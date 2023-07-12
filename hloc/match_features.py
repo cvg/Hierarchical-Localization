@@ -25,7 +25,7 @@ confs = {
         'output': 'matches-superpoint-lightglue',
         'model': {
             'name': 'lightglue',
-            'features': 'disk',
+            'features': 'superpoint',
         },
     },
     'disk+lightglue': {
