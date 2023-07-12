@@ -10,6 +10,9 @@ with open(str(root / 'hloc/__init__.py'), 'r') as f:
     version = eval(f.read().split('__version__ = ')[1].split()[0])
 with open(str(root / 'requirements.txt'), 'r') as f:
     dependencies = f.read().split('\n')
+dependencies = [
+    (f'{d.rsplit("/", 1)[1]} @ ' if d.startswith('git+') else '') + d
+    for d in dependencies]
 
 setup(
     name='hloc',
