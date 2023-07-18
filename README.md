@@ -185,6 +185,31 @@ In a match file, each key corresponds to the string `path0.replace('/', '-')+'_'
 `hloc` also provides an interface for image retrieval via `hloc/extract_features.py`. As previously, simply add a new interface to [`hloc/extractors/`](hloc/extractors/). Alternatively, you will need to export the global descriptors into an HDF5 file, in which each key corresponds to the relative path of an image w.r.t. the dataset root, and contains a dataset `global_descriptor` with size D. You can then export the images pairs with [`hloc/pairs_from_retrieval.py`](hloc/pairs_from_retrieval.py).
 </details>
 
+### Reconstruction with known camera parameters
+
+<details>
+<summary>[Click to expand]</summary>
+
+If the calibration of the camera is known, for example from an external calibration system, you can tell hloc to use these parameters instead of estimating them from EXIF. The name of the camera models and their parameters are [defined by COLMAP](https://colmap.github.io/cameras.html). Python API:
+```python
+opts = dict(camera_model='SIMPLE_RADIAL', camera_params=','.join(map(str, (f, cx, cy, k))))
+model = reconstruction.main(..., image_options=opts)
+```
+Command-line interface:
+```bash
+python -m hloc.reconstruction [...] --image_options camera_model='"SIMPLE_RADIAL"' camera_params='"256,256,256,0"'
+```
+
+By default, hloc refines the camera parameters during the reconstruction process. To prevent this, add:
+```python
+reconstruction.main(..., mapper_options=dict(ba_refine_focal_length=False, ba_refine_extra_params=False))
+```
+```bash
+python -m hloc.reconstruction [...] --mapper_options ba_refine_focal_length=False ba_refine_extra_params=False
+```
+
+</details>
+
 ## Versions
 
 <details>
