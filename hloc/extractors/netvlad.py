@@ -1,5 +1,4 @@
 from pathlib import Path
-import subprocess
 import logging
 import numpy as np
 import torch
@@ -49,23 +48,23 @@ class NetVLAD(BaseModel):
 
     # Models exported using
     # https://github.com/uzh-rpg/netvlad_tf_open/blob/master/matlab/net_class2struct.m.
-    dir_models = {
+    checkpoint_urls = {
         'VGG16-NetVLAD-Pitts30K': 'https://cvg-data.inf.ethz.ch/hloc/netvlad/Pitts30K_struct.mat',
         'VGG16-NetVLAD-TokyoTM': 'https://cvg-data.inf.ethz.ch/hloc/netvlad/TokyoTM_struct.mat'
     }
 
     def _init(self, conf):
-        assert conf['model_name'] in self.dir_models.keys()
+        if conf['model_name'] not in self.checkpoint_urls:
+            raise ValueError(
+                f'{conf["model_name"]} not in {self.checkpoint_urls.keys()}.')
 
         # Download the checkpoint.
-        checkpoint = Path(
+        checkpoint_path = Path(
             torch.hub.get_dir(), 'netvlad', conf['model_name'] + '.mat')
-        if not checkpoint.exists():
-            checkpoint.parent.mkdir(exist_ok=True, parents=True)
-            link = self.dir_models[conf['model_name']]
-            cmd = ['wget', link, '-O', str(checkpoint)]
-            logger.info(f'Downloading the NetVLAD model with `{cmd}`.')
-            subprocess.run(cmd, check=True)
+        if not checkpoint_path.exists():
+            checkpoint_path.parent.mkdir(exist_ok=True, parents=True)
+            url = self.checkpoint_urls[conf['model_name']]
+            torch.hub.download_url_to_file(url, checkpoint_path)
 
         # Create the network.
         # Remove classification head.
@@ -79,7 +78,7 @@ class NetVLAD(BaseModel):
             self.whiten = nn.Linear(self.netvlad.output_dim, 4096)
 
         # Parse MATLAB weights using https://github.com/uzh-rpg/netvlad_tf_open
-        mat = loadmat(checkpoint, struct_as_record=False, squeeze_me=True)
+        mat = loadmat(checkpoint_path, struct_as_record=False, squeeze_me=True)
 
         # CNN weights.
         for layer, mat_layer in zip(self.backbone.children(),
