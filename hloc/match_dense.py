@@ -147,7 +147,7 @@ def get_unique_matches(match_ids, scores):
         return [0]
 
     isets1 = get_grouped_ids(match_ids[:, 0])
-    isets2 = get_grouped_ids(match_ids[:, 0])
+    isets2 = get_grouped_ids(match_ids[:, 1])
     uid1s = [ids[scores[ids].argmax()] for ids in isets1 if len(ids) > 0]
     uid2s = [ids[scores[ids].argmax()] for ids in isets2 if len(ids) > 0]
     uids = list(set(uid1s).intersection(uid2s))
