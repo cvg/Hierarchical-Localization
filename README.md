@@ -213,6 +213,27 @@ python -m hloc.reconstruction [...] --mapper_options ba_refine_focal_length=Fals
 ## Versions
 
 <details>
+<summary>v1.4 (July 2023)</summary>
+
+- New front ends
+  - global features: OpenIBL (https://github.com/cvg/Hierarchical-Localization/pull/164), CosPlace (https://github.com/cvg/Hierarchical-Localization/pull/257)
+  - patch descriptors: SOSNet (https://github.com/cvg/Hierarchical-Localization/pull/161), HardNet (https://github.com/cvg/Hierarchical-Localization/pull/235)
+  - detector & descriptor: DISK (https://github.com/cvg/Hierarchical-Localization/pull/233, https://github.com/cvg/Hierarchical-Localization/pull/291)
+  - sparse matching: AdaLAM (https://github.com/cvg/Hierarchical-Localization/pull/229), LightGlue (https://github.com/cvg/Hierarchical-Localization/pull/285)
+  - dense matching: LoFTR (https://github.com/cvg/Hierarchical-Localization/pull/173, https://github.com/cvg/Hierarchical-Localization/pull/243, https://github.com/cvg/Hierarchical-Localization/pull/254)
+- Triangulation: use known camera poses for two-view geometric verification (https://github.com/cvg/Hierarchical-Localization/pull/178)
+- Control over COLMAP import and reconstruction options (https://github.com/cvg/Hierarchical-Localization/pull/210)
+- Performance
+  - More reliably skip existing pairs in a match file (https://github.com/cvg/Hierarchical-Localization/pull/159)
+  - Faster HDF5 write (https://github.com/cvg/Hierarchical-Localization/pull/194)
+  - Parallel reading and writing in match_features (https://github.com/cvg/Hierarchical-Localization/pull/242)
+- Add scalar detection uncertainty for LaMAR (https://github.com/cvg/Hierarchical-Localization/pull/158)
+- Documentation (https://github.com/cvg/Hierarchical-Localization/pull/294)
+- Updated requirements: tqdm>=4.36.0, pycolmap>=0.3.0, kornia>=0.6.11
+
+</details>
+
+<details>
 <summary>v1.3 (January 2022)</summary>
 
 - Demo notebook in Google Colab

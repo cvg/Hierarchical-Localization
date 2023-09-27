@@ -10,8 +10,7 @@ from ...utils.read_write_model import write_model, read_model
 
 def scene_coordinates(p2D, R_w2c, t_w2c, depth, camera):
     assert len(depth) == len(p2D)
-    ret = pycolmap.image_to_world(p2D, camera._asdict())
-    p2D_norm = np.asarray(ret['world_points'])
+    p2D_norm = np.stack(pycolmap.Camera(camera._asdict()).image_to_world(p2D))
     p2D_h = np.concatenate([p2D_norm, np.ones_like(p2D_norm[:, :1])], 1)
     p3D_c = p2D_h * depth[:, None]
     p3D_w = (p3D_c - t_w2c) @ R_w2c
@@ -52,8 +51,7 @@ def project_to_image(p3D, R, t, camera, eps: float = 1e-4, pad: int = 1):
     p3D = (p3D @ R.T) + t
     visible = p3D[:, -1] >= eps  # keep points in front of the camera
     p2D_norm = p3D[:, :-1] / p3D[:, -1:].clip(min=eps)
-    ret = pycolmap.world_to_image(p2D_norm, camera._asdict())
-    p2D = np.asarray(ret['image_points'])
+    p2D = np.stack(pycolmap.Camera(camera._asdict()).world_to_image(p2D_norm))
     size = np.array([camera.width - pad - 1, camera.height - pad - 1])
     valid = np.all((p2D >= pad) & (p2D <= size), -1)
     valid &= visible
