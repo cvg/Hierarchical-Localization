@@ -20,11 +20,14 @@ try:
 except ImportError:
     logger.warning('pycolmap is not installed, some features may not work.')
 else:
-    minimal_version = version.parse('0.3.0')
+    min_version = version.parse('0.3.0')
+    max_version = version.parse('0.4.0')
     found_version = pycolmap.__version__
     if found_version != 'dev':
-        if version.parse(found_version) < minimal_version:
+        version = version.parse(found_version)
+        if version < min_version or version > max_version:
+            s = f'pycolmap>={min_version},<={max_version}'
             logger.warning(
-                'hloc now requires pycolmap>=%s but found pycolmap==%s, '
-                'please upgrade with `pip install --upgrade pycolmap`',
-                minimal_version, found_version)
+                'hloc now requires %s but found pycolmap==%s, '
+                'please upgrade with `pip install --upgrade "%s"`',
+                s, found_version, s)
