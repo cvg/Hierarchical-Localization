@@ -20,7 +20,7 @@ def cm_RdGn(x):
 
 
 def plot_images(imgs, titles=None, cmaps='gray', dpi=100, pad=.5,
-                adaptive=True):
+                adaptive=True, figsize=4.5):
     """Plot a set of images horizontally.
     Args:
         imgs: a list of NumPy or PyTorch images, RGB (H, W, 3) or mono (H, W).
@@ -36,20 +36,16 @@ def plot_images(imgs, titles=None, cmaps='gray', dpi=100, pad=.5,
         ratios = [i.shape[1] / i.shape[0] for i in imgs]  # W / H
     else:
         ratios = [4/3] * n
-    figsize = [sum(ratios)*4.5, 4.5]
-    fig, ax = plt.subplots(
+    figsize = [sum(ratios)*figsize, figsize]
+    fig, axs = plt.subplots(
         1, n, figsize=figsize, dpi=dpi, gridspec_kw={'width_ratios': ratios})
     if n == 1:
-        ax = [ax]
-    for i in range(n):
-        ax[i].imshow(imgs[i], cmap=plt.get_cmap(cmaps[i]))
-        ax[i].get_yaxis().set_ticks([])
-        ax[i].get_xaxis().set_ticks([])
-        ax[i].set_axis_off()
-        for spine in ax[i].spines.values():  # remove frame
-            spine.set_visible(False)
+        axs = [axs]
+    for i, (img, ax) in enumerate(zip(imgs, axs)):
+        ax.imshow(img, cmap=plt.get_cmap(cmaps[i]))
+        ax.set_axis_off()
         if titles:
-            ax[i].set_title(titles[i])
+            ax.set_title(titles[i])
     fig.tight_layout(pad=pad)
 
 
