@@ -20,7 +20,7 @@ def cm_RdGn(x):
 
 
 def plot_images(imgs, titles=None, cmaps='gray', dpi=100, pad=.5,
-                adaptive=True):
+                adaptive=True, figsize=4.5):
     """Plot a set of images horizontally.
     Args:
         imgs: a list of NumPy or PyTorch images, RGB (H, W, 3) or mono (H, W).
@@ -36,20 +36,16 @@ def plot_images(imgs, titles=None, cmaps='gray', dpi=100, pad=.5,
         ratios = [i.shape[1] / i.shape[0] for i in imgs]  # W / H
     else:
         ratios = [4/3] * n
-    figsize = [sum(ratios)*4.5, 4.5]
-    fig, ax = plt.subplots(
+    figsize = [sum(ratios)*figsize, figsize]
+    fig, axs = plt.subplots(
         1, n, figsize=figsize, dpi=dpi, gridspec_kw={'width_ratios': ratios})
     if n == 1:
-        ax = [ax]
-    for i in range(n):
-        ax[i].imshow(imgs[i], cmap=plt.get_cmap(cmaps[i]))
-        ax[i].get_yaxis().set_ticks([])
-        ax[i].get_xaxis().set_ticks([])
-        ax[i].set_axis_off()
-        for spine in ax[i].spines.values():  # remove frame
-            spine.set_visible(False)
+        axs = [axs]
+    for i, (img, ax) in enumerate(zip(imgs, axs)):
+        ax.imshow(img, cmap=plt.get_cmap(cmaps[i]))
+        ax.set_axis_off()
         if titles:
-            ax[i].set_title(titles[i])
+            ax.set_title(titles[i])
     fig.tight_layout(pad=pad)
 
 
@@ -91,14 +87,12 @@ def plot_matches(kpts0, kpts1, color=None, lw=1.5, ps=4, indices=(0, 1), a=1.):
 
     if lw > 0:
         # transform the points into the figure coordinate system
-        transFigure = fig.transFigure.inverted()
-        fkpts0 = transFigure.transform(ax0.transData.transform(kpts0))
-        fkpts1 = transFigure.transform(ax1.transData.transform(kpts1))
-        fig.lines += [matplotlib.lines.Line2D(
-            (fkpts0[i, 0], fkpts1[i, 0]), (fkpts0[i, 1], fkpts1[i, 1]),
-            zorder=1, transform=fig.transFigure, c=color[i], linewidth=lw,
-            alpha=a)
-            for i in range(len(kpts0))]
+        for i in range(len(kpts0)):
+            fig.add_artist(matplotlib.patches.ConnectionPatch(
+                xyA=(kpts0[i, 0], kpts0[i, 1]), coordsA=ax0.transData,
+                xyB=(kpts1[i, 0], kpts1[i, 1]), coordsB=ax1.transData,
+                zorder=1, color=color[i], linewidth=lw,
+                alpha=a))
 
     # freeze the axes to prevent the transform to change
     ax0.autoscale(enable=False)
