@@ -4,4 +4,5 @@ __pycache__
 .ipynb_checkpoints
 outputs/
 datasets/*
+query_processing_data/
 !datasets/sacre_coeur/
