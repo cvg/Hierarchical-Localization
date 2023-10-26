@@ -100,7 +100,7 @@ def assign_keypoints(kpts: np.ndarray,
                      cell_size: Optional[int] = None):
     if not update:
         # Without update this is just a NN search
-	if len(other_cpts) == 0 or len(kpts) == 0:
+        if len(other_cpts) == 0 or len(kpts) == 0:
             return np.full(len(kpts), -1)
         dist, kpt_ids = KDTree(np.array(other_cpts)).query(kpts)
         valid = (dist <= max_error)
