@@ -1,10 +1,10 @@
-import sys
+import os, sys
 from pathlib import Path
 import torchvision.transforms as tvf
 
 from ..utils.base_model import BaseModel
 
-r2d2_path = Path(__file__).parent / "../../third_party/r2d2"
+r2d2_path = os.path.dirname(__import__('hloc').__file__) + "/third_party/r2d2"
 sys.path.append(str(r2d2_path))
 from extract import load_network, NonMaxSuppression, extract_multiscale
 

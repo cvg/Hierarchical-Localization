@@ -5,3 +5,5 @@ __pycache__
 outputs/
 datasets/*
 !datasets/sacre_coeur/
+build
+hloc/third_party
