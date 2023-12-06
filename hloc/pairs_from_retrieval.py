@@ -67,6 +67,35 @@ def pairs_from_score_matrix(scores: torch.Tensor,
     return pairs
 
 
+def save_global_candidates_for_query(
+        db_descriptors, 
+        query_descriptor, 
+        query_image_names, 
+        num_matched,
+        output_file_path
+        ):
+    """
+    For each image in `query_image_names`, get a list of `num_matched` images from db that are closest to the 
+    query image
+    """
+    db_image_names = list_h5_names(db_descriptors)
+
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    db_desc = get_descriptors(db_image_names, db_descriptors)
+    query_desc = get_descriptors(query_image_names, query_descriptor)
+    sim = torch.einsum('id,jd->ij', query_desc.to(device), db_desc.to(device))
+
+    invalids = np.array(query_image_names)[:, None] == np.array(db_image_names)[None]
+    pairs = pairs_from_score_matrix(sim, invalids, num_matched, min_score=0)
+    pairs = [(query_image_names[i], db_image_names[j]) for i, j in pairs]
+
+    logger.info(f'Found {len(pairs)} pairs.')
+    with open(output_file_path, 'w') as f:
+        f.write('\n'.join(' '.join([i, j]) for i, j in pairs))
+    
+    if len(query_image_names) == 1: # If only one image is passed in, eeturn nearest candidates
+        return [p[1] for p in pairs]
+    
 def main(descriptors, output, num_matched,
          query_prefix=None, query_list=None,
          db_prefix=None, db_list=None, db_model=None, db_descriptors=None):

@@ -71,9 +71,13 @@ def pose_from_cluster(
         db_ids: List[int],
         features_path: Path,
         matches_path: Path,
+        features_q_path: Path = None,
         **kwargs):
 
-    kpq = get_keypoints(features_path, qname)
+    if features_q_path is None:
+        kpq = get_keypoints(features_path, qname)
+    else:
+        kpq = get_keypoints(features_q_path, qname)
     kpq += 0.5  # COLMAP coordinates
 
     kp_idx_to_3D = defaultdict(list)
@@ -122,13 +126,13 @@ def pose_from_cluster(
     }
     return ret, log
 
-
 def main(reference_sfm: Union[Path, pycolmap.Reconstruction],
-         queries: Path,
+         queries: Union[Path, list],
          retrieval: Path,
          features: Path,
          matches: Path,
          results: Path,
+         features_q: Path = None,
          ransac_thresh: int = 12,
          covisibility_clustering: bool = False,
          prepend_camera_name: bool = False,
@@ -138,7 +142,8 @@ def main(reference_sfm: Union[Path, pycolmap.Reconstruction],
     assert features.exists(), features
     assert matches.exists(), matches
 
-    queries = parse_image_lists(queries, with_intrinsics=True)
+    if isinstance(queries, Path):
+        queries = parse_image_lists(queries, with_intrinsics=True)
     retrieval_dict = parse_retrieval(retrieval)
 
     logger.info('Reading the 3D model...')
@@ -178,7 +183,7 @@ def main(reference_sfm: Union[Path, pycolmap.Reconstruction],
             logs_clusters = []
             for i, cluster_ids in enumerate(clusters):
                 ret, log = pose_from_cluster(
-                        localizer, qname, qcam, cluster_ids, features, matches)
+                        localizer, qname, qcam, cluster_ids, features, matches, features_q = features_q)
                 if ret['success'] and ret['num_inliers'] > best_inliers:
                     best_cluster = i
                     best_inliers = ret['num_inliers']
@@ -194,7 +199,7 @@ def main(reference_sfm: Union[Path, pycolmap.Reconstruction],
             }
         else:
             ret, log = pose_from_cluster(
-                    localizer, qname, qcam, db_ids, features, matches)
+                    localizer, qname, qcam, db_ids, features, matches, features_q = features_q)
             if ret['success']:
                 poses[qname] = (ret['qvec'], ret['tvec'])
             else:
