@@ -249,6 +249,8 @@ def main(conf: Dict,
         return feature_path
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    if 'device_id' in conf:
+        device = conf['device_id']
     Model = dynamic_load(extractors, conf['model']['name'])
     model = Model(conf['model']).eval().to(device)
 
