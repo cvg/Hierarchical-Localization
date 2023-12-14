@@ -17,6 +17,8 @@ from .utils.base_model import dynamic_load
 from .utils.parsers import parse_image_lists
 from .utils.io import read_image, list_h5_names
 
+# https://stackoverflow.com/questions/54013846/pytorch-dataloader-stucked-if-using-opencv-resize-method
+cv2.setNumThreads(0)
 
 '''
 A set of standard configurations that can be directly selected from the command
