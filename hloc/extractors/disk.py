@@ -27,6 +27,6 @@ class DISK(BaseModel):
         )
         return {
             'keypoints': [f.keypoints for f in features],
-            'keypoint_scores': [f.detection_scores for f in features],
+            'scores': [f.detection_scores for f in features],
             'descriptors': [f.descriptors.t() for f in features],
         }
