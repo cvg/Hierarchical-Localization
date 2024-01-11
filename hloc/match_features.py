@@ -146,6 +146,12 @@ def writer_fn(inp, match_path):
         if 'matching_scores0' in pred:
             scores = pred['matching_scores0'][0].cpu().half().numpy()
             grp.create_dataset('matching_scores0', data=scores)
+        if 'matches' in pred:
+            matches = pred['matches'][0].cpu().short().numpy()
+            grp.create_dataset('matches', data=matches)
+        if 'scores' in pred:
+            scores = pred['scores'][0].cpu().half().numpy()
+            grp.create_dataset('scores', data=scores)
 
 
 def main(conf: Dict,
