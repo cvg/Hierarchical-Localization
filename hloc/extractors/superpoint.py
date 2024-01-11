@@ -1,10 +1,10 @@
-import sys
+import os, sys
 from pathlib import Path
 import torch
 
 from ..utils.base_model import BaseModel
 
-sys.path.append(str(Path(__file__).parent / '../../third_party'))
+sys.path.append(str(os.path.dirname(__import__('hloc').__file__) + '/third_party/'))
 from SuperGluePretrainedNetwork.models import superpoint  # noqa E402
 
 

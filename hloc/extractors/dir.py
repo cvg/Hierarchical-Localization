@@ -1,4 +1,4 @@
-import sys
+import os, sys
 from pathlib import Path
 import torch
 from zipfile import ZipFile
@@ -9,7 +9,7 @@ import gdown
 from ..utils.base_model import BaseModel
 
 sys.path.append(str(
-    Path(__file__).parent / '../../third_party/deep-image-retrieval'))
+    os.path.dirname(__import__('hloc').__file__) + '/third_party/d2net/deep-image-retrieval'))
 os.environ['DB_ROOT'] = ''  # required by dirtorch
 
 from dirtorch.utils import common  # noqa: E402
