@@ -1,8 +1,9 @@
-from typing import Tuple
 from pathlib import Path
-import numpy as np
+from typing import Tuple
+
 import cv2
 import h5py
+import numpy as np
 
 from .parsers import names_to_pair, names_to_pair_old
 
@@ -14,7 +15,7 @@ def read_image(path, grayscale=False):
         mode = cv2.IMREAD_COLOR
     image = cv2.imread(str(path), mode)
     if image is None:
-        raise ValueError(f'Cannot read image {path}.')
+        raise ValueError(f"Cannot read image {path}.")
     if not grayscale and len(image.shape) == 3:
         image = image[:, :, ::-1]  # BGR to RGB
     return image
@@ -22,20 +23,23 @@ def read_image(path, grayscale=False):
 
 def list_h5_names(path):
     names = []
-    with h5py.File(str(path), 'r', libver='latest') as fd:
+    with h5py.File(str(path), "r", libver="latest") as fd:
+
         def visit_fn(_, obj):
             if isinstance(obj, h5py.Dataset):
-                names.append(obj.parent.name.strip('/'))
+                names.append(obj.parent.name.strip("/"))
+
         fd.visititems(visit_fn)
     return list(set(names))
 
 
-def get_keypoints(path: Path, name: str,
-                  return_uncertainty: bool = False) -> np.ndarray:
-    with h5py.File(str(path), 'r', libver='latest') as hfile:
-        dset = hfile[name]['keypoints']
+def get_keypoints(
+    path: Path, name: str, return_uncertainty: bool = False
+) -> np.ndarray:
+    with h5py.File(str(path), "r", libver="latest") as hfile:
+        dset = hfile[name]["keypoints"]
         p = dset.__array__()
-        uncertainty = dset.attrs.get('uncertainty')
+        uncertainty = dset.attrs.get("uncertainty")
     if return_uncertainty:
         return p, uncertainty
     return p
@@ -56,15 +60,16 @@ def find_pair(hfile: h5py.File, name0: str, name1: str):
     if pair in hfile:
         return pair, True
     raise ValueError(
-        f'Could not find pair {(name0, name1)}... '
-        'Maybe you matched with a different list of pairs? ')
+        f"Could not find pair {(name0, name1)}... "
+        "Maybe you matched with a different list of pairs? "
+    )
 
 
 def get_matches(path: Path, name0: str, name1: str) -> Tuple[np.ndarray]:
-    with h5py.File(str(path), 'r', libver='latest') as hfile:
+    with h5py.File(str(path), "r", libver="latest") as hfile:
         pair, reverse = find_pair(hfile, name0, name1)
-        matches = hfile[pair]['matches0'].__array__()
-        scores = hfile[pair]['matching_scores0'].__array__()
+        matches = hfile[pair]["matches0"].__array__()
+        scores = hfile[pair]["matching_scores0"].__array__()
     idx = np.where(matches != -1)[0]
     matches = np.stack([idx, matches[idx]], -1)
     if reverse:
