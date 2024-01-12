@@ -1,18 +1,19 @@
 import argparse
+from collections import defaultdict
 from pathlib import Path
+
 import numpy as np
 from tqdm import tqdm
-from collections import defaultdict
 
 from . import logger
 from .utils.read_write_model import read_model
 
 
 def main(model, output, num_matched):
-    logger.info('Reading the COLMAP model...')
+    logger.info("Reading the COLMAP model...")
     cameras, images, points3D = read_model(model)
 
-    logger.info('Extracting image pairs from covisibility info...')
+    logger.info("Extracting image pairs from covisibility info...")
     pairs = []
     for image_id, image in tqdm(images.items()):
         matched = image.point3D_ids != -1
@@ -25,7 +26,7 @@ def main(model, output, num_matched):
                     covis[image_covis_id] += 1
 
         if len(covis) == 0:
-            logger.info(f'Image {image_id} does not have any covisibility.')
+            logger.info(f"Image {image_id} does not have any covisibility.")
             continue
 
         covis_ids = np.array(list(covis.keys()))
@@ -45,15 +46,15 @@ def main(model, output, num_matched):
             pair = (image.name, images[i].name)
             pairs.append(pair)
 
-    logger.info(f'Found {len(pairs)} pairs.')
-    with open(output, 'w') as f:
-        f.write('\n'.join(' '.join([i, j]) for i, j in pairs))
+    logger.info(f"Found {len(pairs)} pairs.")
+    with open(output, "w") as f:
+        f.write("\n".join(" ".join([i, j]) for i, j in pairs))
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', required=True, type=Path)
-    parser.add_argument('--output', required=True, type=Path)
-    parser.add_argument('--num_matched', required=True, type=int)
+    parser.add_argument("--model", required=True, type=Path)
+    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--num_matched", required=True, type=int)
     args = parser.parse_args()
     main(**args.__dict__)

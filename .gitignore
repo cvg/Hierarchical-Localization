@@ -1,3 +1,5 @@
+build
+.venv
 __pycache__
 *.pyc
 *.egg-info
@@ -5,3 +7,4 @@ __pycache__
 outputs/
 datasets/*
 !datasets/sacre_coeur/
+datasets/sacre_coeur/query

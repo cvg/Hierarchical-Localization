@@ -1,11 +1,12 @@
 from pathlib import Path
-import numpy as np
-import torch
-import PIL.Image
-from tqdm import tqdm
-import pycolmap
 
-from ...utils.read_write_model import write_model, read_model
+import numpy as np
+import PIL.Image
+import pycolmap
+import torch
+from tqdm import tqdm
+
+from ...utils.read_write_model import read_model, write_model
 
 
 def scene_coordinates(p2D, R_w2c, t_w2c, depth, camera):
@@ -19,7 +20,7 @@ def scene_coordinates(p2D, R_w2c, t_w2c, depth, camera):
 
 def interpolate_depth(depth, kp):
     h, w = depth.shape
-    kp = kp / np.array([[w-1, h-1]]) * 2 - 1
+    kp = kp / np.array([[w - 1, h - 1]]) * 2 - 1
     assert np.all(kp > -1) and np.all(kp < 1)
     depth = torch.from_numpy(depth)[None, None]
     kp = torch.from_numpy(kp)[None, None]
@@ -27,10 +28,10 @@ def interpolate_depth(depth, kp):
 
     # To maximize the number of points that have depth:
     # do bilinear interpolation first and then nearest for the remaining points
-    interp_lin = grid_sample(
-        depth, kp, align_corners=True, mode='bilinear')[0, :, 0]
+    interp_lin = grid_sample(depth, kp, align_corners=True, mode="bilinear")[0, :, 0]
     interp_nn = torch.nn.functional.grid_sample(
-        depth, kp, align_corners=True, mode='nearest')[0, :, 0]
+        depth, kp, align_corners=True, mode="nearest"
+    )[0, :, 0]
     interp = torch.where(torch.isnan(interp_lin), interp_nn, interp_lin)
     valid = ~torch.any(torch.isnan(interp), 0)
 
@@ -40,10 +41,10 @@ def interpolate_depth(depth, kp):
 
 
 def image_path_to_rendered_depth_path(image_name):
-    parts = image_name.split('/')
-    name = '_'.join([''.join(parts[0].split('-')), parts[1]])
-    name = name.replace('color', 'pose')
-    name = name.replace('png', 'depth.tiff')
+    parts = image_name.split("/")
+    name = "_".join(["".join(parts[0].split("-")), parts[1]])
+    name = name.replace("color", "pose")
+    name = name.replace("png", "depth.tiff")
     return name
 
 
@@ -65,8 +66,8 @@ def correct_sfm_with_gt_depth(sfm_path, depth_folder_path, output_path):
         depth_name = image_path_to_rendered_depth_path(image_name)
 
         depth = PIL.Image.open(Path(depth_folder_path) / depth_name)
-        depth = np.array(depth).astype('float64')
-        depth = depth/1000.  # mm to meter
+        depth = np.array(depth).astype("float64")
+        depth = depth / 1000.0  # mm to meter
         depth[(depth == 0.0) | (depth > 1000.0)] = np.nan
 
         R_w2c, t_w2c = img.qvec2rotmat(), img.tvec
@@ -77,12 +78,17 @@ def correct_sfm_with_gt_depth(sfm_path, depth_folder_path, output_path):
         p2Ds, valids_projected = project_to_image(p3Ds, R_w2c, t_w2c, camera)
         invalid_p3D_ids = p3D_ids[p3D_ids != -1][~valids_projected]
         interp_depth, valids_backprojected = interpolate_depth(depth, p2Ds)
-        scs = scene_coordinates(p2Ds[valids_backprojected], R_w2c, t_w2c,
-                                interp_depth[valids_backprojected],
-                                camera)
+        scs = scene_coordinates(
+            p2Ds[valids_backprojected],
+            R_w2c,
+            t_w2c,
+            interp_depth[valids_backprojected],
+            camera,
+        )
         invalid_p3D_ids = np.append(
             invalid_p3D_ids,
-            p3D_ids[p3D_ids != -1][valids_projected][~valids_backprojected])
+            p3D_ids[p3D_ids != -1][valids_projected][~valids_backprojected],
+        )
         for p3did in invalid_p3D_ids:
             if p3did == -1:
                 continue
@@ -91,8 +97,10 @@ def correct_sfm_with_gt_depth(sfm_path, depth_folder_path, output_path):
                 invalid_imgids = list(np.where(obs_imgids == img.id)[0])
                 points3D[p3did] = points3D[p3did]._replace(
                     image_ids=np.delete(obs_imgids, invalid_imgids),
-                    point2D_idxs=np.delete(points3D[p3did].point2D_idxs,
-                                           invalid_imgids))
+                    point2D_idxs=np.delete(
+                        points3D[p3did].point2D_idxs, invalid_imgids
+                    ),
+                )
 
         new_p3D_ids = p3D_ids.copy()
         sub_p3D_ids = new_p3D_ids[new_p3D_ids != -1]
@@ -103,8 +111,9 @@ def correct_sfm_with_gt_depth(sfm_path, depth_folder_path, output_path):
         new_p3D_ids[new_p3D_ids != -1] = sub_p3D_ids
         img = img._replace(point3D_ids=new_p3D_ids)
 
-        assert len(img.point3D_ids[img.point3D_ids != -1]) == len(scs), (
-                f"{len(scs)}, {len(img.point3D_ids[img.point3D_ids != -1])}")
+        assert len(img.point3D_ids[img.point3D_ids != -1]) == len(
+            scs
+        ), f"{len(scs)}, {len(img.point3D_ids[img.point3D_ids != -1])}"
         for i, p3did in enumerate(img.point3D_ids[img.point3D_ids != -1]):
             points3D[p3did] = points3D[p3did]._replace(xyz=scs[i])
         images[imgid] = img
@@ -113,14 +122,13 @@ def correct_sfm_with_gt_depth(sfm_path, depth_folder_path, output_path):
     write_model(cameras, images, points3D, output_path)
 
 
-if __name__ == '__main__':
-    dataset = Path('datasets/7scenes')
-    outputs = Path('outputs/7Scenes')
+if __name__ == "__main__":
+    dataset = Path("datasets/7scenes")
+    outputs = Path("outputs/7Scenes")
 
-    SCENES = ['chess', 'fire', 'heads', 'office', 'pumpkin',
-              'redkitchen', 'stairs']
+    SCENES = ["chess", "fire", "heads", "office", "pumpkin", "redkitchen", "stairs"]
     for scene in SCENES:
-        sfm_path = outputs / scene / 'sfm_superpoint+superglue'
-        depth_path = dataset / f'depth/7scenes_{scene}/train/depth'
-        output_path = outputs / scene / 'sfm_superpoint+superglue+depth'
+        sfm_path = outputs / scene / "sfm_superpoint+superglue"
+        depth_path = dataset / f"depth/7scenes_{scene}/train/depth"
+        output_path = outputs / scene / "sfm_superpoint+superglue+depth"
         correct_sfm_with_gt_depth(sfm_path, depth_path, output_path)
