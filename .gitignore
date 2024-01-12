@@ -1,3 +1,4 @@
+build
 .venv
 __pycache__
 *.pyc
@@ -6,3 +7,4 @@ __pycache__
 outputs/
 datasets/*
 !datasets/sacre_coeur/
+datasets/sacre_coeur/query
