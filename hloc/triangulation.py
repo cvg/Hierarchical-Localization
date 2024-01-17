@@ -115,8 +115,14 @@ def estimation_and_geometric_verification(
     logger.info("Performing geometric verification of the matches...")
     with OutputCapture(verbose):
         with pycolmap.ostream():
+            two_view_geometry_options = pycolmap.TwoViewGeometryOptions()
+            ransac_options = pycolmap.RANSACOptions()
+            ransac_options.max_num_trials = 20000
+            ransac_options.min_inlier_ratio = 0.1
+            two_view_geometry_options.ransac = ransac_options
+
             pycolmap.verify_matches(
-                database_path, pairs_path, max_num_trials=20000, min_inlier_ratio=0.1
+                database_path, pairs_path, two_view_geometry_options
             )
 
 
