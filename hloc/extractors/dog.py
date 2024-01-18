@@ -61,7 +61,7 @@ class DoG(BaseModel):
                 device=getattr(pycolmap.Device, "cuda" if use_gpu else "cpu"),
             )
 
-        keypoints, scores, descriptors = self.sift.extract(image_np)
+        keypoints, descriptors = self.sift.extract(image_np)
         scales = keypoints[:, 2]
         oris = np.rad2deg(keypoints[:, 3])
 
@@ -96,7 +96,7 @@ class DoG(BaseModel):
         keypoints = torch.from_numpy(keypoints[:, :2])  # keep only x, y
         scales = torch.from_numpy(scales)
         oris = torch.from_numpy(oris)
-        scores = torch.from_numpy(scores)
+        scores = keypoints.new_zeros(len(keypoints))  # no scores for SIFT yet
 
         if self.conf["max_keypoints"] != -1:
             # TODO: check that the scores from PyCOLMAP are 100% correct,
