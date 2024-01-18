@@ -116,7 +116,9 @@ def estimation_and_geometric_verification(
     with OutputCapture(verbose):
         with pycolmap.ostream():
             pycolmap.verify_matches(
-                database_path, pairs_path, max_num_trials=20000, min_inlier_ratio=0.1
+                database_path,
+                pairs_path,
+                options=dict(ransac=dict(max_num_trials=20000, min_inlier_ratio=0.1)),
             )
 
 
