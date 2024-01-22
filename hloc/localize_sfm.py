@@ -152,7 +152,7 @@ def main(
     config = {"estimation": {"ransac": {"max_error": ransac_thresh}}, **(config or {})}
     localizer = QueryLocalizer(reference_sfm, config)
 
-    cam_t_world = {}
+    cam_from_world = {}
     logs = {
         "features": features,
         "matches": matches,
@@ -187,7 +187,7 @@ def main(
                 logs_clusters.append(log)
             if best_cluster is not None:
                 ret = logs_clusters[best_cluster]["PnP_ret"]
-                cam_t_world[qname] = ret["cam_from_world"]
+                cam_from_world[qname] = ret["cam_from_world"]
             logs["loc"][qname] = {
                 "db": db_ids,
                 "best_cluster": best_cluster,
@@ -199,17 +199,17 @@ def main(
                 localizer, qname, qcam, db_ids, features, matches
             )
             if ret is not None:
-                cam_t_world[qname] = ret["cam_from_world"]
+                cam_from_world[qname] = ret["cam_from_world"]
             else:
                 closest = reference_sfm.images[db_ids[0]]
-                cam_t_world[qname] = closest.cam_from_world
+                cam_from_world[qname] = closest.cam_from_world
             log["covisibility_clustering"] = covisibility_clustering
             logs["loc"][qname] = log
 
-    logger.info(f"Localized {len(cam_t_world)} / {len(queries)} images.")
+    logger.info(f"Localized {len(cam_from_world)} / {len(queries)} images.")
     logger.info(f"Writing poses to {results}...")
     with open(results, "w") as f:
-        for query, t in cam_t_world.items():
+        for query, t in cam_from_world.items():
             qvec = " ".join(map(str, t.rotation.quat()[[3, 0, 1, 2]]))
             tvec = " ".join(map(str, t.translation))
             name = query.split("/")[-1]
