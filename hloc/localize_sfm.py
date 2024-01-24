@@ -210,7 +210,7 @@ def main(
     logger.info(f"Writing poses to {results}...")
     with open(results, "w") as f:
         for query, t in cam_from_world.items():
-            qvec = " ".join(map(str, t.rotation.quat()[[3, 0, 1, 2]]))
+            qvec = " ".join(map(str, t.rotation.quat[[3, 0, 1, 2]]))
             tvec = " ".join(map(str, t.translation))
             name = query.split("/")[-1]
             if prepend_camera_name:
