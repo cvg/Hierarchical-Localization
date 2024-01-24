@@ -45,7 +45,7 @@ def create_db_from_model(
 
     for i, camera in reconstruction.cameras.items():
         db.add_camera(
-            camera.model_id,
+            camera.model.value,
             camera.width,
             camera.height,
             camera.params,
@@ -145,7 +145,7 @@ def geometric_verification(
         kps0, noise0 = get_keypoints(features_path, name0, return_uncertainty=True)
         noise0 = 1.0 if noise0 is None else noise0
         if len(kps0) > 0:
-            kps0 = np.stack(cam0.image_to_world(kps0))
+            kps0 = np.stack(cam0.cam_from_img(kps0))
         else:
             kps0 = np.zeros((0, 2))
 
@@ -156,7 +156,7 @@ def geometric_verification(
             kps1, noise1 = get_keypoints(features_path, name1, return_uncertainty=True)
             noise1 = 1.0 if noise1 is None else noise1
             if len(kps1) > 0:
-                kps1 = np.stack(cam1.image_to_world(kps1))
+                kps1 = np.stack(cam1.cam_from_img(kps1))
             else:
                 kps1 = np.zeros((0, 2))
 
@@ -170,15 +170,13 @@ def geometric_verification(
                 db.add_two_view_geometry(id0, id1, matches)
                 continue
 
-            qvec_01, tvec_01 = pycolmap.relative_pose(
-                image0.qvec, image0.tvec, image1.qvec, image1.tvec
-            )
-            _, errors0, errors1 = compute_epipolar_errors(
-                qvec_01, tvec_01, kps0[matches[:, 0]], kps1[matches[:, 1]]
+            cam1_from_cam0 = image1.cam_from_world * image0.cam_from_world.inverse()
+            errors0, errors1 = compute_epipolar_errors(
+                cam1_from_cam0, kps0[matches[:, 0]], kps1[matches[:, 1]]
             )
             valid_matches = np.logical_and(
-                errors0 <= max_error * noise0 / cam0.mean_focal_length(),
-                errors1 <= max_error * noise1 / cam1.mean_focal_length(),
+                errors0 <= cam0.cam_from_img_threshold(noise0 * max_error),
+                errors1 <= cam1.cam_from_img_threshold(noise1 * max_error),
             )
             # TODO: We could also add E to the database, but we need
             # to reverse the transformations if id0 > id1 in utils/database.py.
