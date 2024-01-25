@@ -85,7 +85,7 @@ def pose_from_cluster(
     num_matches = 0
     for i, db_id in enumerate(db_ids):
         image = localizer.reconstruction.images[db_id]
-        if image.num_points3D() == 0:
+        if image.num_points3D == 0:
             logger.debug(f"No 3D points found for {image.name}.")
             continue
         points3D_ids = np.array(
@@ -106,12 +106,8 @@ def pose_from_cluster(
     mkp_idxs = [i for i in idxs for _ in kp_idx_to_3D[i]]
     mp3d_ids = [j for i in idxs for j in kp_idx_to_3D[i]]
     ret = localizer.localize(kpq, mkp_idxs, mp3d_ids, query_camera, **kwargs)
-    ret["camera"] = {
-        "model": query_camera.model_name,
-        "width": query_camera.width,
-        "height": query_camera.height,
-        "params": query_camera.params,
-    }
+    if ret is not None:
+        ret["camera"] = query_camera
 
     # mostly for logging and post-processing
     mkp_to_3D_to_db = [
@@ -156,7 +152,7 @@ def main(
     config = {"estimation": {"ransac": {"max_error": ransac_thresh}}, **(config or {})}
     localizer = QueryLocalizer(reference_sfm, config)
 
-    poses = {}
+    cam_from_world = {}
     logs = {
         "features": features,
         "matches": matches,
@@ -185,13 +181,13 @@ def main(
                 ret, log = pose_from_cluster(
                     localizer, qname, qcam, cluster_ids, features, matches
                 )
-                if ret["success"] and ret["num_inliers"] > best_inliers:
+                if ret is not None and ret["num_inliers"] > best_inliers:
                     best_cluster = i
                     best_inliers = ret["num_inliers"]
                 logs_clusters.append(log)
             if best_cluster is not None:
                 ret = logs_clusters[best_cluster]["PnP_ret"]
-                poses[qname] = (ret["qvec"], ret["tvec"])
+                cam_from_world[qname] = ret["cam_from_world"]
             logs["loc"][qname] = {
                 "db": db_ids,
                 "best_cluster": best_cluster,
@@ -202,28 +198,28 @@ def main(
             ret, log = pose_from_cluster(
                 localizer, qname, qcam, db_ids, features, matches
             )
-            if ret["success"]:
-                poses[qname] = (ret["qvec"], ret["tvec"])
+            if ret is not None:
+                cam_from_world[qname] = ret["cam_from_world"]
             else:
                 closest = reference_sfm.images[db_ids[0]]
-                poses[qname] = (closest.qvec, closest.tvec)
+                cam_from_world[qname] = closest.cam_from_world
             log["covisibility_clustering"] = covisibility_clustering
             logs["loc"][qname] = log
 
-    logger.info(f"Localized {len(poses)} / {len(queries)} images.")
+    logger.info(f"Localized {len(cam_from_world)} / {len(queries)} images.")
     logger.info(f"Writing poses to {results}...")
     with open(results, "w") as f:
-        for q in poses:
-            qvec, tvec = poses[q]
-            qvec = " ".join(map(str, qvec))
-            tvec = " ".join(map(str, tvec))
-            name = q.split("/")[-1]
+        for query, t in cam_from_world.items():
+            qvec = " ".join(map(str, t.rotation.quat[[3, 0, 1, 2]]))
+            tvec = " ".join(map(str, t.translation))
+            name = query.split("/")[-1]
             if prepend_camera_name:
-                name = q.split("/")[-2] + "/" + name
+                name = query.split("/")[-2] + "/" + name
             f.write(f"{name} {qvec} {tvec}\n")
 
     logs_path = f"{results}_logs.pkl"
     logger.info(f"Writing logs to {logs_path}...")
+    # TODO: Resolve pickling issue with pycolmap objects.
     with open(logs_path, "wb") as f:
         pickle.dump(logs, f)
     logger.info("Done!")

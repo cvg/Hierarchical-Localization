@@ -19,7 +19,9 @@ def parse_image_list(path, with_intrinsics=False):
             if with_intrinsics:
                 model, width, height, *params = data
                 params = np.array(params, float)
-                cam = pycolmap.Camera(model, int(width), int(height), params)
+                cam = pycolmap.Camera(
+                    model=model, width=int(width), height=int(height), params=params
+                )
                 images.append((name, cam))
             else:
                 images.append(name)
