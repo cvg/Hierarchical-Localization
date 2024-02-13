@@ -92,6 +92,7 @@ def plot_camera(
         scale = 0.5 * image_extent / world_extent
     else:
         scale = 1.0
+    scale = 10.0
     corners = to_homogeneous(corners) @ np.linalg.inv(K).T
     corners = (corners / 2 * scale) @ R.T + t
     legendgroup = legendgroup if legendgroup is not None else name
