@@ -45,7 +45,7 @@ def visualize_sfm_2d(
             p3ids = [p.point3D_id for p in image.points2D if p.has_point3D()]
             z = np.array(
                 [
-                    image.transform_to_image(reconstruction.points3D[j].xyz)[-1]
+                    (image.cam_from_world * reconstruction.points3D[j].xyz)[-1]
                     for j in p3ids
                 ]
             )
