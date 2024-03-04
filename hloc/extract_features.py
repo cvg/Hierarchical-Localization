@@ -114,6 +114,34 @@ confs = {
             "resize_max": 1600,
         },
     },
+    "aliked-n16-rot": {
+        "output": "feats-aliked-n16-rot",
+        "model": {
+            "name": "aliked",
+            "model_name": "aliked-n16-rot",
+            "max_num_keypoints": -1,
+            "detection_threshold": 0.2,
+            "nms_radius": 2,
+        },
+        "preprocessing": {
+            "grayscale": False,
+            "resize_max": 1024,
+        },
+    },
+    "aliked-n32": {
+        "output": "feats-aliked-n32",
+        "model": {
+            "name": "aliked",
+            "model_name": "aliked-n32",
+            "max_num_keypoints": -1,
+            "detection_threshold": 0.2,
+            "nms_radius": 2,
+        },
+        "preprocessing": {
+            "grayscale": False,
+            "resize_max": 1024,
+        },
+    },
     # Global descriptors
     "dir": {
         "output": "global-feats-dir",
