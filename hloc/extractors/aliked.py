@@ -17,7 +17,6 @@ class ALIKED(BaseModel):
         self.model = ALIKED_(**conf)
 
     def _forward(self, data):
-        image = data["image"]
         features = self.model(data)
 
         return {
