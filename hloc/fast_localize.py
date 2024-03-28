@@ -24,7 +24,7 @@ def get_local_features(query_processing_data_dir,
     query_image_dataset = ImageDataset(query_processing_data_dir, local_feature_conf['preprocessing'], [query_image_name])
 
     query_image_dataset_loader = torch.utils.data.DataLoader(
-            query_image_dataset, num_workers=1, shuffle=False, pin_memory=True)
+            query_image_dataset, num_workers=1, shuffle=False)
 
     for idx, data in enumerate(query_image_dataset_loader):
         with torch.no_grad():
@@ -60,7 +60,7 @@ def get_global_descriptors(query_processing_data_dir,
     """
     query_image_dataset = ImageDataset(query_processing_data_dir, global_descriptor_conf['preprocessing'], [query_image_name])
     query_image_dataset_loader = torch.utils.data.DataLoader(
-            query_image_dataset, num_workers=1, shuffle=False, pin_memory=True)
+            query_image_dataset, num_workers=1, shuffle=False)
 
     for idx, data in enumerate(query_image_dataset_loader):
         with torch.no_grad():
