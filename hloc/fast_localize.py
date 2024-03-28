@@ -28,7 +28,7 @@ def get_local_features(query_processing_data_dir,
 
     for idx, data in enumerate(query_image_dataset_loader):
         with torch.no_grad():
-            local_features = local_features_extractor_model({'image': data['image'].to(device, non_blocking=True)})
+            local_features = local_features_extractor_model({'image': data['image'].to(device)})
         local_features = {k: v[0] for k, v in local_features.items()}
 
         local_features['image_size'] = original_size = data['original_size'][0]
@@ -64,7 +64,7 @@ def get_global_descriptors(query_processing_data_dir,
 
     for idx, data in enumerate(query_image_dataset_loader):
         with torch.no_grad():
-            global_descriptor = global_descriptor_model({'image': data['image'].to(device, non_blocking=True)})
+            global_descriptor = global_descriptor_model({'image': data['image'].to(device)})
         global_descriptor = {k: v[0] for k, v in global_descriptor.items()}
         global_descriptor['image_size'] = original_size = data['original_size'][0]
     
