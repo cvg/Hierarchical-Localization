@@ -4,9 +4,43 @@ import numpy as np
 import pycolmap
 import torch
 
-from .extract_features import ImageDataset
+from .extract_features import ImageDataset, resize_image
 from .utils.parsers import names_to_pair
+from .utils.io import read_image
 from .localize_sfm import QueryLocalizer
+
+_default_preprocessing_conf = {
+    'globs': ['*.jpg', '*.png', '*.jpeg', '*.JPG', '*.PNG'],
+    'grayscale': False,
+    'resize_max': None,
+    'resize_force': False,
+    'interpolation': 'cv2_area',  # pil_linear is more accurate but slower
+}
+
+def _get_processed_image(query_dir, query_img_name, preprocessing_conf):
+    preprocessing_conf = {**_default_preprocessing_conf, **preprocessing_conf}
+
+    image = read_image(query_dir / query_img_name, preprocessing_conf['grayscale'])
+    image = image.astype(np.float32)
+    size = image.shape[:2][::-1]
+
+    if preprocessing_conf['resize_max'] and (preprocessing_conf['resize_force']
+                                or max(size) > preprocessing_conf['resize_max']):
+        scale = preprocessing_conf['resize_max'] / max(size)
+        size_new = tuple(int(round(x*scale)) for x in size)
+        image = resize_image(image, size_new, preprocessing_conf['interpolation'])
+
+    if preprocessing_conf['grayscale']:
+        image = image[None]
+    else:
+        image = image.transpose((2, 0, 1))  # HxWxC to CxHxW
+    image = image / 255.
+
+    data = {
+        'image': torch.from_numpy(image),
+        'original_size': torch.from_numpy(np.array(size)),
+    }
+    return data
 
 def get_local_features(query_processing_data_dir, 
              query_image_name,
@@ -21,26 +55,21 @@ def get_local_features(query_processing_data_dir,
         query_image_name: Name of the query image.
         local_features_extractor_model: Local feature extractor model.
     """
-    query_image_dataset = ImageDataset(query_processing_data_dir, local_feature_conf['preprocessing'], [query_image_name])
+    data = _get_processed_image(query_processing_data_dir, query_image_name, local_feature_conf['preprocessing'])
+    with torch.no_grad():
+        local_features = local_features_extractor_model({'image': data['image'].unsqueeze(0).to(device)})
+    local_features = {k: v[0] for k, v in local_features.items()}
 
-    query_image_dataset_loader = torch.utils.data.DataLoader(
-            query_image_dataset, num_workers=1, shuffle=False)
-
-    for idx, data in enumerate(query_image_dataset_loader):
-        with torch.no_grad():
-            local_features = local_features_extractor_model({'image': data['image'].to(device)})
-        local_features = {k: v[0] for k, v in local_features.items()}
-
-        local_features['image_size'] = original_size = data['original_size'][0]
-        
-        # Scale keypoints
-        size = np.array(data['image'].shape[-2:][::-1])
-        scales = (original_size / size).to(device, dtype = torch.float32)
-        local_features['keypoints'] = (local_features['keypoints'] + .5) * scales[None] - .5
-        if 'scales' in local_features:
-            local_features['scales'] *= scales.mean()
-        # add keypoint uncertainties scaled to the original resolution
-        uncertainty = getattr(local_features_extractor_model, 'detection_noise', 1) * scales.mean()
+    local_features['image_size'] = original_size = data['original_size']
+    
+    # Scale keypoints
+    size = np.array(data['image'].shape[-2:][::-1])
+    scales = (original_size / size).to(device, dtype = torch.float32)
+    local_features['keypoints'] = (local_features['keypoints'] + .5) * scales[None] - .5
+    if 'scales' in local_features:
+        local_features['scales'] *= scales.mean()
+    # add keypoint uncertainties scaled to the original resolution
+    uncertainty = getattr(local_features_extractor_model, 'detection_noise', 1) * scales.mean()
     
     return local_features, uncertainty
 
@@ -58,15 +87,11 @@ def get_global_descriptors(query_processing_data_dir,
         global_descriptor_model: Global descriptor model.
         device: Device to run the model on.
     """
-    query_image_dataset = ImageDataset(query_processing_data_dir, global_descriptor_conf['preprocessing'], [query_image_name])
-    query_image_dataset_loader = torch.utils.data.DataLoader(
-            query_image_dataset, num_workers=1, shuffle=False)
-
-    for idx, data in enumerate(query_image_dataset_loader):
-        with torch.no_grad():
-            global_descriptor = global_descriptor_model({'image': data['image'].to(device)})
-        global_descriptor = {k: v[0] for k, v in global_descriptor.items()}
-        global_descriptor['image_size'] = original_size = data['original_size'][0]
+    data = _get_processed_image(query_processing_data_dir, query_image_name, global_descriptor_conf['preprocessing'])
+    with torch.no_grad():
+        global_descriptor = global_descriptor_model({'image': data['image'].unsqueeze(0).to(device)})
+    global_descriptor = {k: v[0] for k, v in global_descriptor.items()}
+    global_descriptor['image_size'] = data['original_size'][0]
     
     return global_descriptor
 
@@ -208,6 +233,8 @@ def localize(query_processing_data_dir, query_image_name,
              db_global_descriptors, db_image_names,
              db_local_features_path, matcher_model, 
              db_reconstruction):
+    print(f"Called Localize for image{query_processing_data_dir}")
+    print("Running get_local_features")
     local_features, uncertainty = get_local_features(
         query_processing_data_dir = query_processing_data_dir, 
         query_image_name = query_image_name,
@@ -215,7 +242,9 @@ def localize(query_processing_data_dir, query_image_name,
         local_features_extractor_model = local_features_extractor_model,
         device = device
     )
+    print("Finished get_local_features")
 
+    print("Running get_global_descriptors")
     global_descriptor = get_global_descriptors(
         query_processing_data_dir = query_processing_data_dir, 
         query_image_name = query_image_name, 
@@ -223,13 +252,17 @@ def localize(query_processing_data_dir, query_image_name,
         global_descriptor_model = global_descriptor_model, 
         device = device
     )
+    print("Finished get_global_descriptors")
 
+    print("Running get_candidate_matches")
     nearest_candidate_images, nearest_image_descriptors = get_candidate_matches(
         global_descriptor = global_descriptor, 
         db_global_descriptors = db_global_descriptors, 
         db_image_names = db_image_names
     )
+    print("Finished get_candidate_matches")
 
+    print("Running get_local_matches")
     local_matches = get_local_matches(
         db_local_features_path = db_local_features_path, 
         nearest_candidate_images = nearest_candidate_images, 
@@ -238,7 +271,9 @@ def localize(query_processing_data_dir, query_image_name,
         query_image_name = query_image_name, 
         device = device
     )
+    print("Finished get_local_matches")
 
+    print("Running get_pose")
     ret, log = get_pose(
         query_processing_data_dir = query_processing_data_dir, 
         query_image_name = query_image_name, 
@@ -247,5 +282,6 @@ def localize(query_processing_data_dir, query_image_name,
         local_matches = local_matches, 
         local_features = local_features
     )
+    print("Finished get_pose: ", ret['qvec'], ret['tvec'])
 
     return ret, log
