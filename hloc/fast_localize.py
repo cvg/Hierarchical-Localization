@@ -170,7 +170,12 @@ def get_pose(query_processing_data_dir,
     ## Now we have global candidate and thier mathces. We use this, along with SfM reconstruction to localize the image.
     reconstruction = pycolmap.Reconstruction(db_reconstruction.__str__())
     query_camera = pycolmap.infer_camera_from_image(query_processing_data_dir / query_image_name)
-    ref_ids = [reconstruction.find_image_with_name(r).image_id for r in nearest_candidate_images]
+    ref_ids = []
+    for r in nearest_candidate_images:
+        image = reconstruction.find_image_with_name(r)
+        if image is not None:  # Check if the image actually exists in the reconstruction
+            ref_ids.append(image.image_id)
+            
     conf = {
         'estimation': {'ransac': {'max_error': 12}},
         'refinement': {'refine_focal_length': True, 'refine_extra_params': True},
