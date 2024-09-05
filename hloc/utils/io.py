@@ -74,5 +74,6 @@ def get_matches(path: Path, name0: str, name1: str) -> Tuple[np.ndarray]:
     matches = np.stack([idx, matches[idx]], -1)
     if reverse:
         matches = np.flip(matches, -1)
+        scores = np.flip(scores)  # Fix score reversal issue when matches are reversed
     scores = scores[idx]
     return matches, scores
