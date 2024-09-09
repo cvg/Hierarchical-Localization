@@ -68,7 +68,8 @@ def run_reconstruction(
     options: Optional[Dict[str, Any]] = None,
 ) -> pycolmap.Reconstruction:
     models_path = sfm_dir / "models"
-    models_path.mkdir(exist_ok=True, parents=True)
+    sparse_dir = sfm_dir / "sparse"
+    sparse_dir.mkdir(exist_ok=True, parents=True)
     logger.info("Running 3D reconstruction...")
     if options is None:
         options = {}
@@ -97,9 +98,9 @@ def run_reconstruction(
     )
 
     for filename in ["images.bin", "cameras.bin", "points3D.bin"]:
-        if (sfm_dir / filename).exists():
-            (sfm_dir / filename).unlink()
-        shutil.move(str(models_path / str(largest_index) / filename), str(sfm_dir))
+        if (sparse_dir / filename).exists():
+            (sparse_dir / filename).unlink()
+        shutil.move(str(models_path / str(largest_index) / filename), str(sparse_dir))
     return reconstructions[largest_index]
 
 
