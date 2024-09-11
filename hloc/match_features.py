@@ -35,6 +35,13 @@ confs = {
             "features": "disk",
         },
     },
+    "aliked+lightglue": {
+        "output": "matches-aliked-lightglue",
+        "model": {
+            "name": "lightglue",
+            "features": "aliked",
+        },
+    },
     "superglue": {
         "output": "matches-superglue",
         "model": {
