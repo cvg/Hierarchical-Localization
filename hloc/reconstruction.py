@@ -69,7 +69,8 @@ def run_reconstruction(
 ) -> pycolmap.Reconstruction:
     models_path = sfm_dir / "models"
     sparse_dir = sfm_dir / "sparse"
-    sparse_dir.mkdir(exist_ok=True, parents=True)
+    assert not sparse_dir.exists(), "sparse directory already exists"
+    sparse_dir.mkdir(exist_ok=False, parents=True)
     logger.info("Running 3D reconstruction...")
     if options is None:
         options = {}
@@ -85,23 +86,64 @@ def run_reconstruction(
         return None
     logger.info(f"Reconstructed {len(reconstructions)} model(s).")
 
-    largest_index = None
+    # Get the list of model directories
+    model_dirs = [d for d in models_path.iterdir() if d.is_dir()]
     largest_num_images = 0
-    for index, rec in reconstructions.items():
-        num_images = rec.num_reg_images()
-        if num_images > largest_num_images:
-            largest_index = index
-            largest_num_images = num_images
-    assert largest_index is not None
-    logger.info(
-        f"Largest model is #{largest_index} " f"with {largest_num_images} images."
-    )
+    largest_model_dir = None
+    largest_reconstruction = None
 
+    # Iterate over model directories
+    for model_dir in model_dirs:
+        rec = pycolmap.Reconstruction(model_dir)
+        num_images = rec.num_reg_images()
+        logger.info(f"Model {model_dir.name} has {num_images} images.")
+        if num_images > largest_num_images:
+            largest_num_images = num_images
+            largest_model_dir = model_dir
+            largest_reconstruction = rec
+
+    if largest_model_dir is None:
+        logger.error("No valid models found.")
+        return None
+
+    logger.info(f"Largest model is {largest_model_dir.name} with {largest_num_images} images.")
+
+    # Clean up the sparse_dir before copying new files
+    for existing_file in sparse_dir.glob("*"):
+        logger.info(f"Deleting existing file: {existing_file}")
+        existing_file.unlink()
+
+    # Copy files from the largest model directory
     for filename in ["images.bin", "cameras.bin", "points3D.bin"]:
-        if (sparse_dir / filename).exists():
-            (sparse_dir / filename).unlink()
-        shutil.move(str(models_path / str(largest_index) / filename), str(sparse_dir))
-    return reconstructions[largest_index]
+        source_file = largest_model_dir / filename
+        target_file = sparse_dir / filename
+        logger.info(f"Copying file: {source_file} -> {target_file}")
+        shutil.copy2(str(source_file), str(target_file))
+        logger.info(f"File copied successfully: {target_file.exists()}")
+
+    # Load and summarize the reconstruction from sparse_dir
+    sparse_reconstruction = pycolmap.Reconstruction(sparse_dir)
+    logger.info(f"Reconstruction summary (sparse_dir model):\n{sparse_reconstruction.summary()}")
+
+    # Delete other models
+    logger.info("Deleting other models...")
+    for model_dir in model_dirs:
+        if model_dir != largest_model_dir:
+            try:
+                shutil.rmtree(model_dir)
+                logger.info(f"Successfully deleted model {model_dir.name}")
+            except Exception as e:
+                logger.error(f"Error deleting model {model_dir.name}: {str(e)}")
+
+    # Confirm all other models are deleted
+    remaining_models = list(models_path.glob("*"))
+    if len(remaining_models) == 1 and remaining_models[0] == largest_model_dir:
+        logger.info("All other models successfully deleted")
+    else:
+        logger.warning(f"Unexpected models remaining: {remaining_models}")
+
+    # Return the largest reconstruction
+    return largest_reconstruction
 
 
 def main(
