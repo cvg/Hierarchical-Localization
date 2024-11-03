@@ -1,3 +1,8 @@
+"""Global image feature extractor Salad:
+Optimal Transport Aggregation for Visual Place Recognition
+Sergio Izquierdo, Javier Civera; CVPR 2024.
+https://github.com/serizba/salad
+"""
 import math
 
 import torch
