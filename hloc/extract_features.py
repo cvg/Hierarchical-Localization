@@ -135,6 +135,11 @@ confs = {
         "model": {"name": "eigenplaces"},
         "preprocessing": {"resize_max": 1024},
     },
+    "salad": {
+        "output": "global-feats-salad",
+        "model": {"name": "salad"},
+        "preprocessing": {"resize_max": 640},
+    },
 }
 
 
