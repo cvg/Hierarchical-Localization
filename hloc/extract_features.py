@@ -114,6 +114,17 @@ confs = {
             "resize_max": 1600,
         },
     },
+    "aliked-n16": {
+        "output": "feats-aliked-n16",
+        "model": {
+            "name": "aliked",
+            "model_name": "aliked-n16",
+        },
+        "preprocessing": {
+            "grayscale": False,
+            "resize_max": 1024,
+        },
+    },
     # Global descriptors
     "dir": {
         "output": "global-feats-dir",
@@ -307,4 +318,11 @@ if __name__ == "__main__":
     parser.add_argument("--image_list", type=Path)
     parser.add_argument("--feature_path", type=Path)
     args = parser.parse_args()
-    main(confs[args.conf], args.image_dir, args.export_dir, args.as_half)
+    main(
+        confs[args.conf],
+        args.image_dir,
+        args.export_dir,
+        args.as_half,
+        args.image_list,
+        args.feature_path,
+    )
