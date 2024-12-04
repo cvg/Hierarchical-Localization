@@ -1,14 +1,14 @@
-import os
 import argparse
 import collections.abc as collections
-import numpy as np
+import os
 from pathlib import Path
-from typing import Optional, Union, List
+from typing import List, Optional, Union
 
-from hloc import logger
-from hloc import pairs_from_retrieval
-from hloc.utils.parsers import parse_image_lists, parse_retrieval
+import numpy as np
+
+from hloc import logger, pairs_from_retrieval
 from hloc.utils.io import list_h5_names
+from hloc.utils.parsers import parse_image_lists, parse_retrieval
 
 
 def main(

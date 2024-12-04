@@ -1,5 +1,6 @@
 import torch
 from lightglue import LightGlue as LightGlue_
+
 from ..utils.base_model import BaseModel
 
 
