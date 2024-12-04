@@ -27,17 +27,27 @@ def main(
 
     Args:
         output (Path): The output file path where the pairs will be saved.
-        image_list (Optional[Union[Path, List[str]]]): A path to a file containing a list of images or a list of image names.
-        features (Optional[Path]): A path to a feature file containing image features.
-        window_size (Optional[int]): The size of the window for sequential matching. Default is 10.
-        quadratic_overlap (bool): Whether to use quadratic overlap in sequential matching. Default is True.
-        use_loop_closure (bool): Whether to use loop closure for additional matching. Default is False.
-        retrieval_path (Optional[Union[Path, str]]): The path to the retrieval file for loop closure.
-        retrieval_interval (Optional[int]): The interval for selecting query images for loop closure. Default is 2.
-        num_loc (Optional[int]): The number of top retrieval matches to consider for loop closure. Default is 5.
+        image_list (Optional[Union[Path, List[str]]]):
+            A path to a file containing a list of images or a list of image names.
+        features (Optional[Path]):
+            A path to a feature file containing image features.
+        window_size (Optional[int]):
+            The size of the window for sequential matching. Default is 10.
+        quadratic_overlap (bool):
+            Whether to use quadratic overlap in sequential matching. Default is True.
+        use_loop_closure (bool):
+            Whether to use loop closure for additional matching. Default is False.
+        retrieval_path (Optional[Union[Path, str]]):
+            The path to the retrieval file for loop closure.
+        retrieval_interval (Optional[int]):
+            The interval for selecting query images for loop closure. Default is 2.
+        num_loc (Optional[int]):
+            The number of top retrieval matches to consider for loop closure.
+            Default is 5.
 
     Raises:
-        ValueError: If neither image_list nor features are provided, or if image_list is of an unknown type.
+        ValueError: If neither image_list nor features are provided,
+            or if image_list is of an unknown type.
 
     Returns:
         None
@@ -70,8 +80,9 @@ def main(
     if use_loop_closure:
         retrieval_pairs_tmp: Path = output.parent / f"retrieval-pairs-tmp.txt"
 
-        # match mask describes for each image, which images NOT to include in retrevial match search
-        # I.e., no reason to get retrieval matches for matches already included from sequential matching
+        # match mask describes for each image, which images NOT to include in retrevial
+        # match search I.e., no reason to get retrieval matches for matches
+        # already included from sequential matching
 
         query_list = names_q[::retrieval_interval]
         M = len(query_list)
@@ -120,7 +131,9 @@ def main(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Create a list of image pairs based on the sequence of images on alphabetic order"
+        description="""
+        Create a list of image pairs basedon the sequence of images on alphabetic order
+        """
     )
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--image_list", type=Path)
