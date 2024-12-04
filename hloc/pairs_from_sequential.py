@@ -78,7 +78,7 @@ def main(
                     pairs.append((names_q[i], names_q[i + q]))
 
     if use_loop_closure:
-        retrieval_pairs_tmp: Path = output.parent / f"retrieval-pairs-tmp.txt"
+        retrieval_pairs_tmp: Path = output.parent / "retrieval-pairs-tmp.txt"
 
         # match mask describes for each image, which images NOT to include in retrevial
         # match search I.e., no reason to get retrieval matches for matches

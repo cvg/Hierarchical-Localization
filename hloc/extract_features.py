@@ -125,7 +125,7 @@ confs = {
             "resize_max": 1024,
         },
     },
-     "xfeat": {
+    "xfeat": {
         "output": "feats-xfeat-n5000-r1600",
         "model": {
             "name": "xfeat",

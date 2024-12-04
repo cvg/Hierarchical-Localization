@@ -32,9 +32,8 @@ class LighterGlue(BaseModel):
     def _init(self, conf):
         LightGlue_.default_conf = self.default_conf_xfeat
         self.net = LightGlue_(None, **conf)
-        state_dict = torch.hub.load_state_dict_from_url(
-            "https://github.com/verlab/accelerated_features/raw/main/weights/xfeat-lighterglue.pt"
-        )
+        url = "https://github.com/verlab/accelerated_features/raw/main/weights/xfeat-lighterglue.pt"  # noqa: E501
+        state_dict = torch.hub.load_state_dict_from_url(url)
 
         # rename old state dict entries
         for i in range(self.net.conf.n_layers):
