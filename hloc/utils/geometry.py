@@ -7,7 +7,7 @@ def to_homogeneous(p):
 
 
 def compute_epipolar_errors(j_from_i: pycolmap.Rigid3d, p2d_i, p2d_j):
-    j_E_i = j_from_i.essential_matrix()
+    j_E_i = pycolmap.essential_matrix_from_pose(j_from_i)
     l2d_j = to_homogeneous(p2d_i) @ j_E_i.T
     l2d_i = to_homogeneous(p2d_j) @ j_E_i
     dist = np.abs(np.sum(to_homogeneous(p2d_i) * l2d_i, axis=1))
