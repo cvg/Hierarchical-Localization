@@ -110,7 +110,7 @@ def pose_from_cluster(dataset_dir, q, retrieved, feature_file, match_file, skip=
         "height": height,
         "params": [focal_length, cx, cy],
     }
-    ret = pycolmap.absolute_pose_estimation(all_mkpq, all_mkp3d, cfg, 48.00)
+    ret = pycolmap.estimate_and_refine_absolute_pose(all_mkpq, all_mkp3d, cfg, 48.00)
     ret["cfg"] = cfg
     return ret, all_mkpq, all_mkpr, all_mkp3d, all_indices, num_matches
 
