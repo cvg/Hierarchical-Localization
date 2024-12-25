@@ -17,7 +17,7 @@ def visualize_sfm_2d(
         reconstruction = pycolmap.Reconstruction(reconstruction)
 
     if not selected:
-        image_ids = reconstruction.reg_image_ids()
+        image_ids = list(reconstruction.reg_image_ids())
         selected = random.Random(seed).sample(image_ids, min(n, len(image_ids)))
 
     for i in selected:
