@@ -58,7 +58,7 @@ class QueryLocalizer:
     def localize(self, points2D_all, points2D_idxs, points3D_id, query_camera):
         points2D = points2D_all[points2D_idxs]
         points3D = [self.reconstruction.points3D[j].xyz for j in points3D_id]
-        ret = pycolmap.absolute_pose_estimation(
+        ret = pycolmap.estimate_and_refine_absolute_pose(
             points2D,
             points3D,
             query_camera,
