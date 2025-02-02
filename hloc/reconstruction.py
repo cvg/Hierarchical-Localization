@@ -84,13 +84,12 @@ def run_reconstruction(
         return None
     logger.info(f"Reconstructed {len(reconstructions)} model(s).")
 
-    # Find the largest reconstruction by examining model folders
+    # Find the largest reconstruction by examining model folders #442
     largest_folder = None
     largest_num_images = 0
     for model_dir in models_path.iterdir():
         if not model_dir.is_dir():
             continue
-        # Load reconstruction from the binary files
         try:
             rec = pycolmap.Reconstruction(model_dir)
             num_images = rec.num_reg_images()
@@ -100,20 +99,15 @@ def run_reconstruction(
         except Exception as e:
             logger.warning(f"Could not load reconstruction from {model_dir}: {e}")
             continue
+    assert largest_folder is not None
 
-    if largest_folder is None:
-        logger.error("Could not find any valid reconstruction!")
-        return None
+    logger.info(f"Largest model is {largest_folder.name} with {largest_num_images} images.")
 
-    logger.info(f"Largest model is in {largest_folder.name} with {largest_num_images} images.")
-
-    # Move the files from the largest model
     for filename in ["images.bin", "cameras.bin", "points3D.bin"]:
         if (sfm_dir / filename).exists():
             (sfm_dir / filename).unlink()
         shutil.move(str(largest_folder / filename), str(sfm_dir))
     
-    # Return the reconstruction object for the largest model
     return pycolmap.Reconstruction(sfm_dir)
 
 
