@@ -84,7 +84,7 @@ def run_reconstruction(
         return None
     logger.info(f"Reconstructed {len(reconstructions)} model(s).")
 
-    # Find the largest reconstruction by examining model folders #442
+    # Find the largest reconstruction by examining model folders #422
     largest_folder = None
     largest_num_images = 0
     for model_dir in models_path.iterdir():
