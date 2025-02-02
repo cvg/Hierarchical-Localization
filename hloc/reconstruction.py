@@ -101,8 +101,7 @@ def run_reconstruction(
     assert largest_folder is not None
 
     logger.info(
-        f"Largest model is {largest_folder.name} "
-        f"with {largest_num_images} images."
+        f"Largest model is {largest_folder.name} " f"with {largest_num_images} images."
     )
 
     for filename in ["images.bin", "cameras.bin", "points3D.bin"]:
