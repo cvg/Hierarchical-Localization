@@ -17,7 +17,7 @@ def visualize_sfm_2d(
         reconstruction = pycolmap.Reconstruction(reconstruction)
 
     if not selected:
-        image_ids = reconstruction.reg_image_ids()
+        image_ids = list(reconstruction.reg_image_ids())
         selected = random.Random(seed).sample(image_ids, min(n, len(image_ids)))
 
     for i in selected:
@@ -110,7 +110,7 @@ def visualize_loc_from_log(
         # select the first, largest cluster if the localization failed
         loc = loc["log_clusters"][loc["best_cluster"] or 0]
 
-    inliers = np.array(loc["PnP_ret"]["inliers"])
+    inliers = np.array(loc["PnP_ret"]["inlier_mask"])
     mkp_q = loc["keypoints_query"]
     n = len(loc["db"])
     if reconstruction is not None:
