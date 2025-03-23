@@ -485,10 +485,7 @@ def match_and_assign(
     pairs = parse_retrieval(pairs_path)
     pairs = [(q, r) for q, rs in pairs.items() for r in rs]
     pairs = find_unique_new_pairs(pairs, None if overwrite else match_path)
-    required_queries = set()
-    for q, r in pairs:
-        required_queries.add(q)
-        required_queries.add(r)
+    required_queries = set(chain.from_iterable(pairs))
 
     name2ref = {
         n: i for i, p in enumerate(feature_paths_refs) for n in list_h5_names(p)
