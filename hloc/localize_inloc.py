@@ -64,7 +64,8 @@ def get_scan_pose(dataset_dir, rpath):
     return P_after_GICP
 
 
-def pose_from_cluster(dataset_dir, q, retrieved, feature_file, match_file, skip=None, estimation_options=None):
+def pose_from_cluster(dataset_dir, q, retrieved, feature_file, match_file, 
+                      skip=None, estimation_options=None):
     height, width = cv2.imread(str(dataset_dir / q)).shape[:2]
     cx = 0.5 * width
     cy = 0.5 * height
@@ -117,7 +118,8 @@ def pose_from_cluster(dataset_dir, q, retrieved, feature_file, match_file, skip=
     return ret, all_mkpq, all_mkpr, all_mkp3d, all_indices, num_matches
 
 
-def main(dataset_dir, retrieval, features, matches, results, skip_matches=None, estimation_options=None):
+def main(dataset_dir, retrieval, features, matches, results, 
+         skip_matches=None, estimation_options=None):
     assert retrieval.exists(), retrieval
     assert features.exists(), features
     assert matches.exists(), matches
@@ -144,7 +146,8 @@ def main(dataset_dir, retrieval, features, matches, results, skip_matches=None, 
     for q in tqdm(queries):
         db = retrieval_dict[q]
         ret, mkpq, mkpr, mkp3d, indices, num_matches = pose_from_cluster(
-            dataset_dir, q, db, feature_file, match_file, skip_matches, estimation_options
+            dataset_dir, q, db, feature_file, match_file, 
+            skip_matches, estimation_options
         )
 
         poses[q] = (
