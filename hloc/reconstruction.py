@@ -3,9 +3,9 @@ import multiprocessing
 import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-import tqdm
 
 import pycolmap
+import tqdm
 
 from . import logger
 from .triangulation import (

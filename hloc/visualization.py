@@ -31,9 +31,11 @@ def visualize_sfm_2d(
         elif color_by == "track_length":
             tl = np.array(
                 [
-                    reconstruction.points3D[p.point3D_id].track.length()
-                    if p.has_point3D()
-                    else 1
+                    (
+                        reconstruction.points3D[p.point3D_id].track.length()
+                        if p.has_point3D()
+                        else 1
+                    )
                     for p in image.points2D
                 ]
             )
