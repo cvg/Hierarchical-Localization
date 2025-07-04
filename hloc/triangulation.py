@@ -162,7 +162,7 @@ def geometric_verification(
                 db.add_two_view_geometry(id0, id1, matches)
                 continue
 
-            cam1_from_cam0 = image1.cam_from_world * image0.cam_from_world.inverse()
+            cam1_from_cam0 = image1.cam_from_world() * image0.cam_from_world().inverse()
             errors0, errors1 = compute_epipolar_errors(
                 cam1_from_cam0, kps0[matches[:, 0]], kps1[matches[:, 1]]
             )
