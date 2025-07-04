@@ -112,7 +112,9 @@ def pose_from_cluster(dataset_dir, q, retrieved, feature_file, match_file, skip=
     }
     estimation_options = pycolmap.AbsolutePoseEstimationOptions()
     estimation_options.ransac.max_error = 48
-    ret = pycolmap.estimate_and_refine_absolute_pose(all_mkpq, all_mkp3d, cfg, estimation_options)
+    ret = pycolmap.estimate_and_refine_absolute_pose(
+        all_mkpq, all_mkp3d, cfg, estimation_options
+    )
     ret["cfg"] = cfg
     return ret, all_mkpq, all_mkpr, all_mkp3d, all_indices, num_matches
 
