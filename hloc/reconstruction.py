@@ -3,6 +3,7 @@ import multiprocessing
 import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+import tqdm
 
 import pycolmap
 
@@ -60,6 +61,42 @@ def get_image_ids(database_path: Path) -> Dict[str, int]:
     return images
 
 
+def incremental_mapping(
+    database_path: Path,
+    image_dir: Path,
+    sfm_path: Path,
+    options: Optional[Dict[str, Any]] = None,
+    verbose: bool = False,
+) -> dict[int, pycolmap.Reconstruction]:
+    num_images = pycolmap.Database(database_path).num_images
+    with OutputCapture(verbose):
+        pbars = []
+
+        def restart_progress_bar():
+            if len(pbars) > 0:
+                pbars[-1].close()
+            pbars.append(
+                tqdm.tqdm(
+                    total=num_images,
+                    desc=f"Reconstruction {len(pbars)}",
+                    unit="images",
+                    postfix="registered",
+                )
+            )
+            pbars[-1].update(2)
+
+        reconstructions = pycolmap.incremental_mapping(
+            database_path,
+            image_dir,
+            sfm_path,
+            options=options or {},
+            initial_image_pair_callback=restart_progress_bar,
+            next_image_callback=lambda: pbars[-1].update(1),
+        )
+
+        return reconstructions
+
+
 def run_reconstruction(
     sfm_dir: Path,
     database_path: Path,
@@ -73,11 +110,9 @@ def run_reconstruction(
     if options is None:
         options = {}
     options = {"num_threads": min(multiprocessing.cpu_count(), 16), **options}
-    with OutputCapture(verbose):
-        with pycolmap.ostream():
-            reconstructions = pycolmap.incremental_mapping(
-                database_path, image_dir, models_path, options=options
-            )
+    reconstructions = incremental_mapping(
+        database_path, image_dir, models_path, options=options, verbose=verbose
+    )
 
     if len(reconstructions) == 0:
         logger.error("Could not reconstruct any model!")
@@ -123,6 +158,9 @@ def main(
 
     sfm_dir.mkdir(parents=True, exist_ok=True)
     database = sfm_dir / "database.db"
+
+    logger.info(f"Writing COLMAP logs to {sfm_dir / 'colmap.LOG.*'}")
+    pycolmap.logging.set_log_destination(pycolmap.logging.INFO, sfm_dir / "colmap.LOG.")
 
     create_empty_db(database)
     import_images(image_dir, database, camera_mode, image_list, image_options)
