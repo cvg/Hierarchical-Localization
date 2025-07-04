@@ -116,7 +116,7 @@ def plot_camera(
             legendgroup=legendgroup,
             name=name,
             showlegend=False,
-            hovertemplate=text.replace("\n", "<br>"),
+            hovertemplate=text.replace("\n", "<br>") if text else None,
         )
         fig.add_trace(pyramid)
 
@@ -134,25 +134,37 @@ def plot_camera(
         name=name,
         line=dict(color=color, width=1),
         showlegend=False,
-        hovertemplate=text.replace("\n", "<br>"),
+        hovertemplate=text.replace("\n", "<br>") if text else None,
     )
     fig.add_trace(pyramid)
 
 
 def plot_camera_colmap(
+    fig: go.Figure, cam_from_world: pycolmap.Rigid3d, camera: pycolmap.Camera, **kwargs
+):
+    """Plot a camera frustum from PyCOLMAP objects"""
+    world_t_camera = cam_from_world.inverse()
+    plot_camera(
+        fig,
+        world_t_camera.rotation.matrix(),
+        world_t_camera.translation,
+        camera.calibration_matrix(),
+        **kwargs
+    )
+
+
+def plot_image_colmap(
     fig: go.Figure,
     image: pycolmap.Image,
     camera: pycolmap.Camera,
     name: Optional[str] = None,
     **kwargs
 ):
-    """Plot a camera frustum from PyCOLMAP objects"""
-    world_t_camera = image.cam_from_world.inverse()
-    plot_camera(
+    """Plot a camera frustum from a PyCOLMAP image."""
+    plot_camera_colmap(
         fig,
-        world_t_camera.rotation.matrix(),
-        world_t_camera.translation,
-        camera.calibration_matrix(),
+        image.cam_from_world(),
+        camera,
         name=name or str(image.image_id),
         text=str(image),
         **kwargs
@@ -162,9 +174,7 @@ def plot_camera_colmap(
 def plot_cameras(fig: go.Figure, reconstruction: pycolmap.Reconstruction, **kwargs):
     """Plot a camera as a cone with camera frustum."""
     for image_id, image in reconstruction.images.items():
-        plot_camera_colmap(
-            fig, image, reconstruction.cameras[image.camera_id], **kwargs
-        )
+        plot_image_colmap(fig, image, reconstruction.cameras[image.camera_id], **kwargs)
 
 
 def plot_reconstruction(
@@ -186,8 +196,7 @@ def plot_reconstruction(
         p3D
         for _, p3D in rec.points3D.items()
         if (
-            (p3D.xyz >= bbs[0]).all()
-            and (p3D.xyz <= bbs[1]).all()
+            bbs.contains_point(p3D.xyz)
             and p3D.error <= max_reproj_error
             and p3D.track.length() >= min_track_length
         )
