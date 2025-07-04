@@ -144,7 +144,10 @@ def main(dataset_dir, retrieval, features, matches, results, skip_matches=None):
             dataset_dir, q, db, feature_file, match_file, skip_matches
         )
 
-        poses[q] = (ret["qvec"], ret["tvec"])
+        poses[q] = (
+            ret["cam_from_world"].rotation.quat[[3, 0, 1, 2]],
+            ret["cam_from_world"].translation,
+        )
         logs["loc"][q] = {
             "db": db,
             "PnP_ret": ret,
