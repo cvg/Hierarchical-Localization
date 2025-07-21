@@ -66,7 +66,6 @@ def incremental_mapping(
     image_dir: Path,
     sfm_path: Path,
     options: Optional[Dict[str, Any]] = None,
-    verbose: bool = False,
 ) -> dict[int, pycolmap.Reconstruction]:
     num_images = pycolmap.Database(database_path).num_images
     pbars = []
