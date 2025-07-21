@@ -69,32 +69,31 @@ def incremental_mapping(
     verbose: bool = False,
 ) -> dict[int, pycolmap.Reconstruction]:
     num_images = pycolmap.Database(database_path).num_images
-    with OutputCapture(verbose):
-        pbars = []
+    pbars = []
 
-        def restart_progress_bar():
-            if len(pbars) > 0:
-                pbars[-1].close()
-            pbars.append(
-                tqdm.tqdm(
-                    total=num_images,
-                    desc=f"Reconstruction {len(pbars)}",
-                    unit="images",
-                    postfix="registered",
-                )
+    def restart_progress_bar():
+        if len(pbars) > 0:
+            pbars[-1].close()
+        pbars.append(
+            tqdm.tqdm(
+                total=num_images,
+                desc=f"Reconstruction {len(pbars)}",
+                unit="images",
+                postfix="registered",
             )
-            pbars[-1].update(2)
-
-        reconstructions = pycolmap.incremental_mapping(
-            database_path,
-            image_dir,
-            sfm_path,
-            options=options or {},
-            initial_image_pair_callback=restart_progress_bar,
-            next_image_callback=lambda: pbars[-1].update(1),
         )
+        pbars[-1].update(2)
 
-        return reconstructions
+    reconstructions = pycolmap.incremental_mapping(
+        database_path,
+        image_dir,
+        sfm_path,
+        options=options or {},
+        initial_image_pair_callback=restart_progress_bar,
+        next_image_callback=lambda: pbars[-1].update(1),
+    )
+
+    return reconstructions
 
 
 def run_reconstruction(
@@ -110,9 +109,11 @@ def run_reconstruction(
     if options is None:
         options = {}
     options = {"num_threads": min(multiprocessing.cpu_count(), 16), **options}
-    reconstructions = incremental_mapping(
-        database_path, image_dir, models_path, options=options, verbose=verbose
-    )
+
+    with OutputCapture(verbose):
+        reconstructions = incremental_mapping(
+            database_path, image_dir, models_path, options=options
+        )
 
     if len(reconstructions) == 0:
         logger.error("Could not reconstruct any model!")
