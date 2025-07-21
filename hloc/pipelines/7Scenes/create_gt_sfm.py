@@ -12,13 +12,11 @@ from ...utils.read_write_model import read_model, write_model
 def scene_coordinates(p2D, R_w2c, t_w2c, depth, camera):
     assert len(depth) == len(p2D)
     pycolmap_camera = pycolmap.Camera(
-        {
-            "camera_id": camera.id,
-            "model": camera.model,
-            "width": camera.width,
-            "height": camera.height,
-            "params": camera.params,
-        }
+        camera_id=camera.id,
+        model=camera.model,
+        width=camera.width,
+        height=camera.height,
+        params=camera.params,
     )
     p2D_norm = pycolmap_camera.cam_from_img(p2D)
     p2D_h = np.concatenate([p2D_norm, np.ones_like(p2D_norm[:, :1])], 1)
@@ -62,13 +60,11 @@ def project_to_image(p3D, R, t, camera, eps: float = 1e-4, pad: int = 1):
     visible = p3D[:, -1] >= eps  # keep points in front of the camera
     p2D_norm = p3D[:, :-1] / p3D[:, -1:].clip(min=eps)
     pycolmap_camera = pycolmap.Camera(
-        {
-            "camera_id": camera.id,
-            "model": camera.model,
-            "width": camera.width,
-            "height": camera.height,
-            "params": camera.params,
-        }
+        camera_id=camera.id,
+        model=camera.model,
+        width=camera.width,
+        height=camera.height,
+        params=camera.params,
     )
     p2D = pycolmap_camera.img_from_cam(p2D_norm)
     size = np.array([camera.width - pad - 1, camera.height - pad - 1])
