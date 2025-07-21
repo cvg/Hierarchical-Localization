@@ -8,6 +8,7 @@ class LightGlue(BaseModel):
         "features": "superpoint",
         "depth_confidence": 0.95,
         "width_confidence": 0.99,
+        "compile": False,
     }
     required_inputs = [
         "image0",
@@ -20,6 +21,8 @@ class LightGlue(BaseModel):
 
     def _init(self, conf):
         self.net = LightGlue_(conf.pop("features"), **conf)
+        if conf["compile"]:
+            self.net.compile()
 
     def _forward(self, data):
         data["descriptors0"] = data["descriptors0"].transpose(-1, -2)
