@@ -11,6 +11,7 @@ from scipy.io import loadmat
 from tqdm import tqdm
 
 from . import logger
+from .utils.io import write_poses
 from .utils.parsers import names_to_pair, parse_retrieval
 
 
@@ -144,10 +145,7 @@ def main(dataset_dir, retrieval, features, matches, results, skip_matches=None):
             dataset_dir, q, db, feature_file, match_file, skip_matches
         )
 
-        poses[q] = (
-            ret["cam_from_world"].rotation.quat[[3, 0, 1, 2]],
-            ret["cam_from_world"].translation,
-        )
+        poses[q] = ret["cam_from_world"]
         logs["loc"][q] = {
             "db": db,
             "PnP_ret": ret,
@@ -159,13 +157,7 @@ def main(dataset_dir, retrieval, features, matches, results, skip_matches=None):
         }
 
     logger.info(f"Writing poses to {results}...")
-    with open(results, "w") as f:
-        for q in queries:
-            qvec, tvec = poses[q]
-            qvec = " ".join(map(str, qvec))
-            tvec = " ".join(map(str, tvec))
-            name = q.split("/")[-1]
-            f.write(f"{name} {qvec} {tvec}\n")
+    write_poses(poses, results, prepend_camera_name=False)
 
     logs_path = f"{results}_logs.pkl"
     logger.info(f"Writing logs to {logs_path}...")
