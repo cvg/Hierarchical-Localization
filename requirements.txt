@@ -1,6 +1,6 @@
 torch>=1.1
 torchvision>=0.3
-numpy
+numpy==1.26.3
 opencv-python
 tqdm>=4.36.0
 matplotlib
