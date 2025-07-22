@@ -139,7 +139,12 @@ confs = {
         'output': 'global-feats-cosplace',
         'model': {'name': 'cosplace'},
         'preprocessing': {'resize_max': 1024},
-    }
+    },
+    "megaloc": {
+        "output": "global-feats-megaloc",
+        "model": {"name": "megaloc"},
+        "preprocessing": {"resize_max": 1024},
+    },
 }
 
 
