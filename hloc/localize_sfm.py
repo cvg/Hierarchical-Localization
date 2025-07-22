@@ -9,7 +9,7 @@ import pycolmap
 from tqdm import tqdm
 
 from . import logger
-from .utils.io import get_keypoints, get_matches
+from .utils.io import get_keypoints, get_matches, write_poses
 from .utils.parsers import parse_image_lists, parse_retrieval
 
 
@@ -58,7 +58,7 @@ class QueryLocalizer:
     def localize(self, points2D_all, points2D_idxs, points3D_id, query_camera):
         points2D = points2D_all[points2D_idxs]
         points3D = [self.reconstruction.points3D[j].xyz for j in points3D_id]
-        ret = pycolmap.absolute_pose_estimation(
+        ret = pycolmap.estimate_and_refine_absolute_pose(
             points2D,
             points3D,
             query_camera,
@@ -208,14 +208,7 @@ def main(
 
     logger.info(f"Localized {len(cam_from_world)} / {len(queries)} images.")
     logger.info(f"Writing poses to {results}...")
-    with open(results, "w") as f:
-        for query, t in cam_from_world.items():
-            qvec = " ".join(map(str, t.rotation.quat[[3, 0, 1, 2]]))
-            tvec = " ".join(map(str, t.translation))
-            name = query.split("/")[-1]
-            if prepend_camera_name:
-                name = query.split("/")[-2] + "/" + name
-            f.write(f"{name} {qvec} {tvec}\n")
+    write_poses(cam_from_world, results, prepend_camera_name=prepend_camera_name)
 
     logs_path = f"{results}_logs.pkl"
     logger.info(f"Writing logs to {logs_path}...")

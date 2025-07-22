@@ -17,7 +17,7 @@ def visualize_sfm_2d(
         reconstruction = pycolmap.Reconstruction(reconstruction)
 
     if not selected:
-        image_ids = reconstruction.reg_image_ids()
+        image_ids = list(reconstruction.reg_image_ids())
         selected = random.Random(seed).sample(image_ids, min(n, len(image_ids)))
 
     for i in selected:
@@ -31,9 +31,11 @@ def visualize_sfm_2d(
         elif color_by == "track_length":
             tl = np.array(
                 [
-                    reconstruction.points3D[p.point3D_id].track.length()
-                    if p.has_point3D()
-                    else 1
+                    (
+                        reconstruction.points3D[p.point3D_id].track.length()
+                        if p.has_point3D()
+                        else 1
+                    )
                     for p in image.points2D
                 ]
             )
@@ -45,7 +47,7 @@ def visualize_sfm_2d(
             p3ids = [p.point3D_id for p in image.points2D if p.has_point3D()]
             z = np.array(
                 [
-                    (image.cam_from_world * reconstruction.points3D[j].xyz)[-1]
+                    (image.cam_from_world() * reconstruction.points3D[j].xyz)[-1]
                     for j in p3ids
                 ]
             )
@@ -110,7 +112,7 @@ def visualize_loc_from_log(
         # select the first, largest cluster if the localization failed
         loc = loc["log_clusters"][loc["best_cluster"] or 0]
 
-    inliers = np.array(loc["PnP_ret"]["inliers"])
+    inliers = np.array(loc["PnP_ret"]["inlier_mask"])
     mkp_q = loc["keypoints_query"]
     n = len(loc["db"])
     if reconstruction is not None:

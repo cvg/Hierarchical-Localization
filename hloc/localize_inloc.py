@@ -11,6 +11,7 @@ from scipy.io import loadmat
 from tqdm import tqdm
 
 from . import logger
+from .utils.io import write_poses
 from .utils.parsers import names_to_pair, parse_retrieval
 
 
@@ -110,7 +111,11 @@ def pose_from_cluster(dataset_dir, q, retrieved, feature_file, match_file, skip=
         "height": height,
         "params": [focal_length, cx, cy],
     }
-    ret = pycolmap.absolute_pose_estimation(all_mkpq, all_mkp3d, cfg, 48.00)
+    estimation_options = pycolmap.AbsolutePoseEstimationOptions()
+    estimation_options.ransac.max_error = 48
+    ret = pycolmap.estimate_and_refine_absolute_pose(
+        all_mkpq, all_mkp3d, cfg, estimation_options
+    )
     ret["cfg"] = cfg
     return ret, all_mkpq, all_mkpr, all_mkp3d, all_indices, num_matches
 
@@ -140,7 +145,7 @@ def main(dataset_dir, retrieval, features, matches, results, skip_matches=None):
             dataset_dir, q, db, feature_file, match_file, skip_matches
         )
 
-        poses[q] = (ret["qvec"], ret["tvec"])
+        poses[q] = ret["cam_from_world"]
         logs["loc"][q] = {
             "db": db,
             "PnP_ret": ret,
@@ -152,13 +157,7 @@ def main(dataset_dir, retrieval, features, matches, results, skip_matches=None):
         }
 
     logger.info(f"Writing poses to {results}...")
-    with open(results, "w") as f:
-        for q in queries:
-            qvec, tvec = poses[q]
-            qvec = " ".join(map(str, qvec))
-            tvec = " ".join(map(str, tvec))
-            name = q.split("/")[-1]
-            f.write(f"{name} {qvec} {tvec}\n")
+    write_poses(poses, results, prepend_camera_name=False)
 
     logs_path = f"{results}_logs.pkl"
     logger.info(f"Writing logs to {logs_path}...")

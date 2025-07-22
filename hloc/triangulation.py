@@ -1,7 +1,4 @@
 import argparse
-import contextlib
-import io
-import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -22,15 +19,11 @@ class OutputCapture:
 
     def __enter__(self):
         if not self.verbose:
-            self.capture = contextlib.redirect_stdout(io.StringIO())
-            self.out = self.capture.__enter__()
+            pycolmap.logging.alsologtostderr = False
 
     def __exit__(self, exc_type, *args):
         if not self.verbose:
-            self.capture.__exit__(exc_type, *args)
-            if exc_type is not None:
-                logger.error("Failed with output:\n%s", self.out.getvalue())
-        sys.stdout.flush()
+            pycolmap.logging.alsologtostderr = True
 
 
 def create_db_from_model(
@@ -114,12 +107,11 @@ def estimation_and_geometric_verification(
 ):
     logger.info("Performing geometric verification of the matches...")
     with OutputCapture(verbose):
-        with pycolmap.ostream():
-            pycolmap.verify_matches(
-                database_path,
-                pairs_path,
-                options=dict(ransac=dict(max_num_trials=20000, min_inlier_ratio=0.1)),
-            )
+        pycolmap.verify_matches(
+            database_path,
+            pairs_path,
+            options=dict(ransac=dict(max_num_trials=20000, min_inlier_ratio=0.1)),
+        )
 
 
 def geometric_verification(
@@ -170,7 +162,7 @@ def geometric_verification(
                 db.add_two_view_geometry(id0, id1, matches)
                 continue
 
-            cam1_from_cam0 = image1.cam_from_world * image0.cam_from_world.inverse()
+            cam1_from_cam0 = image1.cam_from_world() * image0.cam_from_world().inverse()
             errors0, errors1 = compute_epipolar_errors(
                 cam1_from_cam0, kps0[matches[:, 0]], kps1[matches[:, 1]]
             )
@@ -207,10 +199,9 @@ def run_triangulation(
     if options is None:
         options = {}
     with OutputCapture(verbose):
-        with pycolmap.ostream():
-            reconstruction = pycolmap.triangulate_points(
-                reference_model, database_path, image_dir, model_path, options=options
-            )
+        reconstruction = pycolmap.triangulate_points(
+            reference_model, database_path, image_dir, model_path, options=options
+        )
     return reconstruction
 
 
