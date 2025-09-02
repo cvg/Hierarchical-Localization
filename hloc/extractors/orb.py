@@ -6,6 +6,7 @@ from ..utils.base_model import BaseModel
 
 EPS = 1e-6
 
+
 class ORB(BaseModel):
     default_conf = {
         "options": {
@@ -19,7 +20,7 @@ class ORB(BaseModel):
             "patchSize": 31,
             "fastThreshold": 20,
         },
-        "descriptor": "orb",     
+        "descriptor": "orb",
         "max_keypoints": -1,
     }
     required_inputs = ["image"]
@@ -29,7 +30,7 @@ class ORB(BaseModel):
     def _init(self, conf):
         if conf["descriptor"] != "orb":
             raise ValueError(f'Unknown descriptor: {conf["descriptor"]}')
-        self.orb = None 
+        self.orb = None
         self.dummy_param = torch.nn.Parameter(torch.empty(0))
 
     def _make_orb(self):
@@ -49,7 +50,7 @@ class ORB(BaseModel):
 
     def _forward(self, data):
         image = data["image"]
-        
+
         image_np = image.cpu().numpy()[0, 0]
         assert image.shape[1] == 1, "ORB expects a single-channel image"
         assert image_np.min() >= -EPS and image_np.max() <= 1 + EPS
@@ -76,9 +77,10 @@ class ORB(BaseModel):
         scales = torch.from_numpy(scales)
         oris = torch.from_numpy(angles)
         scores = torch.from_numpy(responses)
-        descriptors = torch.from_numpy(descriptors) # (N,32) uint8
+        descriptors = torch.from_numpy(descriptors)  # (N,32) uint8
 
-        if self.conf["max_keypoints"] != -1 and len(keypoints) > self.conf["max_keypoints"]:
+        if (self.conf["max_keypoints"] != -1
+                and len(keypoints) > self.conf["max_keypoints"]):
             k = int(self.conf["max_keypoints"])
             vals, idxs = torch.topk(scores, k)
             keypoints = keypoints[idxs]
@@ -88,9 +90,9 @@ class ORB(BaseModel):
             descriptors = descriptors[idxs]
 
         return {
-            "keypoints": keypoints[None],       # [1, N, 2] (x, y)
-            "scales": scales[None],             # [1, N]
-            "oris": oris[None],                 # [1, N] 
-            "scores": scores[None],             # [1, N]
-            "descriptors": descriptors.T[None], # [1, 32, N]
+            "keypoints": keypoints[None],        # [1, N, 2] (x, y)
+            "scales": scales[None],              # [1, N]
+            "oris": oris[None],                  # [1, N] 
+            "scores": scores[None],              # [1, N]
+            "descriptors": descriptors.T[None],  # [1, 32, N]
         }

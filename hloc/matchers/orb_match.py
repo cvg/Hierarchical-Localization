@@ -21,8 +21,8 @@ def tens_to_cv(x):
 
 class BinaryNearestNeighbor(BaseModel):
     default_conf = {
-        "ratio_threshold": None,          
-        "distance_threshold_bits": None,  
+        "ratio_threshold": None,
+        "distance_threshold_bits": None,
         "do_mutual_check": True,
     }
 
@@ -40,7 +40,7 @@ class BinaryNearestNeighbor(BaseModel):
     def _forward(self, data):
         d0 = data["descriptors0"]
         d1 = data["descriptors1"]
-        
+
         d0 = tens_to_cv(d0)
         d1 = tens_to_cv(d1)
 
@@ -50,7 +50,8 @@ class BinaryNearestNeighbor(BaseModel):
             device = d0.device
             return {
                 "matches0": torch.full((1, N0), -1, dtype=torch.long, device=device),
-                "matching_scores0": torch.zeros((1, N0), dtype=torch.float32, device=device),
+                "matching_scores0": torch.zeros((1, N0), dtype=torch.float32, 
+                                                device=device),
             }
 
         matches = self.matcher.match(d0, d1)
@@ -68,10 +69,8 @@ class BinaryNearestNeighbor(BaseModel):
             matches0[q] = t
             matching_scores0[q] = 1.0 - dist / Dbits
 
-        matches0 = matches0.unsqueeze(0) # [1, N0]
+        matches0 = matches0.unsqueeze(0)  # [1, N0]
         matching_scores0 = matching_scores0.unsqueeze(0)
 
-        return {"matches0": matches0, 
+        return {"matches0": matches0,
                 "matching_scores0": matching_scores0}
-
-
