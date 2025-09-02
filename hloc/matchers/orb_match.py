@@ -26,13 +26,20 @@ class BinaryNearestNeighbor(BaseModel):
         "do_mutual_check": True,
     }
 
-    required_inputs = ['descriptors0', 'scores0',
-                       'descriptors1', 'scores1']
+    required_inputs = ["descriptors0", "scores0", "descriptors1", "scores1"]
 
     def _init(self, conf):
         lut = torch.arange(256, dtype=torch.uint8)
-        lut = (lut & 1) + ((lut >> 1) & 1) + ((lut >> 2) & 1) + ((lut >> 3) & 1) + \
-              ((lut >> 4) & 1) + ((lut >> 5) & 1) + ((lut >> 6) & 1) + ((lut >> 7) & 1)
+        lut = (
+            (lut & 1)
+            + ((lut >> 1) & 1)
+            + ((lut >> 2) & 1)
+            + ((lut >> 3) & 1)
+            + ((lut >> 4) & 1)
+            + ((lut >> 5) & 1)
+            + ((lut >> 6) & 1)
+            + ((lut >> 7) & 1)
+        )
         self.register_buffer("_popcnt8", lut.to(torch.uint8), persistent=False)
 
         self.matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
@@ -73,5 +80,4 @@ class BinaryNearestNeighbor(BaseModel):
         matches0 = matches0.unsqueeze(0)  # [1, N0]
         matching_scores0 = matching_scores0.unsqueeze(0)
 
-        return {"matches0": matches0,
-                "matching_scores0": matching_scores0}
+        return {"matches0": matches0, "matching_scores0": matching_scores0}
