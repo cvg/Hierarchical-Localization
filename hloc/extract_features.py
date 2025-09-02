@@ -95,6 +95,14 @@ confs = {
             "resize_max": 1600,
         },
     },
+    "orb": {
+        "output": "feats-orb",
+        "model": {"name": "orb"},
+        "preprocessing": {
+            "grayscale": True,
+            "resize_max": 1600,
+        },
+    },
     "sosnet": {
         "output": "feats-sosnet",
         "model": {"name": "dog", "descriptor": "sosnet"},
