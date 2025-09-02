@@ -65,7 +65,7 @@ class ORB(BaseModel):
 
         pts = np.array([kp.pt for kp in keypoints], dtype=np.float32)
         sizes = np.array([kp.size for kp in keypoints], dtype=np.float32)
-        scales = sizes / 2.0 
+        scales = sizes / 2.0
         angles = np.array([kp.angle for kp in keypoints], dtype=np.float32)
         responses = np.array([kp.response for kp in keypoints], dtype=np.float32)
 
@@ -92,7 +92,7 @@ class ORB(BaseModel):
         return {
             "keypoints": keypoints[None],        # [1, N, 2] (x, y)
             "scales": scales[None],              # [1, N]
-            "oris": oris[None],                  # [1, N] 
+            "oris": oris[None],                  # [1, N]
             "scores": scores[None],              # [1, N]
             "descriptors": descriptors.T[None],  # [1, 32, N]
         }
