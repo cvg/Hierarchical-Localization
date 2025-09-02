@@ -1,6 +1,6 @@
+import cv2
 import numpy as np
 import torch
-import cv2
 
 from ..utils.base_model import BaseModel
 
