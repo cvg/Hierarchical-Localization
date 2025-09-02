@@ -50,8 +50,9 @@ class BinaryNearestNeighbor(BaseModel):
             device = d0.device
             return {
                 "matches0": torch.full((1, N0), -1, dtype=torch.long, device=device),
-                "matching_scores0": torch.zeros((1, N0), dtype=torch.float32,
-                                                device=device),
+                "matching_scores0": torch.zeros(
+                    (1, N0), dtype=torch.float32, device=device
+                ),
             }
 
         matches = self.matcher.match(d0, d1)

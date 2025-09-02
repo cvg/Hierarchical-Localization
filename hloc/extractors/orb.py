@@ -79,8 +79,10 @@ class ORB(BaseModel):
         scores = torch.from_numpy(responses)
         descriptors = torch.from_numpy(descriptors)  # (N,32) uint8
 
-        if (self.conf["max_keypoints"] != -1
-                and len(keypoints) > self.conf["max_keypoints"]):
+        if (
+            self.conf["max_keypoints"] != -1
+            and len(keypoints) > self.conf["max_keypoints"]
+        ):
             k = int(self.conf["max_keypoints"])
             vals, idxs = torch.topk(scores, k)
             keypoints = keypoints[idxs]
@@ -90,9 +92,9 @@ class ORB(BaseModel):
             descriptors = descriptors[idxs]
 
         return {
-            "keypoints": keypoints[None],        # [1, N, 2] (x, y)
-            "scales": scales[None],              # [1, N]
-            "oris": oris[None],                  # [1, N]
-            "scores": scores[None],              # [1, N]
+            "keypoints": keypoints[None],  # [1, N, 2] (x, y)
+            "scales": scales[None],  # [1, N]
+            "oris": oris[None],  # [1, N]
+            "scores": scores[None],  # [1, N]
             "descriptors": descriptors.T[None],  # [1, 32, N]
         }
