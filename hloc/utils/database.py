@@ -1,7 +1,8 @@
 import contextlib
-from typing import ContextManager
-import pycolmap
 from pathlib import Path
+from typing import ContextManager
+
+import pycolmap
 
 
 @contextlib.contextmanager
