@@ -23,8 +23,8 @@ def create_empty_db(database_path: Path):
         logger.warning("The database already exists, deleting it.")
         database_path.unlink()
     logger.info("Creating an empty database...")
-    db = pycolmap.Database.open(database_path)
-    db.close()
+    with open_colmap_database(database_path) as _:
+        pass
 
 
 def import_images(
