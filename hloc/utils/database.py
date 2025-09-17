@@ -8,10 +8,10 @@ from pathlib import Path
 def open_colmap_database(database_path: Path) -> ContextManager[pycolmap.Database]:
     # In preparation for the context support in the future pycolmap 3.13 release
     if hasattr(pycolmap.Database, "open"):
-        with pycolmap.Database.open(db_path) as db:
+        with pycolmap.Database.open(database_path) as db:
             yield db
     else:
-        db = pycolmap.Database(db_path)
+        db = pycolmap.Database(database_path)
         try:
             yield db
         finally:
