@@ -7,6 +7,7 @@ import pycolmap
 from tqdm import tqdm
 
 from . import logger
+from .utils.database import open_colmap_database
 from .utils.geometry import compute_epipolar_errors
 from .utils.io import get_keypoints, get_matches
 from .utils.parsers import parse_retrieval
@@ -32,7 +33,7 @@ def create_db_from_model(
         logger.warning("The database already exists, deleting it.")
         database_path.unlink()
 
-    with pycolmap.Database.open(database_path) as db:
+    with open_colmap_database(database_path) as db:
         for camera_id, camera in reconstruction.cameras.items():
             db.write_camera(camera, use_camera_id=True)
         for rig_id, rig in reconstruction.rigs.items():
@@ -48,7 +49,7 @@ def import_features(
     image_ids: Dict[str, int], database_path: Path, features_path: Path
 ):
     logger.info("Importing features into the database...")
-    with pycolmap.Database.open(database_path) as db:
+    with open_colmap_database(database_path) as db:
         for image_name, image_id in tqdm(image_ids.items()):
             keypoints = get_keypoints(features_path, image_name)
             keypoints += 0.5  # COLMAP origin
@@ -68,7 +69,7 @@ def import_matches(
     with open(str(pairs_path), "r") as f:
         pairs = [p.split() for p in f.readlines()]
 
-    with pycolmap.Database.open(database_path) as db:
+    with open_colmap_database(database_path) as db:
         matched = set()
         for name0, name1 in tqdm(pairs):
             id0, id1 = image_ids[name0], image_ids[name1]
@@ -111,7 +112,7 @@ def geometric_verification(
 
     pairs = parse_retrieval(pairs_path)
 
-    with pycolmap.Database.open(database_path) as db:
+    with open_colmap_database(database_path) as db:
         inlier_ratios = []
         matched = set()
         for name0 in tqdm(pairs):

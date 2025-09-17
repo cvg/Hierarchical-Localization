@@ -15,6 +15,7 @@ from .triangulation import (
     import_matches,
     parse_option_args,
 )
+from utils.database import open_colmap_database
 
 
 def create_empty_db(database_path: Path):
@@ -51,7 +52,7 @@ def import_images(
 
 def get_image_ids(database_path: Path) -> Dict[str, int]:
     images = {}
-    with pycolmap.Database.open(database_path) as db:
+    with open_colmap_database(database_path) as db:
         for img_id, image in db.read_all_images().items():
             images[image.name] = img_id
     return images
