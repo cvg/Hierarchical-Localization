@@ -15,7 +15,7 @@ from .triangulation import (
     import_matches,
     parse_option_args,
 )
-from .utils.database import COLMAPDatabase
+from .utils.database import open_colmap_database
 
 
 def create_empty_db(database_path: Path):
@@ -23,10 +23,8 @@ def create_empty_db(database_path: Path):
         logger.warning("The database already exists, deleting it.")
         database_path.unlink()
     logger.info("Creating an empty database...")
-    db = COLMAPDatabase.connect(database_path)
-    db.create_tables()
-    db.commit()
-    db.close()
+    with open_colmap_database(database_path) as _:
+        pass
 
 
 def import_images(
@@ -53,11 +51,10 @@ def import_images(
 
 
 def get_image_ids(database_path: Path) -> Dict[str, int]:
-    db = COLMAPDatabase.connect(database_path)
     images = {}
-    for name, image_id in db.execute("SELECT name, image_id FROM images;"):
-        images[name] = image_id
-    db.close()
+    with open_colmap_database(database_path) as db:
+        for image_id, image in db.read_all_images().items():
+            images[image.name] = image_id
     return images
 
 
