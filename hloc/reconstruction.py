@@ -53,8 +53,8 @@ def import_images(
 def get_image_ids(database_path: Path) -> Dict[str, int]:
     images = {}
     with open_colmap_database(database_path) as db:
-        for img_id, image in db.read_all_images().items():
-            images[image.name] = img_id
+        for image_id, image in db.read_all_images().items():
+            images[image.name] = image_id
     return images
 
 

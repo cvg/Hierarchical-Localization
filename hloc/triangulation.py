@@ -42,7 +42,7 @@ def create_db_from_model(
             db.write_frame(frame, use_frame_id=True)
         for image_id, image in reconstruction.images.items():
             db.write_image(image, use_image_id=True)
-    return {image.name: img_id for img_id, image in reconstruction.images.items()}
+    return {image.name: image_id for image_id, image in reconstruction.images.items()}
 
 
 def import_features(
