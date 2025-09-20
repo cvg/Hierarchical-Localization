@@ -146,6 +146,11 @@ confs = {
         "model": {"name": "megaloc"},
         "preprocessing": {"resize_max": 1024},
     },
+    "salad": {
+        "output": "global-feats-salad",
+        "model": {"name": "salad"},
+        "preprocessing": {"resize_max": 640},
+    },
 }
 
 
