@@ -7,9 +7,8 @@ import pycolmap
 from tqdm import tqdm
 
 from . import logger
-from .utils.database import open_colmap_database
 from .utils.geometry import compute_epipolar_errors
-from .utils.io import get_keypoints, get_matches
+from .utils.io import get_keypoints, get_matches, open_colmap_database
 from .utils.parsers import parse_retrieval
 
 

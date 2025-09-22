@@ -1,5 +1,6 @@
+import contextlib
 from pathlib import Path
-from typing import Mapping, Tuple
+from typing import ContextManager, Mapping, Tuple
 
 import cv2
 import h5py
@@ -90,3 +91,17 @@ def write_poses(
             if prepend_camera_name:
                 name = query.split("/")[-2] + "/" + name
             f.write(f"{name} {qvec} {tvec}\n")
+
+
+@contextlib.contextmanager
+def open_colmap_database(database_path: Path) -> ContextManager[pycolmap.Database]:
+    # In preparation for the context support in the future pycolmap >= 3.13 release
+    if isinstance(pycolmap.Database.__dict__.get("open"), (staticmethod, classmethod)):
+        with pycolmap.Database.open(database_path) as db:
+            yield db
+    else:
+        db = pycolmap.Database(database_path)
+        try:
+            yield db
+        finally:
+            db.close()

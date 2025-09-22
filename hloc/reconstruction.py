@@ -15,7 +15,7 @@ from .triangulation import (
     import_matches,
     parse_option_args,
 )
-from .utils.database import open_colmap_database
+from .utils.io import open_colmap_database
 
 
 def create_empty_db(database_path: Path):
