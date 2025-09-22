@@ -53,8 +53,9 @@ def import_images(
 def get_image_ids(database_path: Path) -> Dict[str, int]:
     images = {}
     with open_colmap_database(database_path) as db:
-        for image_id, image in db.read_all_images().items():
-            images[image.name] = image_id
+        images = {
+            image.name: image_id for image_id, image in db.read_all_images().items()
+        }
     return images
 
 
@@ -168,17 +169,19 @@ def main(
     create_empty_db(database)
     import_images(image_dir, database, camera_mode, image_list, image_options)
     image_ids = get_image_ids(database)
-    import_features(image_ids, database, features)
-    import_matches(
-        image_ids,
-        database,
-        pairs,
-        matches,
-        min_match_score,
-        skip_geometric_verification,
-    )
+    with open_colmap_database(database) as db:
+        import_features(image_ids, db, features)
+        import_matches(
+            image_ids,
+            db,
+            pairs,
+            matches,
+            min_match_score,
+            skip_geometric_verification,
+        )
     if not skip_geometric_verification:
-        estimation_and_geometric_verification(database, pairs, verbose)
+        with open_colmap_database(database) as db:
+            estimation_and_geometric_verification(db, pairs, verbose)
     reconstruction = run_reconstruction(
         sfm_dir, database, image_dir, verbose, mapper_options
     )
