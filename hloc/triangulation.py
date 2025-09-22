@@ -127,9 +127,7 @@ def geometric_verification(
             id1 = image_ids[name1]
             image1 = reference.images[id1]
             cam1 = reference.cameras[image1.camera_id]
-            kps1, noise1 = get_keypoints(
-                features_path, name1, return_uncertainty=True
-            )
+            kps1, noise1 = get_keypoints(features_path, name1, return_uncertainty=True)
             noise1 = 1.0 if noise1 is None else noise1
             if len(kps1) > 0:
                 kps1 = np.stack(cam1.cam_from_img(kps1))
@@ -146,9 +144,7 @@ def geometric_verification(
                 db.write_two_view_geometry(id0, id1, pycolmap.TwoViewGeometry())
                 continue
 
-            cam1_from_cam0 = (
-                image1.cam_from_world() * image0.cam_from_world().inverse()
-            )
+            cam1_from_cam0 = image1.cam_from_world() * image0.cam_from_world().inverse()
             errors0, errors1 = compute_epipolar_errors(
                 cam1_from_cam0, kps0[matches[:, 0]], kps1[matches[:, 1]]
             )
