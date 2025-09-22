@@ -15,7 +15,7 @@ from .triangulation import (
     import_matches,
     parse_option_args,
 )
-from .utils.database import COLMAPDatabase
+from .utils.io import open_colmap_database
 
 
 def create_empty_db(database_path: Path):
@@ -23,10 +23,8 @@ def create_empty_db(database_path: Path):
         logger.warning("The database already exists, deleting it.")
         database_path.unlink()
     logger.info("Creating an empty database...")
-    db = COLMAPDatabase.connect(database_path)
-    db.create_tables()
-    db.commit()
-    db.close()
+    with open_colmap_database(database_path) as _:
+        pass
 
 
 def import_images(
@@ -53,11 +51,11 @@ def import_images(
 
 
 def get_image_ids(database_path: Path) -> Dict[str, int]:
-    db = COLMAPDatabase.connect(database_path)
     images = {}
-    for name, image_id in db.execute("SELECT name, image_id FROM images;"):
-        images[name] = image_id
-    db.close()
+    with open_colmap_database(database_path) as db:
+        images = {
+            image.name: image_id for image_id, image in db.read_all_images().items()
+        }
     return images
 
 
@@ -171,17 +169,19 @@ def main(
     create_empty_db(database)
     import_images(image_dir, database, camera_mode, image_list, image_options)
     image_ids = get_image_ids(database)
-    import_features(image_ids, database, features)
-    import_matches(
-        image_ids,
-        database,
-        pairs,
-        matches,
-        min_match_score,
-        skip_geometric_verification,
-    )
+    with open_colmap_database(database) as db:
+        import_features(image_ids, db, features)
+        import_matches(
+            image_ids,
+            db,
+            pairs,
+            matches,
+            min_match_score,
+            skip_geometric_verification,
+        )
     if not skip_geometric_verification:
-        estimation_and_geometric_verification(database, pairs, verbose)
+        with open_colmap_database(database) as db:
+            estimation_and_geometric_verification(db, pairs, verbose)
     reconstruction = run_reconstruction(
         sfm_dir, database, image_dir, verbose, mapper_options
     )

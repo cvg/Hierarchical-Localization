@@ -7,9 +7,8 @@ import pycolmap
 from tqdm import tqdm
 
 from . import logger
-from .utils.database import COLMAPDatabase
 from .utils.geometry import compute_epipolar_errors
-from .utils.io import get_keypoints, get_matches
+from .utils.io import get_keypoints, get_matches, open_colmap_database
 from .utils.parsers import parse_retrieval
 
 
@@ -33,45 +32,31 @@ def create_db_from_model(
         logger.warning("The database already exists, deleting it.")
         database_path.unlink()
 
-    db = COLMAPDatabase.connect(database_path)
-    db.create_tables()
-
-    for i, camera in reconstruction.cameras.items():
-        db.add_camera(
-            camera.model.value,
-            camera.width,
-            camera.height,
-            camera.params,
-            camera_id=i,
-            prior_focal_length=True,
-        )
-
-    for i, image in reconstruction.images.items():
-        db.add_image(image.name, image.camera_id, image_id=i)
-
-    db.commit()
-    db.close()
-    return {image.name: i for i, image in reconstruction.images.items()}
+    with open_colmap_database(database_path) as db:
+        for camera_id, camera in reconstruction.cameras.items():
+            db.write_camera(camera, use_camera_id=True)
+        for rig_id, rig in reconstruction.rigs.items():
+            db.write_rig(rig, use_rig_id=True)
+        for frame_id, frame in reconstruction.frames.items():
+            db.write_frame(frame, use_frame_id=True)
+        for image_id, image in reconstruction.images.items():
+            db.write_image(image, use_image_id=True)
+    return {image.name: image_id for image_id, image in reconstruction.images.items()}
 
 
 def import_features(
-    image_ids: Dict[str, int], database_path: Path, features_path: Path
+    image_ids: Dict[str, int], db: pycolmap.Database, features_path: Path
 ):
     logger.info("Importing features into the database...")
-    db = COLMAPDatabase.connect(database_path)
-
     for image_name, image_id in tqdm(image_ids.items()):
         keypoints = get_keypoints(features_path, image_name)
         keypoints += 0.5  # COLMAP origin
-        db.add_keypoints(image_id, keypoints)
-
-    db.commit()
-    db.close()
+        db.write_keypoints(image_id, keypoints)
 
 
 def import_matches(
     image_ids: Dict[str, int],
-    database_path: Path,
+    db: pycolmap.Database,
     pairs_path: Path,
     matches_path: Path,
     min_match_score: Optional[float] = None,
@@ -82,8 +67,6 @@ def import_matches(
     with open(str(pairs_path), "r") as f:
         pairs = [p.split() for p in f.readlines()]
 
-    db = COLMAPDatabase.connect(database_path)
-
     matched = set()
     for name0, name1 in tqdm(pairs):
         id0, id1 = image_ids[name0], image_ids[name1]
@@ -92,14 +75,13 @@ def import_matches(
         matches, scores = get_matches(matches_path, name0, name1)
         if min_match_score:
             matches = matches[scores > min_match_score]
-        db.add_matches(id0, id1, matches)
+        db.write_matches(id0, id1, matches)
         matched |= {(id0, id1), (id1, id0)}
 
         if skip_geometric_verification:
-            db.add_two_view_geometry(id0, id1, matches)
-
-    db.commit()
-    db.close()
+            db.write_two_view_geometry(
+                id0, id1, pycolmap.TwoViewGeometry(inlier_matches=matches)
+            )
 
 
 def estimation_and_geometric_verification(
@@ -117,7 +99,7 @@ def estimation_and_geometric_verification(
 def geometric_verification(
     image_ids: Dict[str, int],
     reference: pycolmap.Reconstruction,
-    database_path: Path,
+    db: pycolmap.Database,
     features_path: Path,
     pairs_path: Path,
     matches_path: Path,
@@ -126,7 +108,6 @@ def geometric_verification(
     logger.info("Performing geometric verification of the matches...")
 
     pairs = parse_retrieval(pairs_path)
-    db = COLMAPDatabase.connect(database_path)
 
     inlier_ratios = []
     matched = set()
@@ -159,7 +140,7 @@ def geometric_verification(
             matched |= {(id0, id1), (id1, id0)}
 
             if matches.shape[0] == 0:
-                db.add_two_view_geometry(id0, id1, matches)
+                db.write_two_view_geometry(id0, id1, pycolmap.TwoViewGeometry())
                 continue
 
             cam1_from_cam0 = image1.cam_from_world() * image0.cam_from_world().inverse()
@@ -172,7 +153,11 @@ def geometric_verification(
             )
             # TODO: We could also add E to the database, but we need
             # to reverse the transformations if id0 > id1 in utils/database.py.
-            db.add_two_view_geometry(id0, id1, matches[valid_matches, :])
+            db.write_two_view_geometry(
+                id0,
+                id1,
+                pycolmap.TwoViewGeometry(inlier_matches=matches[valid_matches, :]),
+            )
             inlier_ratios.append(np.mean(valid_matches))
     logger.info(
         "mean/med/min/max valid matches %.2f/%.2f/%.2f/%.2f%%.",
@@ -181,9 +166,6 @@ def geometric_verification(
         np.min(inlier_ratios) * 100,
         np.max(inlier_ratios) * 100,
     )
-
-    db.commit()
-    db.close()
 
 
 def run_triangulation(
@@ -228,18 +210,20 @@ def main(
     reference = pycolmap.Reconstruction(reference_model)
 
     image_ids = create_db_from_model(reference, database)
-    import_features(image_ids, database, features)
-    import_matches(
-        image_ids,
-        database,
-        pairs,
-        matches,
-        min_match_score,
-        skip_geometric_verification,
-    )
+    with open_colmap_database(database) as db:
+        import_features(image_ids, db, features)
+        import_matches(
+            image_ids,
+            db,
+            pairs,
+            matches,
+            min_match_score,
+            skip_geometric_verification,
+        )
     if not skip_geometric_verification:
         if estimate_two_view_geometries:
-            estimation_and_geometric_verification(database, pairs, verbose)
+            with open_colmap_database(database) as db:
+                estimation_and_geometric_verification(db, pairs, verbose)
         else:
             geometric_verification(
                 image_ids, reference, database, features, pairs, matches
