@@ -178,7 +178,7 @@ def main(
             skip_geometric_verification,
         )
     if not skip_geometric_verification:
-        estimation_and_geometric_verification(db, pairs, verbose)
+        estimation_and_geometric_verification(database, pairs, verbose)
     reconstruction = run_reconstruction(
         sfm_dir, database, image_dir, verbose, mapper_options
     )
