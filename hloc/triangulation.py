@@ -222,12 +222,12 @@ def main(
         )
     if not skip_geometric_verification:
         if estimate_two_view_geometries:
-            with open_colmap_database(database) as db:
-                estimation_and_geometric_verification(db, pairs, verbose)
+            estimation_and_geometric_verification(database, pairs, verbose)
         else:
-            geometric_verification(
-                image_ids, reference, database, features, pairs, matches
-            )
+            with open_colmap_database(database) as db:
+                geometric_verification(
+                    image_ids, reference, db, features, pairs, matches
+                )
     reconstruction = run_triangulation(
         sfm_dir, database, image_dir, reference, verbose, mapper_options
     )

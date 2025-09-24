@@ -53,9 +53,7 @@ def import_images(
 def get_image_ids(database_path: Path) -> Dict[str, int]:
     images = {}
     with open_colmap_database(database_path) as db:
-        images = {
-            image.name: image_id for image_id, image in db.read_all_images().items()
-        }
+        images = {image.name: image.image_id for image in db.read_all_images()}
     return images
 
 
@@ -180,8 +178,7 @@ def main(
             skip_geometric_verification,
         )
     if not skip_geometric_verification:
-        with open_colmap_database(database) as db:
-            estimation_and_geometric_verification(db, pairs, verbose)
+        estimation_and_geometric_verification(database, pairs, verbose)
     reconstruction = run_reconstruction(
         sfm_dir, database, image_dir, verbose, mapper_options
     )
