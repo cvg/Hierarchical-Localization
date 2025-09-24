@@ -178,8 +178,7 @@ def main(
             skip_geometric_verification,
         )
     if not skip_geometric_verification:
-        with open_colmap_database(database) as db:
-            estimation_and_geometric_verification(db, pairs, verbose)
+        estimation_and_geometric_verification(db, pairs, verbose)
     reconstruction = run_reconstruction(
         sfm_dir, database, image_dir, verbose, mapper_options
     )
