@@ -69,6 +69,9 @@ def import_matches(
 
     matched = set()
     for name0, name1 in tqdm(pairs):
+        if name0 not in image_ids or name1 not in image_ids:
+            continue
+        
         id0, id1 = image_ids[name0], image_ids[name1]
         if len({(id0, id1), (id1, id0)} & matched) > 0:
             continue
