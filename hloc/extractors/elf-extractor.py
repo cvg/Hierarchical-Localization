@@ -22,7 +22,9 @@ class ElfFeatures(BaseModel):
         self.detector = getExtractor(conf["elf_detector"], conf["elf_detector_conf"])
         self.detector.to(self.device)
 
-        self.descriptor = getExtractor(conf["elf_descriptor"], conf["elf_descriptor_conf"])
+        self.descriptor = getExtractor(
+            conf["elf_descriptor"], conf["elf_descriptor_conf"]
+        )
         self.descriptor.to(self.device)
 
     def _forward(self, data):
