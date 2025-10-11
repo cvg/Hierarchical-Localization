@@ -1,7 +1,6 @@
 import torch
 from ..utils.base_model import BaseModel
 from easy_local_features import getExtractor
-from easy_local_features.feature.baseline_xfeat import XFeat_baseline
 
 
 class ElfFeatures(BaseModel):
