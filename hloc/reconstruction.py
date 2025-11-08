@@ -63,7 +63,7 @@ def incremental_mapping(
     sfm_path: Path,
     options: Optional[Dict[str, Any]] = None,
 ) -> dict[int, pycolmap.Reconstruction]:
-    num_images = pycolmap.Database(database_path).num_images
+    num_images = pycolmap.Database.open(database_path).num_images()
     pbars = []
 
     def restart_progress_bar():
