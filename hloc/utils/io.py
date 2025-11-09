@@ -90,4 +90,3 @@ def write_poses(
             if prepend_camera_name:
                 name = query.split("/")[-2] + "/" + name
             f.write(f"{name} {qvec} {tvec}\n")
-
