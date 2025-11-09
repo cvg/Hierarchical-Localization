@@ -1,6 +1,5 @@
-import contextlib
 from pathlib import Path
-from typing import ContextManager, Mapping, Tuple
+from typing import Mapping, Tuple
 
 import cv2
 import h5py
@@ -91,5 +90,4 @@ def write_poses(
             if prepend_camera_name:
                 name = query.split("/")[-2] + "/" + name
             f.write(f"{name} {qvec} {tvec}\n")
-
 
