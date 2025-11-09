@@ -93,7 +93,3 @@ def write_poses(
             f.write(f"{name} {qvec} {tvec}\n")
 
 
-@contextlib.contextmanager
-def open_colmap_database(database_path: Path) -> ContextManager[pycolmap.Database]:
-    with pycolmap.Database.open(database_path) as db:
-        yield db
