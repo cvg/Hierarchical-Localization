@@ -81,6 +81,13 @@ confs = {
             "do_mutual_check": True,
         },
     },
+    "orb": {
+        "output": "matches-orb",
+        "model": {
+            "name": "orb_match",
+            "do_mutual_check": True,
+        },
+    },
     "adalam": {
         "output": "matches-adalam",
         "model": {"name": "adalam"},
