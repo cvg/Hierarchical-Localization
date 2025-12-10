@@ -125,6 +125,34 @@ confs = {
             "resize_max": 1024,
         },
     },
+    "dad": {
+        "output": "feats-dad",
+        "model": {
+            "name": "elf-extractor",
+            "elf_detector": "dad",
+            "elf_detector_conf": {},
+            "elf_descriptor": "xfeat",
+            "elf_descriptor_conf": {},
+        },
+        "preprocessing": {
+            "grayscale": False,
+        },
+    },
+    "dedode": {
+        "output": "feats-dedode",
+        "model": {
+            "name": "elf-extractor",
+            "elf_detector": "dedode",
+            "elf_detector_conf": {
+                "detector_weights": "L-C4-v2",
+            },
+            "elf_descriptor": "xfeat",
+            "elf_descriptor_conf": {},
+        },
+        "preprocessing": {
+            "grayscale": False,
+        },
+    },
     # Global descriptors
     "dir": {
         "output": "global-feats-dir",
@@ -240,7 +268,7 @@ def main(
     overwrite: bool = False,
 ) -> Path:
     logger.info(
-        "Extracting local features with configuration:" f"\n{pprint.pformat(conf)}"
+        f"Extracting local features with configuration:\n{pprint.pformat(conf)}"
     )
 
     dataset = ImageDataset(image_dir, conf["preprocessing"], image_list)
