@@ -114,16 +114,24 @@ def run_reconstruction(
         return None
     logger.info(f"Reconstructed {len(reconstructions)} model(s).")
 
-    largest_index = None
+    largest_folder = None
     largest_num_images = 0
-    for index, rec in reconstructions.items():
-        num_images = rec.num_reg_images()
-        if num_images > largest_num_images:
-            largest_index = index
-            largest_num_images = num_images
-    assert largest_index is not None
+    for model_dir in models_path.iterdir():
+        if not model_dir.is_dir():
+            continue
+        try:
+            rec = pycolmap.Reconstruction(model_dir)
+            num_images = rec.num_reg_images()
+            if num_images > largest_num_images:
+                largest_folder = model_dir
+                largest_num_images = num_images
+        except Exception as e:
+            logger.warning(f"Could not load reconstruction from {model_dir}: {e}")
+            continue
+    assert largest_folder is not None
+
     logger.info(
-        f"Largest model is #{largest_index} " f"with {largest_num_images} images."
+        f"Largest model is {largest_folder.name} " f"with {largest_num_images} images."
     )
 
     for filename in [
@@ -135,8 +143,9 @@ def run_reconstruction(
     ]:
         if (sfm_dir / filename).exists():
             (sfm_dir / filename).unlink()
-        shutil.move(str(models_path / str(largest_index) / filename), str(sfm_dir))
-    return reconstructions[largest_index]
+        shutil.move(str(largest_folder / filename), str(sfm_dir))
+
+    return pycolmap.Reconstruction(sfm_dir)
 
 
 def main(
