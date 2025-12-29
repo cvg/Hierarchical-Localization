@@ -3,7 +3,7 @@
 	url = https://github.com/mihaidusmanu/d2-net.git
 [submodule "third_party/SuperGluePretrainedNetwork"]
 	path = third_party/SuperGluePretrainedNetwork
-	url = https://github.com/VuThanhDat14122004/SuperGluePretrainedNetwork/tree/lg
+	url = https://github.com/VuThanhDat14122004/SuperGluePretrainedNetwork.git
 [submodule "third_party/deep-image-retrieval"]
 	path = third_party/deep-image-retrieval
 	url = https://github.com/naver/deep-image-retrieval.git
