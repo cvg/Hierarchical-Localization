@@ -74,7 +74,7 @@ def pose_from_cluster(
         **kwargs):
 
     kpq = get_keypoints(features_path, qname)
-    kpq = kpq.astype(np.float32)
+    kpq = np.array(kpq, dtype=np.float32)
     kpq += 0.5  # COLMAP coordinates
 
     kp_idx_to_3D = defaultdict(list)
@@ -82,14 +82,17 @@ def pose_from_cluster(
     num_matches = 0
     for i, db_id in enumerate(db_ids):
         image = localizer.reconstruction.images[db_id]
-        if image.num_points3D() == 0:
+        print(f'image {image}')
+        print(f'image numpoint 3d: {image.num_points3D}')
+        if image.num_points3D == 0:
             logger.debug(f'No 3D points found for {image.name}.')
             continue
         points3D_ids = np.array([p.point3D_id if p.has_point3D() else -1
                                  for p in image.points2D])
 
         matches, _ = get_matches(matches_path, qname, image.name)
-        matches = matches[points3D_ids[matches[:, 1]] != -1]
+        valid_matches = np.array([list(pair) for pair in matches if (pair[1] < len(points3D_ids))])
+        matches = valid_matches[points3D_ids[valid_matches[:, 1]] != -1]
         num_matches += len(matches)
         for idx, m in matches:
             id_3D = points3D_ids[m]
@@ -102,8 +105,10 @@ def pose_from_cluster(
     mkp_idxs = [i for i in idxs for _ in kp_idx_to_3D[i]]
     mp3d_ids = [j for i in idxs for j in kp_idx_to_3D[i]]
     ret = localizer.localize(kpq, mkp_idxs, mp3d_ids, query_camera, **kwargs)
+    print(f'query_camera attrs: {query_camera}')
     ret['camera'] = {
-        'model': query_camera.model_name,
+        # 'model': query_camera.model_name,
+        'model': query_camera.model,
         'width': query_camera.width,
         'height': query_camera.height,
         'params': query_camera.params,

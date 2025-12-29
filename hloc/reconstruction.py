@@ -28,17 +28,50 @@ def import_images(image_dir: Path,
                   camera_mode: pycolmap.CameraMode,
                   image_list: Optional[List[str]] = None,
                   options: Optional[Dict[str, Any]] = None):
+    # logger.info('Importing images into the database...')
+    # if options is None:
+    #     options = {}
+    # images = list(image_dir.iterdir())
+    # if len(images) == 0:
+    #     raise IOError(f'No images found in {image_dir}.')
+    # with pycolmap.ostream():
+    #     # print all type of database_path, image_dir, camera_mode, image_list, options
+    #     # str database_path
+    #     print(f"database_path: {database_path}, type: {type(database_path)}")
+    #     print(f"image_dir: {image_dir}, type: {type(image_dir)}")
+    #     print(f"camera_mode: {camera_mode}, type: {type(camera_mode)}")
+    #     print(f"image_list: {image_list}, type: {type(image_list)}")
+    #     print(f"options: {options}, type: {type(options)}")
+    #     pycolmap.import_images(database_path, image_dir, camera_mode,
+    #                            image_list=image_list or [],
+    #                            options=options)
     logger.info('Importing images into the database...')
-    if options is None:
-        options = {}
-    images = list(image_dir.iterdir())
+    image_list = image_list or []
+
+    if not image_dir.exists():
+        raise IOError(f'Image directory {image_dir} does not exist.')
+    images = list(image_dir.glob('*.jpg')) + list(image_dir.glob('*.png'))
     if len(images) == 0:
         raise IOError(f'No images found in {image_dir}.')
-    with pycolmap.ostream():
-        pycolmap.import_images(database_path, image_dir, camera_mode,
-                               image_list=image_list or [],
-                               options=options)
 
+    if options is None:
+        options = pycolmap.ImageReaderOptions()
+    elif isinstance(options, dict):
+        opts = pycolmap.ImageReaderOptions()
+        for k, v in options.items():
+            setattr(opts, k, v)
+        options = opts
+    elif not isinstance(options, pycolmap.ImageReaderOptions):
+        raise TypeError("options must be a dict or a pycolmap.ImageReaderOptions instance")
+
+    with pycolmap.ostream():
+        pycolmap.import_images(
+            str(database_path),
+            str(image_dir),
+            camera_mode,
+            image_names=image_list,
+            options=options
+        )
 
 def get_image_ids(database_path: Path) -> Dict[str, int]:
     db = COLMAPDatabase.connect(database_path)
@@ -110,7 +143,6 @@ def main(sfm_dir: Path,
 
     sfm_dir.mkdir(parents=True, exist_ok=True)
     database = sfm_dir / 'database.db'
-
     create_empty_db(database)
     import_images(image_dir, database, camera_mode, image_list, image_options)
     image_ids = get_image_ids(database)

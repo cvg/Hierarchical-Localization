@@ -62,6 +62,7 @@ def import_features(image_ids: Dict[str, int],
 
     for image_name, image_id in tqdm(image_ids.items()):
         keypoints = get_keypoints(features_path, image_name)
+        keypoints = np.array(keypoints, dtype=np.float32)
         keypoints += 0.5  # COLMAP origin
         db.add_keypoints(image_id, keypoints)
 
@@ -100,15 +101,26 @@ def import_matches(image_ids: Dict[str, int],
     db.close()
 
 
+# def estimation_and_geometric_verification(database_path: Path,
+#                                           pairs_path: Path,
+#                                           verbose: bool = False):
+#     logger.info('Performing geometric verification of the matches...')
+#     with OutputCapture(verbose):
+#         with pycolmap.ostream():
+#             pycolmap.verify_matches(
+#                 database_path, pairs_path,
+#                 max_num_trials=20000, min_inlier_ratio=0.1)
 def estimation_and_geometric_verification(database_path: Path,
                                           pairs_path: Path,
                                           verbose: bool = False):
     logger.info('Performing geometric verification of the matches...')
     with OutputCapture(verbose):
         with pycolmap.ostream():
-            pycolmap.verify_matches(
-                database_path, pairs_path,
-                max_num_trials=20000, min_inlier_ratio=0.1)
+            options = pycolmap.TwoViewGeometryOptions()
+            options.ransac.max_num_trials = 20000
+            options.ransac.min_inlier_ratio = 0.1
+            pycolmap.verify_matches(database_path, pairs_path, options)
+
 
 
 def geometric_verification(image_ids: Dict[str, int],

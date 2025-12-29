@@ -129,7 +129,8 @@ def plot_camera_colmap(
         name: Optional[str] = None,
         **kwargs):
     """Plot a camera frustum from PyCOLMAP objects"""
-    rigid = image.cam_from_world()
+    # rigid = image.cam_from_world()
+    rigid = image['cam_from_world']  # sử dụng từ điển
     R = rigid.rotation.matrix().T     # nếu bạn muốn ma trận 3x3 quay từ thế giới → camera
     t = rigid.translation            # vị trí của camera trong hệ tọa độ thế giới
 
@@ -139,8 +140,10 @@ def plot_camera_colmap(
         R,
         t,
         K,
-        name=name or str(image.image_id),
-        text=image.summary(),
+        # name=name or str(image.image_id),
+        name=name,
+        # text=image.summary(),
+        text='',
         **kwargs
     )
 

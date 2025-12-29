@@ -84,7 +84,8 @@ def visualize_loc_from_log(image_dir, query_name, loc, reconstruction=None,
         # select the first, largest cluster if the localization failed
         loc = loc['log_clusters'][loc['best_cluster'] or 0]
 
-    inliers = np.array(loc['PnP_ret']['inliers'])
+    # inliers = np.array(loc['PnP_ret']['inliers'])
+    inliers = np.array(loc['PnP_ret']['inlier_mask'])
     mkp_q = loc['keypoints_query']
     n = len(loc['db'])
     if reconstruction is not None:

@@ -210,6 +210,7 @@ class ImageDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         name = self.names[idx]
+        image_path = str(self.root / name)
         image = read_image(self.root / name, self.conf.grayscale)
         image = image.astype(np.float32)
         size = image.shape[:2][::-1]
@@ -218,8 +219,14 @@ class ImageDataset(torch.utils.data.Dataset):
                                      or max(size) > self.conf.resize_max):
             scale = self.conf.resize_max / max(size)
             size_new = tuple(int(round(x*scale)) for x in size)
+            try:
+                if self.conf.size_roma:
+                    size_new = (int(round(size[0]*scale/self.conf.patch_size)*self.conf.patch_size),
+                                int(round(size[1]*scale/self.conf.patch_size)*self.conf.patch_size))
+            except:
+                pass
             image = resize_image(image, size_new, self.conf.interpolation)
-
+            # print(f"New size: {size_new}")
         if self.conf.grayscale:
             image = image[None]
         else:
@@ -229,6 +236,7 @@ class ImageDataset(torch.utils.data.Dataset):
         data = {
             'image': image,
             'original_size': np.array(size),
+            'image_path': image_path
         }
         return data
 
@@ -243,7 +251,9 @@ def main(conf: Dict,
          as_half: bool = True,
          image_list: Optional[Union[Path, List[str]]] = None,
          feature_path: Optional[Path] = None,
-         overwrite: bool = False) -> Path:
+         feature_raw_path: Optional[Path] = None,
+         overwrite: bool = False,
+         dict_keypoints_index: Optional[Path] = None) -> Path:
     logger.info('Extracting local features with configuration:'
                 f'\n{pprint.pformat(conf)}')
 
@@ -253,23 +263,31 @@ def main(conf: Dict,
     feature_path.parent.mkdir(exist_ok=True, parents=True)
     skip_names = set(list_h5_names(feature_path)
                      if feature_path.exists() and not overwrite else ())
+    
     dataset.names = [n for n in dataset.names if n not in skip_names]
     if len(dataset.names) == 0:
         logger.info('Skipping the extraction.')
         return feature_path
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    # device = 'cpu'
     Model = dynamic_load(extractors, conf['model']['name'])
     model = Model(conf['model']).eval().to(device)
+    # print name of device being used
 
     loader = torch.utils.data.DataLoader(
-        dataset, num_workers=1, shuffle=False, pin_memory=True)
+        dataset, num_workers=1, shuffle=False, pin_memory=True) # default batch_size=1
+    # loader = torch.utils.data.DataLoader(
+    #     dataset, num_workers=1, shuffle=False, pin_memory=False) # default batch_size=1
     for idx, data in enumerate(tqdm(loader)):
         name = dataset.names[idx]
         pred = model({'image': data['image'].to(device, non_blocking=True)})
         pred = {k: v[0].cpu().numpy() for k, v in pred.items()}
 
         pred['image_size'] = original_size = data['original_size'][0].numpy()
+        pred['image'] = data['image']
+        pred['image_path'] = data['image_path']
+        list_keypoints = []
         if 'keypoints' in pred:
             size = np.array(data['image'].shape[-2:][::-1])
             scales = (original_size / size).astype(np.float32)
@@ -277,10 +295,12 @@ def main(conf: Dict,
             if 'scales' in pred:
                 pred['scales'] *= scales.mean()
             # add keypoint uncertainties scaled to the original resolution
-            uncertainty = getattr(model, 'detection_noise', 1) * scales.mean()
+            uncertainty = getattr(model, 'detection_noise', 1) * scales.mean() ## detetion_noise = 2 in hloc extractors/superpoint.py
 
         if as_half:
             for k in pred:
+                if k == 'image_path':
+                    continue
                 dt = pred[k].dtype
                 if (dt == np.float32) and (dt != np.float16):
                     pred[k] = pred[k].astype(np.float16)
@@ -294,6 +314,7 @@ def main(conf: Dict,
                     grp.create_dataset(k, data=v)
                 if 'keypoints' in pred:
                     grp['keypoints'].attrs['uncertainty'] = uncertainty
+                    list_keypoints = [(int(xy[0]), int(xy[1])) for xy in pred['keypoints']]
             except OSError as error:
                 if 'No space left on device' in error.args[0]:
                     logger.error(
@@ -301,9 +322,21 @@ def main(conf: Dict,
                         'significant space, did you enable the as_half flag?')
                     del grp, fd[name]
                 raise error
-
+        # create dict_keypoints_index, file['image_name'] =  {(pointx1, pointy1):index1, (pointx2, pointy2):index2, ...}
+        if dict_keypoints_index is not None and 'keypoints' in pred:
+            with h5py.File(str(dict_keypoints_index), 'a', libver='latest') as fd_index:
+                if name in fd_index:
+                    del fd_index[name]
+                fd_index.create_group(name)
+                # keep integer values for keypoints
+                for idx_kp, kp in enumerate(list_keypoints):
+                    fd_index[name].create_dataset(str(kp), data=idx_kp)
         del pred
-
+    # make copy feature.h5 named feature_raw.h5
+    if feature_raw_path:
+        import shutil
+        shutil.copyfile(feature_path, feature_raw_path)
+        logger.info(f'Copied {feature_path} to {feature_raw_path} for roma preprocessing.')
     logger.info('Finished exporting features.')
     return feature_path
 

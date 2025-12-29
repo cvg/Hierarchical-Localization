@@ -23,3 +23,4 @@ class LightGlue(BaseModel):
             'image0': {k[:-1]: v for k, v in data.items() if k[-1] == '0'},
             'image1': {k[:-1]: v for k, v in data.items() if k[-1] == '1'}
         })
+
