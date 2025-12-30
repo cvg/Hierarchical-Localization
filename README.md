@@ -22,17 +22,17 @@ Uses GIM-LightGlue as the primary matching backbone.
 
 | Stage              | Results                                                                 |
 |--------------------|-------------------------------------------------------------------------|
-| Matching           | ![GIM-LightGlue Matching 1](image-6.png) ![GIM-LightGlue Matching 2](image-7.png) ![GIM-LightGlue Matching 3](image-11.png) |
-| Reconstruction     | ![GIM-LightGlue Reconstruction](image-3.png)                            |
+| Matching           | ![GIM-LightGlue Matching 1](images/image-6.png) ![GIM-LightGlue Matching 2](images/image-7.png) ![GIM-LightGlue Matching 3](images/image-11.png) |
+| Reconstruction     | ![GIM-LightGlue Reconstruction](images/image-3.png)                            |
 
 ### 2. RoMa + GIM-LightGlue Matcher
 Combines RoMa for enhanced keypoint detection/refinement with GIM-LightGlue matching.
 
 | Stage              | Results                                                                 |
 |--------------------|-------------------------------------------------------------------------|
-| Keypoints          | ![RoMa + SuperPoint Keypoints 1](image-1.png) ![RoMa + SuperPoint Keypoints 2](image-2.png) |
-| Matching           | ![RoMa + GIM-LightGlue Matching 1](image-8.png) ![RoMa + GIM-LightGlue Matching 2](image-9.png) ![RoMa + GIM-LightGlue Matching 3](image-10.png) |
-| Reconstruction     | ![RoMa + GIM-LightGlue Reconstruction](image.png)                       |
+| Keypoints          | ![RoMa + SuperPoint Keypoints 1](images/image-1.png) ![RoMa + SuperPoint Keypoints 2](images/image-2.png) |
+| Matching           | ![RoMa + GIM-LightGlue Matching 1](images/image-8.png) ![RoMa + GIM-LightGlue Matching 2](images/image-9.png) ![RoMa + GIM-LightGlue Matching 3](images/image-10.png) |
+| Reconstruction     | ![RoMa + GIM-LightGlue Reconstruction](images/image.png)                       |
 
 ## Observations
 
