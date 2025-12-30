@@ -176,12 +176,21 @@ class FeaturePairsDataset(torch.utils.data.Dataset):
         with h5py.File(self.feature_path_q, "r") as fd:
             grp = fd[name0]
             for k, v in grp.items():
+                if k == 'image_path':
+                    v = v.__array__().astype(str)
+                    data[k + "0"] = v[0]
+                    continue
+
                 data[k + "0"] = torch.from_numpy(v.__array__()).float()
             # some matchers might expect an image but only use its size
             data["image0"] = torch.empty((1,) + tuple(grp["image_size"])[::-1])
         with h5py.File(self.feature_path_r, "r") as fd:
             grp = fd[name1]
             for k, v in grp.items():
+                if k == 'image_path':
+                    v = v.__array__().astype(str)
+                    data[k + "1"] = v[0]
+                    continue
                 data[k + "1"] = torch.from_numpy(v.__array__()).float()
             data["image1"] = torch.empty((1,) + tuple(grp["image_size"])[::-1])
         return data
@@ -433,17 +442,26 @@ def match_from_paths(conf: Dict,
     print(f"\n---start lg")
     print(f"\n----pairs path: {pairs_path}")
     pairs = []
-    if not is_query_map_match:
+    if not is_query_map_match and 'roma' in conf['model']['name']:
         pairs = match_from_paths_glue(conf, pairs_path, match_path, feature_path_q, feature_path_ref, overwrite)
-    else:
+    elif 'roma' in conf['model']['name']:
         pairs = match_from_paths_glue(conf, pairs_path, match_path, feature_path_q, feature_path_raw_ref, overwrite)
-    print(f"finished lg, start roma")
     logger.info('Matching local features with configuration:'
                 f'\n{pprint.pformat(conf)}')
     if not feature_path_q.exists():
         raise FileNotFoundError(f'Query feature file {feature_path_q}.')
     if not feature_path_ref.exists():
         raise FileNotFoundError(f'Reference feature file {feature_path_ref}.')
+    if 'roma' not in conf['model']['name']:
+        match_path.parent.mkdir(exist_ok=True, parents=True)
+        assert pairs_path.exists(), pairs_path
+        pairs = parse_retrieval(pairs_path)
+        pairs = [(q, r) for q, rs in pairs.items() for r in rs]
+        
+        pairs = find_unique_new_pairs(pairs, None if overwrite else match_path)
+        if len(pairs) == 0:
+            logger.info('Skipping the matching.')
+            return
     # match_path.parent.mkdir(exist_ok=True, parents=True)
 
     # assert pairs_path.exists(), pairs_path
@@ -460,13 +478,14 @@ def match_from_paths(conf: Dict,
     Model = dynamic_load(matchers, conf['model']['name'])
     model = Model(conf['model']).eval().to(device)
     use_roma = False
+    print(f"feature_path_q: {feature_path_q}, feature_path_ref: {feature_path_ref}")
     if 'roma' in conf['model']['name']:
         use_roma = True
         dataset = FeaturePairsDatasetRoMa(pairs, feature_path_q, feature_path_ref)
     else:
         dataset = FeaturePairsDataset(pairs, feature_path_q, feature_path_ref)
         writer_queue = WorkQueue(partial(writer_fn, match_path=match_path), 5)
-        
+    print(f"dataset len: {dataset.__len__()}")
     loader = torch.utils.data.DataLoader(
         dataset, num_workers=0, batch_size=1, shuffle=False, pin_memory=True)# keep shuffle=False
     
