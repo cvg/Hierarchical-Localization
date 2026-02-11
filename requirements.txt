@@ -11,3 +11,4 @@ pycolmap>=3.13.0
 kornia>=0.6.11
 gdown
 lightglue @ git+https://github.com/cvg/LightGlue
+easy-local-features  @ git+https://github.com/felipecadar/easy-local-features-baselines
