@@ -6,15 +6,13 @@ from ..utils.base_model import BaseModel
 
 class ElfFeatures(BaseModel):
     default_conf = {
-        "model": {
-            "name": "elf-detectors",
-            "elf_detector": "xfeat",
-            "elf_detector_conf": {
-                "top_k": 512,
-            },
-            "elf_descriptor": "xfeat",
-            "elf_descriptor_conf": {},
+        "name": "elf-detectors",
+        "elf_detector": "xfeat",
+        "elf_detector_conf": {
+            "top_k": 512,
         },
+        "elf_descriptor": "xfeat",
+        "elf_descriptor_conf": {},
     }
 
     def _init(self, conf):
