@@ -57,7 +57,9 @@ class DoG(BaseModel):
             else:
                 options["normalization"] = pycolmap.Normalization.L2
             self.sift = pycolmap.Sift(
-                options=pycolmap.SiftExtractionOptions(options),
+                options=pycolmap.FeatureExtractionOptions(
+                    sift=pycolmap.SiftExtractionOptions(options)
+                ),
                 device=getattr(pycolmap.Device, "cuda" if use_gpu else "cpu"),
             )
 

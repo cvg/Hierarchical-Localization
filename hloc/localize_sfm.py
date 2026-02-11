@@ -204,7 +204,7 @@ def main(
                 cam_from_world[qname] = ret["cam_from_world"]
             else:
                 closest = reference_sfm.images[db_ids[0]]
-                cam_from_world[qname] = closest.cam_from_world
+                cam_from_world[qname] = closest.cam_from_world()
             log["covisibility_clustering"] = covisibility_clustering
             logs["loc"][qname] = log
 

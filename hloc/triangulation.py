@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 from . import logger
 from .utils.geometry import compute_epipolar_errors
-from .utils.io import get_keypoints, get_matches, open_colmap_database
+from .utils.io import get_keypoints, get_matches
 from .utils.parsers import parse_retrieval
 
 
@@ -32,7 +32,7 @@ def create_db_from_model(
         logger.warning("The database already exists, deleting it.")
         database_path.unlink()
 
-    with open_colmap_database(database_path) as db:
+    with pycolmap.Database.open(database_path) as db:
         for camera_id, camera in reconstruction.cameras.items():
             db.write_camera(camera, use_camera_id=True)
         for rig_id, rig in reconstruction.rigs.items():
@@ -210,7 +210,7 @@ def main(
     reference = pycolmap.Reconstruction(reference_model)
 
     image_ids = create_db_from_model(reference, database)
-    with open_colmap_database(database) as db:
+    with pycolmap.Database.open(database) as db:
         import_features(image_ids, db, features)
         import_matches(
             image_ids,
@@ -224,7 +224,7 @@ def main(
         if estimate_two_view_geometries:
             estimation_and_geometric_verification(database, pairs, verbose)
         else:
-            with open_colmap_database(database) as db:
+            with pycolmap.Database.open(database) as db:
                 geometric_verification(
                     image_ids, reference, db, features, pairs, matches
                 )
