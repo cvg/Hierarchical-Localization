@@ -78,11 +78,21 @@ def incremental_mapping(
         )
         pbars[-1].update(2)
 
+    pipeline_options = pycolmap.IncrementalPipelineOptions()
+    if options and isinstance(options, dict):
+        for k, v in options.items():
+            # Check if this parameter belongs to mapper
+            if hasattr(pipeline_options.mapper, k):
+                setattr(pipeline_options.mapper, k, v)
+            # Or belongs to top level (such as num_threads)
+            elif hasattr(pipeline_options, k):
+                setattr(pipeline_options, k, v)
+
     reconstructions = pycolmap.incremental_mapping(
         database_path,
         image_dir,
         sfm_path,
-        options=options or {},
+        options=pipeline_options,
         initial_image_pair_callback=restart_progress_bar,
         next_image_callback=lambda: pbars[-1].update(1),
     )
