@@ -125,6 +125,17 @@ confs = {
             "resize_max": 1024,
         },
     },
+    "xfeat": {
+        "output": "feats-xfeat-n5000-r1600",
+        "model": {
+            "name": "xfeat",
+            "max_keypoints": 5000,
+        },
+        "preprocessing": {
+            "grayscale": False,
+            "resize_max": 1600,
+        },
+    },
     # Global descriptors
     "dir": {
         "output": "global-feats-dir",
