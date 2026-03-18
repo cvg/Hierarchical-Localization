@@ -254,6 +254,8 @@ def main(conf: Dict,
          feature_raw_path: Optional[Path] = None,
          overwrite: bool = False,
          dict_keypoints_index: Optional[Path] = None) -> Path:
+    # only use for benchmark
+    
     logger.info('Extracting local features with configuration:'
                 f'\n{pprint.pformat(conf)}')
 
@@ -261,10 +263,13 @@ def main(conf: Dict,
     if feature_path is None:
         feature_path = Path(export_dir, conf['output']+'.h5')
     feature_path.parent.mkdir(exist_ok=True, parents=True)
+    print(f"\n---------------------feature path : {feature_path}----------------------\n")
     skip_names = set(list_h5_names(feature_path)
                      if feature_path.exists() and not overwrite else ())
-    
+    print(f"\n------------len dataset bef: {len(dataset.names)}--------------\n")
     dataset.names = [n for n in dataset.names if n not in skip_names]
+    # dataset.names = [n for n in dataset.names] #test
+    print(f"\n------------len dataset aft: {len(dataset.names)}--------------\n")
     if len(dataset.names) == 0:
         logger.info('Skipping the extraction.')
         return feature_path
@@ -295,7 +300,7 @@ def main(conf: Dict,
             if 'scales' in pred:
                 pred['scales'] *= scales.mean()
             # add keypoint uncertainties scaled to the original resolution
-            uncertainty = getattr(model, 'detection_noise', 1) * scales.mean() ## detetion_noise = 2 in hloc extractors/superpoint.py
+            uncertainty = getattr(model, 'detection_noise', 1) * scales.mean() ## detection_noise = 2 in hloc extractors/superpoint.py
 
         if as_half:
             for k in pred:

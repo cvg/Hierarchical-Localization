@@ -5,3 +5,4 @@ __pycache__
 outputs/
 datasets/*
 !datasets/sacre_coeur/
+*.safetensors

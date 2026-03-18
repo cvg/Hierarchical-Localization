@@ -106,7 +106,7 @@ confs = {
         'output': 'matches-superglue-roma',
         'model': {
             'name': 'roma',
-            'max_keypoints': 4096,
+            'max_keypoints': 1024,
             'weight_mode': 'indoor',
             'resize_max': 1024,
         },
@@ -245,6 +245,31 @@ def writer_fn(inp, match_path):
     with h5py.File(str(match_path), 'a', libver='latest') as fd:
         if pair in fd:
             del fd[pair]
+        grp = fd.create_group(pair)
+        matches = pred['matches0'][0].cpu().short().numpy()
+        grp.create_dataset('matches0', data=matches)
+        if 'matching_scores0' in pred:
+            scores = pred['matching_scores0'][0].cpu().half().numpy()
+            grp.create_dataset('matching_scores0', data=scores)
+
+def writer_fn_sub(inp, match_path):
+    pair, pred = inp
+    matches = pred['matches0'][0].cpu().short().numpy()
+    matches = np.expand_dims(matches, axis=-1)
+    with h5py.File(str(match_path), 'a', libver='latest') as fd:
+        if pair in fd:
+            # add new data
+            del fd[pair]
+            raise NotImplementedError
+        else:
+            # make new data
+            grp = fd.create_group(pair)
+            grp.create_dataset('matches0', data=matches)
+            if 'matching_scores0' in pred:
+                scores = pred['matching_scores0'][0].cpu().half().numpy()
+                scores = np.expand_dims(scores, axis=-1)
+                grp.create_dataset('matching_scores0', data=scores)
+        raise NotImplementedError
         grp = fd.create_group(pair)
         matches = pred['matches0'][0].cpu().short().numpy()
         grp.create_dataset('matches0', data=matches)
@@ -427,6 +452,16 @@ def match_from_paths_glue(conf: Dict,
     writer_queue.join()
     return pairs
 
+def split_image(image: np.ndarray):
+    h, w = image.shape[:2]
+    sub_h = h//4
+    sub_w = w//4
+    patch1 = image[:sub_h][:sub_w]
+    patch2 = image[:sub_h][sub_w:]
+    patch3 = image[sub_h:][:sub_w]
+    patch4 = image[sub_h:][sub_w:]
+    return patch1, patch2, patch3, patch4
+
 @torch.no_grad()
 def match_from_paths(conf: Dict,
                      pairs_path: Path,
@@ -499,7 +534,7 @@ def match_from_paths(conf: Dict,
                     else v.to(device, non_blocking=True) for k, v in data[1].items()}
             name_img0 = data0['image_name'][0]
             name_img1 = data1['image_name'][0]
-        
+
             kpt0, kpt1 = data0['keypoints'].cpu().numpy(), data1['keypoints'].cpu().numpy()
 
             # H, W, 3
@@ -512,6 +547,9 @@ def match_from_paths(conf: Dict,
             resize_max = None
             image0, scales_0 = get_image(img_path0, interp, resize_max)
             image1, scales_1 = get_image(img_path1, interp, resize_max)
+
+            # im0_path1, im0_path2, im0_path3, im0_path4 = split_image(image0)
+            # im1_path1, im1_path2, im1_path3, im1_path4 = split_image(image1)
 
             image0 = Image.fromarray(image0.astype(np.uint8))
             image1 = Image.fromarray(image1.astype(np.uint8))
@@ -563,20 +601,23 @@ def match_from_paths(conf: Dict,
                         dict_index_keypoints_reference[k] = int(v.__array__())
             # processing for 2 keypoints less than threshold
             for j in range(len(index_nearest_2_kpts)):
+                if (index_nearest_2_kpts[j][0] == -1) or (index_nearest_2_kpts[j][1] == -1):
+                    continue
                 keypoint_query = kpt0[index_nearest_2_kpts[j][0]]
                 keypoint_reference = kpt1[index_nearest_2_kpts[j][1]]
                 index_matches0 = dict_index_keypoints_query[str(keypoint_query)]
                 score_matches0 = old_list_matching_scores0[index_matches0]
                 score_matches0_roma = score_less_than_threshold[j]
                 ### add new pair to old matches and scores
-                if score_matches0_roma > score_matches0:
+                # if score_matches0_roma > score_matches0:  
+                if score_matches0 < 0.6:
                     old_list_matches0[index_matches0] = dict_index_keypoints_reference[str(keypoint_reference)]
                     old_list_matching_scores0[index_matches0] = score_matches0_roma
 
             ## if is_query_map_match, add keypoints for only query keypoints
             if is_query_map_match:
                 for j in range(score_map_less_query_larger.shape[0]):
-                    new_query_keypoint = ((int(keypoints_match0_map_less_query_larger[j][0]), int(keypoints_match0_map_less_query_larger[j][1])))
+                    new_query_keypoint = (int(keypoints_match0_map_less_query_larger[j][0]), int(keypoints_match0_map_less_query_larger[j][1]))
                     old_map_keypoint = (int(keypoint_match1_map_less_sp[j][0]), int(keypoint_match1_map_less_sp[j][1]))
                     if str(new_query_keypoint) not in dict_index_keypoints_query:
                         old_len_kpt0 = len(kpt0)
@@ -614,12 +655,12 @@ def match_from_paths(conf: Dict,
             kpt0 = np.array(kpt0)
             kpt1 = np.array(kpt1)
             with h5py.File(str(feature_path_q), 'a', libver='latest') as fq:
-                uncertainty = 1.2*scales_0
+                uncertainty = 2.0*scales_0
                 del fq[name_img0]['keypoints']
                 fq[name_img0].create_dataset('keypoints', data=kpt0)
                 fq[name_img0]['keypoints'].attrs['uncertainty'] = uncertainty
             with h5py.File(str(feature_path_ref), 'a', libver='latest') as fr:
-                uncertainty = 1.2*scales_1
+                uncertainty = 2.0*scales_1
                 del fr[name_img1]['keypoints']
                 fr[name_img1].create_dataset('keypoints', data=kpt1)
                 fr[name_img1]['keypoints'].attrs['uncertainty'] = uncertainty

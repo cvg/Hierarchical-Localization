@@ -69,7 +69,7 @@ class RoMa_Matches(BaseModel):
         try:
             self.dist_threshold = float(conf['dist_threshold'])
         except:
-            self.dist_threshold = 5.0
+            self.dist_threshold = 3
         self.net = roma_model(
             resolution=self.coarse_res,
             upsample_preds=self.upsample_preds,
@@ -154,10 +154,10 @@ RuntimeError: expected mat1 and mat2 to have the same dtype, but got: float != d
 
         for i in range(len(rm0)):
             if dists_4_sp0.shape[1] != 0:
-                if dists_4_sp0[i][0] > dist_threshold:
+                if dists_4_sp0[i][0] > 3*dist_threshold:
                     adding_index_rm0.add(i)
                     index_nearest_query_kpts.append(-1)
-                else:
+                elif dists_4_sp0[i][0] <= dist_threshold:
                     index_nearest_query_kpts.append(inds_4_sp0[i][0])
                     sum_distance = float(sum(dists_4_sp0[i]))
                     s_4_ids = int(sum(inds_4_sp0[i]))
@@ -167,6 +167,8 @@ RuntimeError: expected mat1 and mat2 to have the same dtype, but got: float != d
                     elif dict_filter_4distance_rm0[s_4_ids] > sum_distance:
                         dict_filter_4distance_rm0[s_4_ids] = sum_distance
                         dict_filter_rm0[s_4_ids] = i
+                else:
+                    index_nearest_query_kpts.append(-1)
             else:
                 adding_index_rm0.add(i)
                 index_nearest_query_kpts.append(-1)
@@ -189,10 +191,10 @@ RuntimeError: expected mat1 and mat2 to have the same dtype, but got: float != d
 
         for i in range(len(rm1)):
             if dists_4_sp1.shape[1] != 0:
-                if dists_4_sp1[i][0] > dist_threshold:
+                if dists_4_sp1[i][0] > 3*dist_threshold:
                     adding_index_rm1.add(i)
                     index_nearest_map_kpts.append(-1)
-                else:
+                elif dists_4_sp1[i][0] <= dist_threshold:
                     index_nearest_map_kpts.append(inds_4_sp1[i][0])
                     sum_distance = float(sum(dists_4_sp1[i]))
                     s_4_ids = int(sum(inds_4_sp1[i]))
@@ -202,6 +204,8 @@ RuntimeError: expected mat1 and mat2 to have the same dtype, but got: float != d
                     elif dict_filter_4distance_rm1[s_4_ids] > sum_distance:
                         dict_filter_4distance_rm1[s_4_ids] = sum_distance
                         dict_filter_rm1[s_4_ids] = i
+                else:
+                    index_nearest_map_kpts.append(-1)
             else:
                 adding_index_rm1.add(i)
                 index_nearest_map_kpts.append(-1)

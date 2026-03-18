@@ -10,11 +10,16 @@ import torchvision.transforms as tvf
 from ..utils.base_model import BaseModel
 
 
+# Load model
+
+
+
 class MegaPlaces(BaseModel):
     required_inputs = ["image"]
 
     def _init(self, conf):
-        self.net = torch.hub.load("gmberton/MegaLoc", "get_trained_model").eval()
+        self.net = torch.hub.load("/lamar/lamar/MegaLoc", "get_trained_model", source='local').eval()
+        # self.net = get_trained_model().eval()
         mean = [0.485, 0.456, 0.406]
         std = [0.229, 0.224, 0.225]
         self.norm_rgb = tvf.Normalize(mean=mean, std=std)

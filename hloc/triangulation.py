@@ -76,6 +76,8 @@ def import_matches(image_ids: Dict[str, int],
                    matches_path: Path,
                    min_match_score: Optional[float] = None,
                    skip_geometric_verification: bool = False):
+
+    # image_ids: id của image trong dbase               
     logger.info('Importing matches into the database...')
 
     with open(str(pairs_path), 'r') as f:
@@ -84,14 +86,15 @@ def import_matches(image_ids: Dict[str, int],
     db = COLMAPDatabase.connect(database_path)
 
     matched = set()
-    for name0, name1 in tqdm(pairs):
+    for name0, name1 in tqdm(pairs): # xử lý từng cặp ảnh
         id0, id1 = image_ids[name0], image_ids[name1]
         if len({(id0, id1), (id1, id0)} & matched) > 0:
             continue
         matches, scores = get_matches(matches_path, name0, name1)
         if min_match_score:
             matches = matches[scores > min_match_score]
-        db.add_matches(id0, id1, matches)
+        # matches: [[index_kpts_query, index_kpts_maps], ...]
+        db.add_matches(id0, id1, matches) # 1 keypoint q có thể ứng với nhiều keypoint m
         matched |= {(id0, id1), (id1, id0)}
 
         if skip_geometric_verification:
@@ -201,11 +204,16 @@ def run_triangulation(model_path: Path,
     logger.info('Running 3D triangulation...')
     if options is None:
         options = {}
+    logger.info("start triangulate points pycolmap")
     with OutputCapture(verbose):
+        logger.info("start OutputCapture")
         with pycolmap.ostream():
+            logger.info("pycolmap start ostream")
             reconstruction = pycolmap.triangulate_points(
                 reference_model, database_path, image_dir, model_path,
                 options=options)
+    ##
+    logger.info("success triangulation!")
     return reconstruction
 
 
@@ -230,7 +238,7 @@ def main(sfm_dir: Path,
     sfm_dir.mkdir(parents=True, exist_ok=True)
     database = sfm_dir / 'database.db'
     reference = pycolmap.Reconstruction(reference_model)
-
+    print(f"model_path: {sfm_dir}, database: {database}, image_dir: {image_dir}, reference_model: {reference}, verbose: {verbose}, option: {mapper_options}")
     image_ids = create_db_from_model(reference, database)
     import_features(image_ids, database, features)
     import_matches(image_ids, database, pairs, matches,
