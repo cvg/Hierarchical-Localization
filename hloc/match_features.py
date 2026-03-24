@@ -233,7 +233,9 @@ def match_from_paths(
         logger.info("Skipping the matching.")
         return
 
-    device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if device == "cpu" and torch.backends.mps.is_available():
+        device = "mps"
     Model = dynamic_load(matchers, conf["model"]["name"])
     model = Model(conf["model"]).eval().to(device)
 
