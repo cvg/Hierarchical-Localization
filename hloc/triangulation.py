@@ -147,6 +147,8 @@ def geometric_verification(image_ids: Dict[str, int],
         kps0, noise0 = get_keypoints(
             features_path, name0, return_uncertainty=True)
         noise0 = 1.0 if noise0 is None else noise0
+        if len(kps0.shape) == 3:
+            kps0 = kps0.squeeze()
         if len(kps0) > 0:
             kps0 = np.stack(cam0.image_to_world(kps0))
         else:
@@ -158,6 +160,8 @@ def geometric_verification(image_ids: Dict[str, int],
             cam1 = reference.cameras[image1.camera_id]
             kps1, noise1 = get_keypoints(
                 features_path, name1, return_uncertainty=True)
+            if len(kps1.shape) == 3:
+                kps1 = kps1.squeeze()
             noise1 = 1.0 if noise1 is None else noise1
             if len(kps1) > 0:
                 kps1 = np.stack(cam1.image_to_world(kps1))

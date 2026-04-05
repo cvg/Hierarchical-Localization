@@ -65,9 +65,22 @@ def get_matches(path: Path, name0: str, name1: str) -> Tuple[np.ndarray]:
         pair, reverse = find_pair(hfile, name0, name1)
         matches = hfile[pair]['matches0'].__array__()
         scores = hfile[pair]['matching_scores0'].__array__()
-    idx = np.where(matches != -1)[0]
-    matches = np.stack([idx, matches[idx]], -1)
-    if reverse:
-        matches = np.flip(matches, -1)
-    scores = scores[idx]
-    return matches, scores
+    # matches shape (n_keypoints_q, m), scores same shape
+    matches_res = []
+    scores_res = []
+    for ind, keypoint_match in enumerate(matches):
+        for ind1, id_match in enumerate(keypoint_match):
+            if id_match == -1:
+                continue
+            matches_res.append([ind, id_match])
+            scores_res.append(scores[ind, ind1])
+    #
+    # # original_code
+    # idx = np.where(matches != -1)[0]
+    # matches = np.stack([idx, matches[idx]], -1)
+    # if reverse:
+    #     matches = np.flip(matches, -1)
+    # scores = scores[idx]
+    # #
+    # return matches, scores
+    return np.array(matches_res), np.array(scores_res)

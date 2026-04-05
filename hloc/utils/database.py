@@ -182,6 +182,10 @@ class COLMAPDatabase(sqlite3.Connection):
         return cursor.lastrowid
 
     def add_keypoints(self, image_id, keypoints):
+        if len(keypoints.shape) > 2:
+            # keypoints is numpy array
+            # drop first dim
+            keypoints = keypoints.squeeze()
         assert(len(keypoints.shape) == 2)
         assert(keypoints.shape[1] in [2, 4, 6])
 

@@ -54,6 +54,9 @@ class QueryLocalizer:
         self.config = config or {}
 
     def localize(self, points2D_all, points2D_idxs, points3D_id, query_camera):
+        if len(points2D_all.shape) > 2:
+            points2D_all = points2D_all.squeeze()
+        print(f"shape points2D_all: {points2D_all.shape}")
         points2D = points2D_all[points2D_idxs]
         points3D = [self.reconstruction.points3D[j].xyz for j in points3D_id]
         ret = pycolmap.absolute_pose_estimation(
@@ -75,6 +78,8 @@ def pose_from_cluster(
 
     kpq = get_keypoints(features_path, qname)
     kpq = np.array(kpq, dtype=np.float32)
+    if len(kpq.shape) > 2:
+        kpq = kpq.squeeze()
     kpq += 0.5  # COLMAP coordinates
 
     kp_idx_to_3D = defaultdict(list)
