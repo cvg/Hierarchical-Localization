@@ -11,3 +11,4 @@ pycolmap>=3.13.0
 kornia>=0.6.11
 gdown
 lightglue @ git+https://github.com/cvg/LightGlue
+lomatch @ git+https://github.com/davnords/LoMa

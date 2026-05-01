@@ -85,6 +85,10 @@ confs = {
         "output": "matches-adalam",
         "model": {"name": "adalam"},
     },
+    "loma": {
+        "output": "matches-loma",
+        "model": {"name": "loma"},
+    },
 }
 
 
