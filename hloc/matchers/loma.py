@@ -1,6 +1,6 @@
 import torch
 from loma.geometry import to_normalized
-from loma.loma import LoMa, LoMaB, LoMaG, LoMaL, filter_matches
+from loma.loma import LoMa, LoMaB, LoMaG, LoMaL, LoMaR, filter_matches
 
 from ..utils.base_model import BaseModel
 
@@ -26,6 +26,8 @@ class LoMaMatcher(BaseModel):
             cfg = LoMaL()
         elif conf["arch"] == "LoMa-G":
             cfg = LoMaG()
+        elif conf["arch"] == "LoMa-R":
+            cfg = LoMaR()
         else:
             raise ValueError(f"Unknown architecture {conf['arch']}")
         self.net = LoMa(cfg)
