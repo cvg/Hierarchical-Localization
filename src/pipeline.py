@@ -9,7 +9,15 @@ hloc_path = project_root / 'Hierarchical-Localization'
 if str(hloc_path) not in sys.path:
     sys.path.append(str(hloc_path))
 
-from hloc import extract_features, match_features, pairs_from_retrieval, reconstruction, visualization
+from hloc import (
+    extract_features,
+    match_features,
+    pairs_from_retrieval,
+    pairs_from_covisibility,
+    pairs_from_exhaustive,
+    reconstruction,
+    visualization,
+)
 
 
 class FeatureExtractor:
@@ -73,39 +81,24 @@ class FeatureExtractor:
             conf, self.dataset_path, self.outputs_path,
             image_list=self.mapping_list + self.query_list
         )
-def create_sequential_pairs(image_list, pairs_path, window=10):
-    """
-    Sequential (temporal) pairing for video-like datasets.
-    """
-    print(f"📄 Sequential pairs oluşturuluyor (window={window})")
-
-    pairs = []
-    n = len(image_list)
-
-    for i in range(n):
-        for j in range(i + 1, min(i + 1 + window, n)):
-            pairs.append(f"{image_list[i]} {image_list[j]}")
-
-    with open(pairs_path, "w") as f:
-        f.write("\n".join(pairs))
-
-    print(f"✅ {len(pairs)} adet sequential pair yazıldı → {pairs_path}")
-
 def match_mapping_images_for_sfm(extractor):
     """
-    3D Harita oluşturmak için MAPPING resimlerini kendi arasında eşleştirir.
+    3D harita oluşturmak için mapping görüntülerini non-sequential şekilde eşleştirir.
+    Aachen v1.1 SIFT modeli varsa covisibility kullanır, yoksa exhaustive'e düşer.
     """
     outputs_path = extractor.outputs_path
 
-    # 1. Mapping-Mapping Çiftlerini Bul
-    sfm_pairs = outputs_path / "pairs-mapping-sequential.txt"
+    # 1. Mapping-Mapping çiftlerini üret
+    sfm_pairs = outputs_path / "pairs-mapping.txt"
+    aachen_sift_model = extractor.dataset_path / "3D-models" / "aachen_v_1_1"
 
     if not sfm_pairs.exists():
-        create_sequential_pairs(
-            extractor.mapping_list,
-            sfm_pairs,
-            window=10
-        )
+        if aachen_sift_model.exists():
+            print("📄 Covisibility tabanli pair'ler uretiliyor...")
+            pairs_from_covisibility.main(aachen_sift_model, sfm_pairs, num_matched=20)
+        else:
+            print("📄 Covisibility modeli bulunamadi, exhaustive pair'lere dusuluyor...")
+            pairs_from_exhaustive.main(sfm_pairs, image_list=sorted(extractor.mapping_list))
 
     else:
         print(f"✅ Çift listesi zaten var: {sfm_pairs.name}")
