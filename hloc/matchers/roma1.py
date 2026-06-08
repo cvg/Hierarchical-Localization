@@ -97,8 +97,9 @@ class RoMa_Matches(BaseModel):
 
         # Tìm ra các điểm có mconf cao với số lượng keypoints đã config
         max_keypoints_process = self.max_keypoints
-        if patch_number != 0:
-            max_keypoints_process = max_keypoints_process//4
+        # # trying 5_4: using only existed keypoints. if result is not inscrease, then uncomment this
+        # if patch_number != 0:
+        #     max_keypoints_process = max_keypoints_process//4
         # else:
         #     max_keypoints_process = max_keypoints_process//4
         matches, mconf = self.net.sample(

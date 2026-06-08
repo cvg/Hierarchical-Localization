@@ -86,6 +86,7 @@ def import_matches(image_ids: Dict[str, int],
     db = COLMAPDatabase.connect(database_path)
 
     matched = set()
+    count_zero = 0
     for name0, name1 in tqdm(pairs): # xử lý từng cặp ảnh
         id0, id1 = image_ids[name0], image_ids[name1]
         if len({(id0, id1), (id1, id0)} & matched) > 0:
@@ -94,12 +95,12 @@ def import_matches(image_ids: Dict[str, int],
         if min_match_score:
             matches = matches[scores > min_match_score]
         # matches: [[index_kpts_query, index_kpts_maps], ...]
-        db.add_matches(id0, id1, matches) # 1 keypoint q có thể ứng với nhiều keypoint m
+        db.add_matches(id0, id1, matches, count_zero) # 1 keypoint q có thể ứng với nhiều keypoint m
         matched |= {(id0, id1), (id1, id0)}
 
         if skip_geometric_verification:
             db.add_two_view_geometry(id0, id1, matches)
-
+    print(f"\n----count zero------{count_zero}\n")
     db.commit()
     db.close()
 

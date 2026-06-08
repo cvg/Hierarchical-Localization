@@ -126,7 +126,7 @@ confs = {
             'output': 'matches-superglue-roma',
             'model': {
                 'name': 'roma1',
-                'max_keypoints': 1024,
+                'max_keypoints': 4096,
                 'weight_mode': 'indoor',
                 'resize_max': 512,
                 'dist_threshold': 2.0,
@@ -329,7 +329,11 @@ def main(conf: Dict,
          dict_keypoints_index_query: Optional[Path] = None,
          dict_keypoints_index_map: Optional[Path] = None,
          is_query_map_match: bool = False,
-         feature_path_raw_ref: Optional[Path] = None):
+         feature_path_raw_ref: Optional[Path] = None,
+         method_baseline = False,
+         method1 = False,
+         method2 = True,
+         method3 = True):
 
     if isinstance(features, Path) or Path(features).exists():
         features_q = features
@@ -347,7 +351,7 @@ def main(conf: Dict,
 
     if features_ref is None:
         features_ref = features_q
-    match_from_paths(conf, pairs, matches, features_q, features_ref, overwrite, dict_keypoints_index_query, dict_keypoints_index_map, is_query_map_match=is_query_map_match, feature_path_raw_ref=feature_path_raw_ref)
+    match_from_paths(conf, pairs, matches, features_q, features_ref, overwrite, dict_keypoints_index_query, dict_keypoints_index_map, is_query_map_match=is_query_map_match, feature_path_raw_ref=feature_path_raw_ref, method_baseline=method_baseline, method1=method1, method2=method2, method3=method3)
 
     return matches
 
@@ -439,8 +443,23 @@ def match_from_paths_glue(conf: Dict,
         image1 = Image.fromarray(image1.astype(np.uint8))
 
         # print(f'keypoint_matches0_roma: {keypoint_matches0_roma.shape}, keypoint_matches1_roma: {keypoint_matches1_roma.shape}, score: {score.shape}')
-        keypts0 = data0['keypoints'][0].unsqueeze(0).to(device)
-        keypts1 = data1['keypoints'][0].unsqueeze(0).to(device)
+        print(f"data0['keypoints']: {data0['keypoints'].shape}, data1['keypoints'].shape: {data1['keypoints'].shape}")
+        if len(data0['keypoints'].shape) == 4:
+            keypts0 = data0['keypoints'][0].to(device)
+        else:
+            keypts0 = data0['keypoints'].to(device)
+        if len(data1['keypoints'].shape) == 4:
+            keypts1 = data1['keypoints'][0].to(device)
+        else:
+            keypts1 = data1['keypoints'].to(device)
+        # if len(keypts0.shape) == 3:
+        #     keypts0 = keypts0.squeeze()
+        # if len(keypts1.shape) == 3:
+        #     keypts1 = keypts1.squeeze()
+        print(f"keypts0.shape: {keypts0.shape}, keypts1.shape: {keypts1.shape}")
+        #
+        # keypts0 = data0['keypoints'][0].unsqueeze(0)
+        # keypts1 = data1['keypoints'][0].unsqueeze(0)
         scores0 = data0['scores'][0].unsqueeze(0).to(device)
         scores1 = data1['scores'][0].unsqueeze(0).to(device)
         image_size0 = data0['image_size'].to(device)
@@ -466,7 +485,6 @@ def match_from_paths_glue(conf: Dict,
             'image0': img0,
             'image1': img1
         }
-
         pred_lg = model_lg(data_input_lg)
 
         pair = names_to_pair(*pairs[idx])
@@ -612,7 +630,11 @@ def match_from_paths(conf: Dict,
                      dict_keypoints_index_query: Path = None,
                      dict_keypoints_index_map: Path = None,
                      is_query_map_match: bool = False,
-                     feature_path_raw_ref: Path = None):
+                     feature_path_raw_ref: Path = None,
+                     method_baseline = False,
+                     method1 = False,
+                     method2 = True,
+                     method3 = True):
     
     print(f"\n---start lg")
     print(f"\n----pairs path: {pairs_path}")
@@ -710,7 +732,7 @@ def match_from_paths(conf: Dict,
             sub_patch_number = 0
             for id0 in range(5):
                 for id1 in range(5):
-                    
+                       
                     if id0 != 0 or id1 != 0:
                         sub_patch_number = 1
                     patch_img0 = split_image(image0, id0)
@@ -756,9 +778,11 @@ def match_from_paths(conf: Dict,
                         old_list_matches0 = list(fm[names_to_pair(name_img0, name_img1)]['matches0'][:])
                         old_list_matching_scores0 = list(fm[names_to_pair(name_img0, name_img1)]['matching_scores0'][:])
                     if len(old_list_matches0[0].shape) == 0:
+                        print(f"len: {len(old_list_matches0)}, shape0: {old_list_matches0[0].shape}")
                         old_list_matches0 = [[int(imat)] for imat in old_list_matches0]
                         old_list_matching_scores0 = [[int(iscore)] for iscore in old_list_matching_scores0]
                     else:
+                        print(f"len: {len(old_list_matches0)}, shape0: {old_list_matches0[0].shape}")
                         old_list_matches0 = [[int(val) for val in imat] for imat in old_list_matches0]
                         old_list_matching_scores0 = [[float(val) for val in iscore] for iscore in old_list_matching_scores0]
                     kpt0 = [(int(x), int(y)) for x, y in kpt0[0]]
@@ -781,85 +805,88 @@ def match_from_paths(conf: Dict,
                             grp1 = fd[name_img1]
                             for k, v in grp1.items():
                                 dict_index_keypoints_reference[k] = int(v.__array__())
-                    # processing for 2 keypoints less than threshold
-                    for j in range(len(index_nearest_2_kpts)):
-                        if (index_nearest_2_kpts[j][0] == -1) or (index_nearest_2_kpts[j][1] == -1):
-                            continue
-                        keypoint_query = kpt0[index_nearest_2_kpts[j][0]]
-                        keypoint_reference = kpt1[index_nearest_2_kpts[j][1]]
-                        index_matches0 = dict_index_keypoints_query[str(keypoint_query)]
-                        list_score_matches0 = old_list_matching_scores0[index_matches0]
-                        score_matches0_roma = score_less_than_threshold[j]
-                        ### add new pair to old matches and scores
-                        # if score_matches0_roma > score_matches0:  
-                        if list_score_matches0[0] < 0.6:
-                            old_list_matches0[index_matches0][0] = dict_index_keypoints_reference[str(keypoint_reference)]
-                            old_list_matching_scores0[index_matches0][0] = score_matches0_roma
-                        else:
-                            old_list_matches0[index_matches0].append(dict_index_keypoints_reference[str(keypoint_reference)])
-                            old_list_matching_scores0[index_matches0].append(score_matches0_roma)
-
-                    # process for map less and query larger
-                    # if not kpt0_is_max:
-                    for j in range(score_map_less_query_larger.shape[0]):
-                        new_query_keypoint = (int(keypoints_match0_map_less_query_larger[j][0]), int(keypoints_match0_map_less_query_larger[j][1]))
-                        old_map_keypoint = (int(keypoint_match1_map_less_sp[j][0]), int(keypoint_match1_map_less_sp[j][1]))
-                        if str(new_query_keypoint) not in dict_index_keypoints_query:
-                            old_len_kpt0 = len(kpt0)
-                            if str(old_map_keypoint) not in dict_index_keypoints_reference:
-                                count_keypoints_loss += 1
+                    
+                    if not method_baseline:
+                        # processing for 2 keypoints less than threshold
+                        for j in range(len(index_nearest_2_kpts)):
+                            if (index_nearest_2_kpts[j][0] == -1) or (index_nearest_2_kpts[j][1] == -1):
                                 continue
-                            index_old_map_keypoint = dict_index_keypoints_reference[str(old_map_keypoint)]
-                            kpt0.append(new_query_keypoint)
-                            old_list_matches0.append([index_old_map_keypoint])
-                            old_list_matching_scores0.append([score_map_less_query_larger[j]])
-                            dict_index_keypoints_query[str(new_query_keypoint)] = old_len_kpt0
+                            keypoint_query = kpt0[index_nearest_2_kpts[j][0]]
+                            keypoint_reference = kpt1[index_nearest_2_kpts[j][1]]
+                            index_matches0 = dict_index_keypoints_query[str(keypoint_query)]
+                            list_score_matches0 = old_list_matching_scores0[index_matches0]
+                            score_matches0_roma = score_less_than_threshold[j]
+                            ### add new pair to old matches and scores
+                            # if score_matches0_roma > score_matches0:  
+                            if list_score_matches0[0] < 0.6:
+                                old_list_matches0[index_matches0][0] = dict_index_keypoints_reference[str(keypoint_reference)]
+                                old_list_matching_scores0[index_matches0][0] = score_matches0_roma
+                            else:
+                                old_list_matches0[index_matches0].append(dict_index_keypoints_reference[str(keypoint_reference)])
+                                old_list_matching_scores0[index_matches0].append(score_matches0_roma)
+                        if method2:
+                            
+                            # process for map less and query larger
+                            # if not kpt0_is_max:
+                            for j in range(score_map_less_query_larger.shape[0]):
+                                new_query_keypoint = (int(keypoints_match0_map_less_query_larger[j][0]), int(keypoints_match0_map_less_query_larger[j][1]))
+                                old_map_keypoint = (int(keypoint_match1_map_less_sp[j][0]), int(keypoint_match1_map_less_sp[j][1]))
+                                if str(new_query_keypoint) not in dict_index_keypoints_query:
+                                    old_len_kpt0 = len(kpt0)
+                                    if str(old_map_keypoint) not in dict_index_keypoints_reference:
+                                        count_keypoints_loss += 1
+                                        continue
+                                    index_old_map_keypoint = dict_index_keypoints_reference[str(old_map_keypoint)]
+                                    kpt0.append(new_query_keypoint)
+                                    old_list_matches0.append([index_old_map_keypoint])
+                                    old_list_matching_scores0.append([score_map_less_query_larger[j]])
+                                    dict_index_keypoints_query[str(new_query_keypoint)] = old_len_kpt0
 
-                    # process for map larger and query less, only if not is query_map
-                    # if not kpt1_is_max:
-                    if not is_query_map_match:
-                        for j in range(score_map_larger_query_less.shape[0]):
-                            new_map_keypoint = (int(keypoint_match1_map_larger_query_less[j][0]), int(keypoint_match1_map_larger_query_less[j][1]))
-                            old_query_keypoint = (int(keypoints_match0_query_less_sp[j][0]), int(keypoints_match0_query_less_sp[j][1]))
-                            if str(new_map_keypoint) not in dict_index_keypoints_reference:
-                                old_len_kpt1 = len(kpt1)
-                                if str(old_query_keypoint) not in dict_index_keypoints_query:
-                                    count_keypoints_loss += 1
-                                    continue
-                                index_old_query_keypoint = dict_index_keypoints_query[str(old_query_keypoint)]
-                                kpt1.append(new_map_keypoint)
-                                old_list_matches0[index_old_query_keypoint].append(old_len_kpt1)
-                                old_list_matching_scores0[index_old_query_keypoint].append(score_map_larger_query_less[j])
-                                dict_index_keypoints_reference[str(new_map_keypoint)] = old_len_kpt1
+                            # process for map larger and query less, only if not is query_map
+                            # if not kpt1_is_max:
+                            if not is_query_map_match:
+                                for j in range(score_map_larger_query_less.shape[0]):
+                                    new_map_keypoint = (int(keypoint_match1_map_larger_query_less[j][0]), int(keypoint_match1_map_larger_query_less[j][1]))
+                                    old_query_keypoint = (int(keypoints_match0_query_less_sp[j][0]), int(keypoints_match0_query_less_sp[j][1]))
+                                    if str(new_map_keypoint) not in dict_index_keypoints_reference:
+                                        old_len_kpt1 = len(kpt1)
+                                        if str(old_query_keypoint) not in dict_index_keypoints_query:
+                                            count_keypoints_loss += 1
+                                            continue
+                                        index_old_query_keypoint = dict_index_keypoints_query[str(old_query_keypoint)]
+                                        kpt1.append(new_map_keypoint)
+                                        old_list_matches0[index_old_query_keypoint].append(old_len_kpt1)
+                                        old_list_matching_scores0[index_old_query_keypoint].append(score_map_larger_query_less[j])
+                                        dict_index_keypoints_reference[str(new_map_keypoint)] = old_len_kpt1
 
-                    ## processing for 2 keypoints larger than threshold, only if not is query map
-                    # if (not kpt0_is_max) and (not kpt1_is_max):
-                    if not is_query_map_match:
-                        for j in range(score_larger_than_threshold.shape[0]):
-                            old_len_kpt1 = len(kpt1)
-                            old_len_kpt0 = len(kpt0)
-                            new_keypoint_query = keypoints_match0_larger_than_threshold[j] ## different in float but same in int
-                            new_keypoint_query = (int(new_keypoint_query[0]), int(new_keypoint_query[1]))
-                            new_keypoint_reference = keypoint_match1_larger_than_threshold[j]
-                            new_keypoint_reference = (int(new_keypoint_reference[0]), int(new_keypoint_reference[1]))
-                            if str(new_keypoint_query) in dict_index_keypoints_query or str(new_keypoint_reference) in dict_index_keypoints_reference:
-                                # print(f'Warning: new_keypoint_query: {new_keypoint_query} already in dict_index_keypoints_query, skip adding again.')
-                                continue
-                            ## add at the end of kpt0 and kpt1
-                            kpt0.append(new_keypoint_query)
-                            kpt1.append(new_keypoint_reference)
-                            ## add to dict index_keypoint of dict_index_keypoints_query and dict_index_keypoints_reference
-                            dict_index_keypoints_query[str(new_keypoint_query)] = old_len_kpt0
-                            dict_index_keypoints_reference[str(new_keypoint_reference)] = old_len_kpt1
+                            ## processing for 2 keypoints larger than threshold, only if not is query map
+                            # if (not kpt0_is_max) and (not kpt1_is_max):
+                            if not is_query_map_match:
+                                for j in range(score_larger_than_threshold.shape[0]):
+                                    old_len_kpt1 = len(kpt1)
+                                    old_len_kpt0 = len(kpt0)
+                                    new_keypoint_query = keypoints_match0_larger_than_threshold[j] ## different in float but same in int
+                                    new_keypoint_query = (int(new_keypoint_query[0]), int(new_keypoint_query[1]))
+                                    new_keypoint_reference = keypoint_match1_larger_than_threshold[j]
+                                    new_keypoint_reference = (int(new_keypoint_reference[0]), int(new_keypoint_reference[1]))
+                                    if str(new_keypoint_query) in dict_index_keypoints_query or str(new_keypoint_reference) in dict_index_keypoints_reference:
+                                        # print(f'Warning: new_keypoint_query: {new_keypoint_query} already in dict_index_keypoints_query, skip adding again.')
+                                        continue
+                                    ## add at the end of kpt0 and kpt1
+                                    kpt0.append(new_keypoint_query)
+                                    kpt1.append(new_keypoint_reference)
+                                    ## add to dict index_keypoint of dict_index_keypoints_query and dict_index_keypoints_reference
+                                    dict_index_keypoints_query[str(new_keypoint_query)] = old_len_kpt0
+                                    dict_index_keypoints_reference[str(new_keypoint_reference)] = old_len_kpt1
 
-                            ## add to old_list_matches0 and old_list_matching_scores0
-                            old_list_matches0.append([old_len_kpt1])
-                            old_list_matching_scores0.append([score_larger_than_threshold[j]])
+                                    ## add to old_list_matches0 and old_list_matching_scores0
+                                    old_list_matches0.append([old_len_kpt1])
+                                    old_list_matching_scores0.append([score_larger_than_threshold[j]])
                         
                     # write back kpt0 and kpt1 to feature_path_q and feature_path_ref
                     kpt0 = np.array([kpt0])
                     kpt1 = np.array([kpt1])
-
+                    print(f"kpt0.shape{kpt0.shape}, kpt1.shape{kpt1.shape}")
                     with h5py.File(str(feature_path_q), 'a', libver='latest') as fq:
                         uncertainty = 2.0*scales_0
                         del fq[name_img0]['keypoints']
@@ -870,7 +897,8 @@ def match_from_paths(conf: Dict,
                         del fr[name_img1]['keypoints']
                         fr[name_img1].create_dataset('keypoints', data=kpt1)
                         fr[name_img1]['keypoints'].attrs['uncertainty'] = uncertainty
-
+                    
+                    
                     # process matches and matching score before write to file
                     ## matches: [[1], [1,3,2], [4,2], ...]
                     ## matching score: [[0.9], [0.94,0.92,0.99], [0.95,0.93], ...]
@@ -883,10 +911,19 @@ def match_from_paths(conf: Dict,
 
                     # 3. Đổ dữ liệu từ list ban đầu vào ma trận NumPy
                     for i, sub_list in enumerate(old_list_matches0):
+                        if len(sub_list) == 0:
+                            print("sub_list is empty!")
+                            raise ValueError("sub_list must not be empty")
                         old_list_matches0_f[i, :len(sub_list)] = sub_list
 
                     for i, sub_list in enumerate(old_list_matching_scores0):
+                        if len(sub_list) == 0:
+                            print("sub_list is empty!")
+                            raise ValueError("sub_list must not be empty")
                         old_list_matching_scores0_f[i, :len(sub_list)] = sub_list
+                    print(f"old_list_matches0_f.shape: {old_list_matches0_f.shape}")
+                    print(f"old_list_matching_scores0_f.shape: {old_list_matching_scores0_f.shape}")
+                    print("sub_____________looooppppppppp")
 
                     ## write back old_list_matches0 and old_list_matching_scores0 to match_path
                     # old_list_matches0_f = np.array(old_list_matches0)
@@ -915,11 +952,16 @@ def match_from_paths(conf: Dict,
                     # if is_query_map_match:
                     #     if idx < 1:
                     #         draw_custom_matches(image0, image1, kpt0[0], kpt1[0], old_list_matches0_f, id0, id1)
+                    # draw_custom_matches(image0, image1, kpt0[0], kpt1[0], old_list_matches0_f, id0, id1)
                     if not is_query_map_match:
+                        break
+                    if not method3:
                         break
                 if not is_query_map_match:
                     break
-                    
+                if not method3:
+                        break
+            print("looooppppppppppppppppppppppppp")
 
             print(f"count_keypoints_loss: {count_keypoints_loss}")    
 

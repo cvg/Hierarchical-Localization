@@ -173,7 +173,7 @@ class COLMAPDatabase(sqlite3.Connection):
         return cursor.lastrowid
 
     def add_image(self, name, camera_id,
-                  prior_q=np.full(4, np.NaN), prior_t=np.full(3, np.NaN),
+                  prior_q=np.full(4, np.nan), prior_t=np.full(3, np.nan),
                   image_id=None):
         cursor = self.execute(
             "INSERT INTO images VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -200,42 +200,84 @@ class COLMAPDatabase(sqlite3.Connection):
             "INSERT INTO descriptors VALUES (?, ?, ?, ?)",
             (image_id,) + descriptors.shape + (array_to_blob(descriptors),))
 
-    def add_matches(self, image_id1, image_id2, matches):
-        assert(len(matches.shape) == 2)
-        assert(matches.shape[1] == 2)
+    def add_matches(self, image_id1, image_id2, matches, count_zero):
+        try:
+            
+            assert(len(matches.shape) == 2)
+            assert(matches.shape[1] == 2)
 
-        if image_id1 > image_id2:
-            matches = matches[:,::-1]
+            if image_id1 > image_id2:
+                matches = matches[:,::-1]
 
-        pair_id = image_ids_to_pair_id(image_id1, image_id2)
-        matches = np.asarray(matches, np.uint32)
-        self.execute(
-            "INSERT INTO matches VALUES (?, ?, ?, ?)",
-            (pair_id,) + matches.shape + (array_to_blob(matches),))
+            pair_id = image_ids_to_pair_id(image_id1, image_id2)
+            matches = np.asarray(matches, np.uint32)
+            self.execute(
+                "INSERT INTO matches VALUES (?, ?, ?, ?)",
+                (pair_id,) + matches.shape + (array_to_blob(matches),))
+        except: # adding logic for ~70 pair map 0 matches
+            count_zero+=1
+            print(f"pair: {image_id1}, {image_id2}: ")
+            print(f"matches.shape: {matches.shape} \n")
+            if matches.shape[0] == 0:
+                matches = np.array([[0,0]])
+            assert(len(matches.shape) == 2)
+            assert(matches.shape[1] == 2)
+
+            if image_id1 > image_id2:
+                matches = matches[:,::-1]
+
+            pair_id = image_ids_to_pair_id(image_id1, image_id2)
+            matches = np.asarray(matches, np.uint32)
+            self.execute(
+                "INSERT INTO matches VALUES (?, ?, ?, ?)",
+                (pair_id,) + matches.shape + (array_to_blob(matches),)) 
+
 
     def add_two_view_geometry(self, image_id1, image_id2, matches,
                               F=np.eye(3), E=np.eye(3), H=np.eye(3),
                               qvec=np.array([1.0, 0.0, 0.0, 0.0]),
                               tvec=np.zeros(3), config=2):
-        assert(len(matches.shape) == 2)
-        assert(matches.shape[1] == 2)
+        try:
+            assert(len(matches.shape) == 2)
+            assert(matches.shape[1] == 2)
 
-        if image_id1 > image_id2:
-            matches = matches[:,::-1]
+            if image_id1 > image_id2:
+                matches = matches[:,::-1]
 
-        pair_id = image_ids_to_pair_id(image_id1, image_id2)
-        matches = np.asarray(matches, np.uint32)
-        F = np.asarray(F, dtype=np.float64)
-        E = np.asarray(E, dtype=np.float64)
-        H = np.asarray(H, dtype=np.float64)
-        qvec = np.asarray(qvec, dtype=np.float64)
-        tvec = np.asarray(tvec, dtype=np.float64)
-        self.execute(
-            "INSERT INTO two_view_geometries VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (pair_id,) + matches.shape + (array_to_blob(matches), config,
-             array_to_blob(F), array_to_blob(E), array_to_blob(H),
-             array_to_blob(qvec), array_to_blob(tvec)))
+            pair_id = image_ids_to_pair_id(image_id1, image_id2)
+            matches = np.asarray(matches, np.uint32)
+            F = np.asarray(F, dtype=np.float64)
+            E = np.asarray(E, dtype=np.float64)
+            H = np.asarray(H, dtype=np.float64)
+            qvec = np.asarray(qvec, dtype=np.float64)
+            tvec = np.asarray(tvec, dtype=np.float64)
+            self.execute(
+                "INSERT INTO two_view_geometries VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (pair_id,) + matches.shape + (array_to_blob(matches), config,
+                array_to_blob(F), array_to_blob(E), array_to_blob(H),
+                array_to_blob(qvec), array_to_blob(tvec)))
+        except: # adding logic for ~70 pair map 0 matches
+            print(f"pair: {image_id1}, {image_id2}: ")
+            print(f"matches.shape: {matches.shape} \n")
+            if matches.shape[0] == 0:
+                matches = np.array([[0,0]])
+            assert(len(matches.shape) == 2)
+            assert(matches.shape[1] == 2)
 
+            if image_id1 > image_id2:
+                matches = matches[:,::-1]
+            pair_id = image_ids_to_pair_id(image_id1, image_id2)
+            matches = np.asarray(matches, np.uint32)
+            F = np.asarray(F, dtype=np.float64)
+            E = np.asarray(E, dtype=np.float64)
+            H = np.asarray(H, dtype=np.float64)
+            qvec = np.asarray(qvec, dtype=np.float64)
+            tvec = np.asarray(tvec, dtype=np.float64)
+            self.execute(
+                "INSERT INTO two_view_geometries VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (pair_id,) + matches.shape + (array_to_blob(matches), config,
+                array_to_blob(F), array_to_blob(E), array_to_blob(H),
+                array_to_blob(qvec), array_to_blob(tvec)))
 
 def example_usage():
     import os

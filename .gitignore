@@ -6,3 +6,4 @@ outputs/
 datasets/*
 !datasets/sacre_coeur/
 *.safetensors
+*.pth

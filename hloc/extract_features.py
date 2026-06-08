@@ -38,6 +38,20 @@ confs = {
             'resize_max': 1024,
         },
     },
+    'superpoint': {
+            'name': 'superpoint',
+            'hloc': {
+                'model': {
+                    'name': 'superpoint',
+                    'nms_radius': 3,
+                    'max_keypoints': 4096,
+                },
+                'preprocessing': {
+                    'grayscale': True,
+                    'resize_max': 1024,
+                },
+            },
+    },
     # Resize images to 1600px even if they are originally smaller.
     # Improves the keypoint localization if the images are of good quality.
     'superpoint_max': {
