@@ -162,7 +162,7 @@ def main(
     overwrite: bool = False,
 ) -> Path:
     if isinstance(features, Path) or Path(features).exists():
-        features_q = features
+        features_q = Path(features)
         if matches is None:
             raise ValueError(
                 "Either provide both features and matches as Path" " or both as names."
@@ -265,4 +265,10 @@ if __name__ == "__main__":
         "--conf", type=str, default="superglue", choices=list(confs.keys())
     )
     args = parser.parse_args()
-    main(confs[args.conf], args.pairs, args.features, args.export_dir)
+    main(
+        confs[args.conf],
+        args.pairs,
+        args.features,
+        export_dir=args.export_dir,
+        matches=args.matches,
+    )
