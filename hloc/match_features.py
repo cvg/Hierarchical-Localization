@@ -85,6 +85,17 @@ confs = {
         "output": "matches-adalam",
         "model": {"name": "adalam"},
     },
+    "superpoint+latemambaglue": {
+        "output": "matches-superpoint-latemambaglue",
+        "model": {
+            "name": "latemambaglue",
+            "features": "superpoint",
+            "checkpoint": "/home/ubuntu/work/MambaGlue/glue-factory/outputs/training/latemambaglueMDnc3/checkpoint_best.tar",
+            "n_layers": 9,
+            "n_cross_layers": 3,
+            "filter_threshold": 0.1,
+        },
+    },
 }
 
 
