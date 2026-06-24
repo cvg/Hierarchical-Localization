@@ -146,6 +146,26 @@ confs = {
         "model": {"name": "megaloc"},
         "preprocessing": {"resize_max": 1024},
     },
+    "superpoint_open_aachen": {
+        "output": "feats-superpoint-open-n4096-r1024",
+        "model": {
+            "name": "superpoint_open",
+            "nms_radius": 3,
+            "max_num_keypoints": 4096,
+            "detection_threshold": 0.005,
+        },
+        "preprocessing": {"grayscale": True, "resize_max": 1024},
+    },
+    "superpoint_mg_aachen": {
+    "output": "feats-superpoint-mg-n2048-r1600",
+    "model": {
+        "name": "superpoint",          # hloc's native MagicLeap SuperPoint
+        "nms_radius": 3,               # matches training
+        "max_keypoints": 2048,         # test-time budget; see note below
+        "keypoint_threshold": 0.0,     # matches training's detection_threshold: 0.0
+    },
+    "preprocessing": {"grayscale": True, "resize_max": 1600},
+    },
 }
 
 
