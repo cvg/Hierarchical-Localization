@@ -72,6 +72,14 @@ def import_images(image_dir: Path,
             image_names=image_list,
             options=options
         )
+    # with pycolmap.ostream():
+    #     pycolmap.import_images(
+    #         str(database_path),
+    #         str(image_dir),
+    #         camera_mode,
+    #         image_list=image_list,
+    #         options=options
+    #     )
 
 def get_image_ids(database_path: Path) -> Dict[str, int]:
     db = COLMAPDatabase.connect(database_path)

@@ -189,7 +189,7 @@ RuntimeError: expected mat1 and mat2 to have the same dtype, but got: float != d
             if dists_4_sp1.shape[1] != 0:
                 if len(rm1) != dists_4_sp1.shape[0]:
                     print(f"len rm1 {len(rm1)} and shape dists_4_sp1 {dists_4_sp1.shape}")
-                if dists_4_sp1[i][0] > 3*dist_threshold:
+                if dists_4_sp1[i][0] > 4*dist_threshold:
                     adding_index_rm1.add(i)
                     index_nearest_map_kpts.append(-1)
                 elif dists_4_sp1[i][0] <= dist_threshold:
