@@ -50,7 +50,7 @@ def import_images(image_dir: Path,
 
     if not image_dir.exists():
         raise IOError(f'Image directory {image_dir} does not exist.')
-    images = list(image_dir.glob('*.jpg')) + list(image_dir.glob('*.png'))
+    images = list(image_dir.glob('*.jpg')) + list(image_dir.glob('*.png')) + list(image_dir.glob('*.JPG'))
     if len(images) == 0:
         raise IOError(f'No images found in {image_dir}.')
 

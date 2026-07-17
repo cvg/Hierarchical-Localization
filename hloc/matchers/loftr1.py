@@ -7,9 +7,9 @@ from ..utils.base_model import BaseModel
 
 # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-class LoFTR(BaseModel):
+class LoFTR1(BaseModel):
     default_conf = {
-        'weights': 'outdoor',
+        'weights': 'indoor',
         'match_threshold': 0.2,
         'max_num_matches': None,
     }

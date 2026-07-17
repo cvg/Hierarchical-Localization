@@ -85,11 +85,15 @@ class RoMa_Matches(BaseModel):
     def _forward(self, data):
         img0, img1 = data[0], data[2]
         sp0, sp1 = data[1], data[3]
-        patch_number = data[4]
+        # patch_number = data[4]
         # print(f"shape im0 {img0.shape} shape im1 {img1.shape}")
         W0, H0 = img0.size #
         W1, H1 = img1.size #
         # Viết hàm match_from_feature dựa vào match của RoMa để xử lý với đàu vào là feature.
+
+        free, total = torch.cuda.mem_get_info()
+        # print(f"Free: {free/1024**3:.2f} GB")
+        # print(f"Total: {total/1024**3:.2f} GB")
         matches, mconf = self.net.match(
             im_A_input=img0,
             im_B_input=img1
