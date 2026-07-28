@@ -69,7 +69,7 @@ class RoMa_Matches(BaseModel):
         try:
             self.dist_threshold = float(conf['dist_threshold'])
         except:
-            self.dist_threshold = 3
+            self.dist_threshold = 2
         self.net = roma_model(
             resolution=self.coarse_res,
             upsample_preds=self.upsample_preds,
@@ -85,19 +85,31 @@ class RoMa_Matches(BaseModel):
     def _forward(self, data):
         img0, img1 = data[0], data[2]
         sp0, sp1 = data[1], data[3]
-        W0, H0 = img0.size # original size
-        W1, H1 = img1.size # original size
+        # patch_number = data[4]
+        # print(f"shape im0 {img0.shape} shape im1 {img1.shape}")
+        W0, H0 = img0.size #
+        W1, H1 = img1.size #
         # Viết hàm match_from_feature dựa vào match của RoMa để xử lý với đàu vào là feature.
+
+        free, total = torch.cuda.mem_get_info()
+        # print(f"Free: {free/1024**3:.2f} GB")
+        # print(f"Total: {total/1024**3:.2f} GB")
         matches, mconf = self.net.match(
             im_A_input=img0,
             im_B_input=img1
         )
 
         # Tìm ra các điểm có mconf cao với số lượng keypoints đã config
+        max_keypoints_process = self.max_keypoints
+        # # trying 5_4: using only existed keypoints. if result is not inscrease, then uncomment this
+        # if patch_number != 0:
+        #     max_keypoints_process = max_keypoints_process//4
+        # else:
+        #     max_keypoints_process = max_keypoints_process//4
         matches, mconf = self.net.sample(
             matches,
             mconf,
-            num=self.max_keypoints,
+            num=max_keypoints_process,
         )
         
         # Chuyển và tách ra thành keypoint ở ảnh 1 và ảnh 2 ứng với kích thước gốc của 2 ảnh đó.
@@ -107,8 +119,8 @@ class RoMa_Matches(BaseModel):
         
         # Do đây là 2 keypoint đã được matches với nhau bằng RoMa nên matches0 là range từ [0, 1, 2, 3, ...] phù hợp với đầu ra của hloc.
 
-        sp0 = sp0[0] # original coordinates, not resized coordinates
-        sp1 = sp1[0] # original coordinates, not resized coordinates
+        # sp0 = sp0[0] # original coordinates, not resized coordinates
+        # sp1 = sp1[0] # original coordinates, not resized coordinates
         # print(f"shape of rm0: {rm0.shape}, shape of rm1: {rm1.shape}, shape of sp0: {sp0.shape}, shape of sp1: {sp1.shape}")
         mask = (mconf >= 0.9)
         # rm0 = rm0[mask].cpu().numpy() # original coordinates, not resized coordinates
@@ -123,8 +135,12 @@ class RoMa_Matches(BaseModel):
         # tree0 = cKDTree(sp0)
         # tree1 = cKDTree(sp1)
 
+        print(f"rm0shape {rm0.shape}, sp0 shape{sp0.shape}")
+        print(f"rm1shape {rm1.shape}, sp1 shape{sp1.shape}")
         dist_rm0_sp0 = torch.cdist(rm0, torch.tensor(sp0).to(self.device).float(), p=2)
         dist_rm1_sp1 = torch.cdist(rm1, torch.tensor(sp1).to(self.device).float(), p=2)
+        print(f"dist_rm0_sp0shape {dist_rm0_sp0.shape}")
+        print(f"dist_rm1_sp1shape {dist_rm1_sp1.shape}\n\n")
         ''' File "/external/hloc/hloc/matchers/roma.py", line 131, in _forward
     dist_rm0_sp0 = torch.cdist(rm0, torch.tensor(sp0).to(self.device), p=2)
   File "/usr/local/lib/python3.10/dist-packages/torch/functional.py", line 1505, in cdist
@@ -151,10 +167,10 @@ RuntimeError: expected mat1 and mat2 to have the same dtype, but got: float != d
         index_nearest_query_kpts = list()
         index_nearest_map_kpts = list()
         index_2_larger_than_threshold = list()
-
+        print(f"shape dists_4_sp0 {dists_4_sp0.shape}")
         for i in range(len(rm0)):
             if dists_4_sp0.shape[1] != 0:
-                if dists_4_sp0[i][0] > 3*dist_threshold:
+                if dists_4_sp0[i][0] > 4*dist_threshold:
                     adding_index_rm0.add(i)
                     index_nearest_query_kpts.append(-1)
                 elif dists_4_sp0[i][0] <= dist_threshold:
@@ -172,26 +188,12 @@ RuntimeError: expected mat1 and mat2 to have the same dtype, but got: float != d
             else:
                 adding_index_rm0.add(i)
                 index_nearest_query_kpts.append(-1)
-
-        # for i in range(len(rm0)):
-        #     dist, ids = tree0.query(rm0[i], k=4)
-        #     if dist[0] > dist_threshold:
-        #         adding_index_rm0.add(i)
-        #         index_nearest_query_kpts.append(-1)
-        #     else:
-        #         index_nearest_query_kpts.append(ids[0])
-        #         sum_distance = float(sum(dist))
-        #         s_4_ids = int(sum(ids))
-        #         if s_4_ids not in dict_filter_4distance_rm0:
-        #             dict_filter_4distance_rm0[s_4_ids] = sum_distance
-        #             dict_filter_rm0[s_4_ids] = i
-        #         elif dict_filter_4distance_rm0[s_4_ids] > sum_distance:
-        #             dict_filter_4distance_rm0[s_4_ids] = sum_distance
-        #             dict_filter_rm0[s_4_ids] = i
-
+        print(f"shape dists_4_sp1 {dists_4_sp1.shape}")
         for i in range(len(rm1)):
             if dists_4_sp1.shape[1] != 0:
-                if dists_4_sp1[i][0] > 3*dist_threshold:
+                if len(rm1) != dists_4_sp1.shape[0]:
+                    print(f"len rm1 {len(rm1)} and shape dists_4_sp1 {dists_4_sp1.shape}")
+                if dists_4_sp1[i][0] > 4*dist_threshold:
                     adding_index_rm1.add(i)
                     index_nearest_map_kpts.append(-1)
                 elif dists_4_sp1[i][0] <= dist_threshold:
@@ -209,23 +211,6 @@ RuntimeError: expected mat1 and mat2 to have the same dtype, but got: float != d
             else:
                 adding_index_rm1.add(i)
                 index_nearest_map_kpts.append(-1)
-        
-        # for i in range(len(rm1)):
-        #     dist, ids = tree1.query(rm1[i], k=4)
-            
-        #     if dist[0] > dist_threshold:
-        #         index_nearest_map_kpts.append(-1)
-        #         adding_index_rm1.add(i)
-        #     else:
-        #         index_nearest_map_kpts.append(ids[0])
-        #         sum_distance = float(sum(dist))
-        #         s_4_ids = int(sum(ids))
-        #         if s_4_ids not in dict_filter_4distance_rm1:
-        #             dict_filter_4distance_rm1[s_4_ids] = sum_distance
-        #             dict_filter_rm1[s_4_ids] = i
-        #         elif dict_filter_4distance_rm1[s_4_ids] > sum_distance:
-        #             dict_filter_4distance_rm1[s_4_ids] = sum_distance
-        #             dict_filter_rm1[s_4_ids] = i
 
         
         
@@ -234,6 +219,9 @@ RuntimeError: expected mat1 and mat2 to have the same dtype, but got: float != d
 
         index_map_less_query_larger = []
         index_keypoint_map_less_sp = []
+
+        index_map_larger_query_less = []
+        index_keypoint_query_less_sp = []
 
         for i in range(len(rm0)):
             if i in adding_index_rm0 and i in adding_index_rm1:
@@ -244,24 +232,30 @@ RuntimeError: expected mat1 and mat2 to have the same dtype, but got: float != d
             elif i in adding_index_rm0 and i in filter_set_rm1:
                 index_map_less_query_larger.append(i)
                 index_keypoint_map_less_sp.append(index_nearest_map_kpts[i])
-
+            elif i in filter_set_rm0 and i in adding_index_rm1:
+                index_map_larger_query_less.append(i)
+                index_keypoint_query_less_sp.append(index_nearest_query_kpts[i])
 
         keypoints_match0_less_than_threshold = rm0[index_2_less_than_threshold]
         keypoints_match0_larger_than_threshold = rm0[index_2_larger_than_threshold]
         keypoints_match0_map_less_query_larger = rm0[index_map_less_query_larger]
+        keypoints_match0_query_less_sp = sp0[index_keypoint_query_less_sp]
 
         keypoint_match1_less_than_threshold = rm1[index_2_less_than_threshold]
         keypoint_match1_larger_than_threshold = rm1[index_2_larger_than_threshold]
         keypoint_match1_map_less_sp = sp1[index_keypoint_map_less_sp]
+        keypoint_match1_map_larger_query_less = rm1[index_map_larger_query_less]
 
         score_less_than_threshold = mconf[index_2_less_than_threshold].cpu().numpy()
         score_larger_than_threshold = mconf[index_2_larger_than_threshold].cpu().numpy()
         score_map_less_query_larger = mconf[index_map_less_query_larger].cpu().numpy()
+        score_map_larger_query_less = mconf[index_map_larger_query_less].cpu().numpy()
 
 
         return keypoints_match0_less_than_threshold, keypoint_match1_less_than_threshold, score_less_than_threshold, index_nearest_2_kpts, \
             keypoints_match0_larger_than_threshold, keypoint_match1_larger_than_threshold, score_larger_than_threshold, \
-            keypoints_match0_map_less_query_larger, keypoint_match1_map_less_sp, score_map_less_query_larger
+            keypoints_match0_map_less_query_larger, torch.tensor(keypoint_match1_map_less_sp), score_map_less_query_larger, \
+            torch.tensor(keypoints_match0_query_less_sp), keypoint_match1_map_larger_query_less, score_map_larger_query_less
 
 
         

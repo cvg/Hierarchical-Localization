@@ -147,7 +147,7 @@ confs = {
             'output': 'matches-superglue-dkm',
             'model': {
                 'name': 'dkm',
-                'max_keypoints': 1024,
+                'max_keypoints': 2048,
                 'weight_mode': 'indoor',
                 'resize_max': 1024,
                 'dist_threshold': 2.0,
@@ -2019,7 +2019,7 @@ def match_from_paths_loftr(conf: Dict,
                     # if is_query_map_match:
                     #     if idx < 1:
                     #         draw_custom_matches(image0, image1, kpt0[0], kpt1[0], old_list_matches0_f, id0, id1)
-                    # draw_custom_matches_for_gray(image0, image1, kpt0[0], kpt1[0], old_list_matches0_f, id0, id1)
+                    draw_custom_matches_for_gray(image0, image1, kpt0[0], kpt1[0], old_list_matches0_f, id0, id1)
                     if not is_query_map_match:
                         break
                     if not method3:
