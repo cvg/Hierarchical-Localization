@@ -17,6 +17,7 @@ from . import logger, matchers
 from .extract_features import read_image, resize_image
 from .match_features import find_unique_new_pairs
 from .utils.base_model import dynamic_load
+from .utils.device import dataloader_kwargs, get_device
 from .utils.io import list_h5_names
 from .utils.parsers import names_to_pair, parse_retrieval
 
@@ -236,13 +237,13 @@ def match_dense(
     match_path: Path,  # out
     existing_refs: Optional[List] = [],
 ):
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = get_device()
     Model = dynamic_load(matchers, conf["model"]["name"])
     model = Model(conf["model"]).eval().to(device)
 
     dataset = ImagePairDataset(image_dir, conf["preprocessing"], pairs)
     loader = torch.utils.data.DataLoader(
-        dataset, num_workers=16, batch_size=1, shuffle=False
+        dataset, batch_size=1, shuffle=False, **dataloader_kwargs(16, device)
     )
 
     logger.info("Performing dense matching...")
@@ -530,7 +531,7 @@ def match_and_assign(
 
     # Invalidate matches that are far from selected bin by reassignment
     if max_kps is not None:
-        logger.info(f'Reassign matches with max_error={conf["max_error"]}.')
+        logger.info(f"Reassign matches with max_error={conf['max_error']}.")
         assign_matches(pairs, match_path, cpdict, max_error=conf["max_error"])
 
 
@@ -547,7 +548,7 @@ def main(
     overwrite: bool = False,
 ) -> Path:
     logger.info(
-        "Extracting semi-dense features with configuration:" f"\n{pprint.pformat(conf)}"
+        f"Extracting semi-dense features with configuration:\n{pprint.pformat(conf)}"
     )
 
     if features is None:
@@ -557,7 +558,7 @@ def main(
         features_q = features
         if matches is None:
             raise ValueError(
-                "Either provide both features and matches as Path" " or both as names."
+                "Either provide both features and matches as Path or both as names."
             )
     else:
         if export_dir is None:
@@ -565,9 +566,9 @@ def main(
                 "Provide an export_dir if features and matches"
                 f" are not file paths: {features}, {matches}."
             )
-        features_q = Path(export_dir, f'{features}{conf["output"]}.h5')
+        features_q = Path(export_dir, f"{features}{conf['output']}.h5")
         if matches is None:
-            matches = Path(export_dir, f'{conf["output"]}_{pairs.stem}.h5')
+            matches = Path(export_dir, f"{conf['output']}_{pairs.stem}.h5")
 
     if features_ref is None:
         features_ref = []

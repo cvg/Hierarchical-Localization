@@ -15,6 +15,7 @@ from tqdm import tqdm
 
 from . import extractors, logger
 from .utils.base_model import dynamic_load
+from .utils.device import dataloader_kwargs, get_device
 from .utils.io import list_h5_names, read_image
 from .utils.parsers import parse_image_lists
 
@@ -240,7 +241,7 @@ def main(
     overwrite: bool = False,
 ) -> Path:
     logger.info(
-        "Extracting local features with configuration:" f"\n{pprint.pformat(conf)}"
+        f"Extracting local features with configuration:\n{pprint.pformat(conf)}"
     )
 
     dataset = ImageDataset(image_dir, conf["preprocessing"], image_list)
@@ -255,12 +256,12 @@ def main(
         logger.info("Skipping the extraction.")
         return feature_path
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = get_device()
     Model = dynamic_load(extractors, conf["model"]["name"])
     model = Model(conf["model"]).eval().to(device)
 
     loader = torch.utils.data.DataLoader(
-        dataset, num_workers=1, shuffle=False, pin_memory=True
+        dataset, shuffle=False, **dataloader_kwargs(1, device)
     )
     for idx, data in enumerate(tqdm(loader)):
         name = dataset.names[idx]

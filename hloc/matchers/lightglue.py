@@ -1,6 +1,8 @@
 from lightglue import LightGlue as LightGlue_
 
 from ..utils.base_model import BaseModel
+from ..utils.device import get_device
+from ..utils.fast_lightglue import patch_lightglue, tune_conf_for_device
 
 
 class LightGlue(BaseModel):
@@ -20,6 +22,9 @@ class LightGlue(BaseModel):
     ]
 
     def _init(self, conf):
+        device = get_device()
+        patch_lightglue(device)
+        conf = tune_conf_for_device(dict(conf), device)
         self.net = LightGlue_(conf.pop("features"), **conf)
         if conf["compile"]:
             self.net.compile()
