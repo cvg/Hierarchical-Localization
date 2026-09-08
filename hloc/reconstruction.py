@@ -125,9 +125,9 @@ def run_reconstruction(
         f"Largest model is #{largest_index} " f"with {largest_num_images} images."
     )
 
-    # Note: The reconstructions returned by incremental_mapping() are keyed by creation order, 
-    # while COLMAP writes them into sub-directories ranked by number of 3D points, 
-    # so the two do not correspond. 
+    # The reconstructions returned by incremental_mapping are keyed by creation order,
+    # while COLMAP writes them into sub-directories ranked by number of 3D points,
+    # so the two do not correspond.
     # We therefore write the selected model instead of moving files from subdirs.
     reconstructions[largest_index].write(sfm_dir)
     return reconstructions[largest_index]
