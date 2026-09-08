@@ -1,6 +1,5 @@
 import argparse
 import multiprocessing
-import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -126,16 +125,11 @@ def run_reconstruction(
         f"Largest model is #{largest_index} " f"with {largest_num_images} images."
     )
 
-    for filename in [
-        "images.bin",
-        "cameras.bin",
-        "points3D.bin",
-        "frames.bin",
-        "rigs.bin",
-    ]:
-        if (sfm_dir / filename).exists():
-            (sfm_dir / filename).unlink()
-        shutil.move(str(models_path / str(largest_index) / filename), str(sfm_dir))
+    # The reconstructions returned by incremental_mapping are keyed by creation order,
+    # while COLMAP writes them into sub-directories ranked by number of 3D points,
+    # so the two do not correspond.
+    # We therefore write the selected model instead of moving files from subdirs.
+    reconstructions[largest_index].write(sfm_dir)
     return reconstructions[largest_index]
 
 
