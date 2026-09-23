@@ -95,7 +95,12 @@ class DoG(BaseModel):
         else:
             raise ValueError(f'Unknown descriptor: {self.conf["descriptor"]}')
 
-        keypoints = torch.from_numpy(keypoints[:, :2])  # keep only x, y
+        # pycolmap returns COLMAP's corner-based coordinates, in which the
+        # center of the top-left pixel is (0.5, 0.5). hloc's convention is
+        # centre-based, which is what triangulation.import_features assumes
+        # when it adds 0.5 back before writing to COLMAP. Convert here so DoG
+        # agrees with every other extractor.
+        keypoints = torch.from_numpy(keypoints[:, :2] - 0.5)  # keep only x, y
         scales = torch.from_numpy(scales)
         oris = torch.from_numpy(oris)
         scores = keypoints.new_zeros(len(keypoints))  # no scores for SIFT yet
