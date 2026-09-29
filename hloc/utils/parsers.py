@@ -12,7 +12,7 @@ def parse_image_list(path, with_intrinsics=False):
     images = []
     with open(path, "r") as f:
         for line in f:
-            line = line.strip("\n")
+            line = line.strip()
             if len(line) == 0 or line[0] == "#":
                 continue
             name, *data = line.split()
@@ -44,7 +44,7 @@ def parse_retrieval(path):
     retrieval = defaultdict(list)
     with open(path, "r") as f:
         for p in f.read().rstrip("\n").split("\n"):
-            if len(p) == 0:
+            if not p.strip():
                 continue
             q, r = p.split()
             retrieval[q].append(r)
