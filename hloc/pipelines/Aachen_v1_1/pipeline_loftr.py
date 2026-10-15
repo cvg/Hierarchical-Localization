@@ -102,3 +102,4 @@ if __name__ == "__main__":
         help="Number of image pairs for loc, default: %(default)s",
     )
     args = parser.parse_args()
+    run(args)
