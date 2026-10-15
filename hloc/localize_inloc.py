@@ -18,9 +18,9 @@ from .utils.parsers import names_to_pair, parse_retrieval
 def interpolate_scan(scan, kp):
     h, w, c = scan.shape
     kp = kp / np.array([[w - 1, h - 1]]) * 2 - 1
-    assert np.all(kp > -1) and np.all(kp < 1)
+    assert np.all(kp >= -1) and np.all(kp <= 1)
     scan = torch.from_numpy(scan).permute(2, 0, 1)[None]
-    kp = torch.from_numpy(kp)[None, None]
+    kp = torch.as_tensor(kp, dtype=scan.dtype, device=scan.device)[None, None]
     grid_sample = torch.nn.functional.grid_sample
 
     # To maximize the number of points that have depth:
