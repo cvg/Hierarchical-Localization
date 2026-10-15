@@ -262,7 +262,9 @@ def parse_option_args(args: List[str], default_options) -> Dict[str, Any]:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--sfm_dir", type=Path, required=True)
-    parser.add_argument("--reference_sfm_model", type=Path, required=True)
+    parser.add_argument(
+        "--reference_sfm_model", dest="reference_model", type=Path, required=True
+    )
     parser.add_argument("--image_dir", type=Path, required=True)
 
     parser.add_argument("--pairs", type=Path, required=True)
@@ -274,8 +276,4 @@ if __name__ == "__main__":
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args().__dict__
 
-    mapper_options = parse_option_args(
-        args.pop("mapper_options"), pycolmap.IncrementalMapperOptions()
-    )
-
-    main(**args, mapper_options=mapper_options)
+    main(**args)
