@@ -73,7 +73,7 @@ def run_slice(slice_, root, outputs, num_covis, num_loc):
 
     localize_sfm.main(
         ref_sfm,
-        dataset / "queries/*_time_queries_with_intrinsics.txt",
+        query_list,
         loc_pairs,
         features,
         loc_matches,
@@ -116,9 +116,9 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    if args.slice == "*":
+    if args.slices == "*":
         slices = TEST_SLICES
-    if "-" in args.slices:
+    elif "-" in args.slices:
         min_, max_ = args.slices.split("-")
         slices = list(range(int(min_), int(max_) + 1))
     else:
