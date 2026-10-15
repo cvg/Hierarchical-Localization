@@ -15,7 +15,7 @@ setup(
     name='hloc',
     version=version,
     packages=find_packages(),
-    python_requires='>=3.6',
+    python_requires='>=3.9',
     install_requires=dependencies,
     author='Paul-Edouard Sarlin',
     description=description,
