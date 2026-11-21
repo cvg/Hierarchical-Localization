@@ -4,15 +4,9 @@ import os
 from pathlib import Path
 
 import numpy as np
+import pycolmap
 
 from ...utils.parsers import parse_retrieval
-from ...utils.read_write_model import (
-    Camera,
-    Image,
-    qvec2rotmat,
-    rotmat2qvec,
-    write_model,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -54,8 +48,12 @@ def camera_from_calibration_file(id_, path):
     assert model == "Pinhole"
     model_name = "PINHOLE"
     params = [float(i) for i in [fx, fy, cx, cy]]
-    camera = Camera(
-        id=id_, model=model_name, width=int(width), height=int(height), params=params
+    camera = pycolmap.Camera(
+        camera_id=id_,
+        model=model_name,
+        width=int(width),
+        height=int(height),
+        params=params,
     )
     return camera
 
@@ -72,10 +70,10 @@ def parse_poses(path, colmap=False):
             ts, p = data[0], np.array(data[1:], float)
             if colmap:
                 q, t = np.split(p, [4])
+                q = q[[1, 2, 3, 0]]  # wxyz to xyzw
             else:
                 t, q = np.split(p, [3])
-                q = q[[3, 0, 1, 2]]  # xyzw to wxyz
-            R = qvec2rotmat(q)
+            R = pycolmap.Rotation3d(q).matrix()
             poses.append((ts, R, t))
     return poses
 
@@ -93,8 +91,7 @@ def parse_relocalization(path, has_poses=False):
             if has_poses:
                 assert len(data) == 9
                 t, q = np.split(np.array(data[2:], float), [3])
-                q = q[[3, 0, 1, 2]]  # xyzw to wxyz
-                R = qvec2rotmat(q)
+                R = pycolmap.Rotation3d(q).matrix()
                 out += [R, t]
             reloc.append(out)
     return reloc
@@ -105,11 +102,12 @@ def build_empty_colmap_model(root, sfm_dir):
     calibration = "Calibration/undistorted_calib_{}.txt"
     cam0 = camera_from_calibration_file(0, root / calibration.format(0))
     cam1 = camera_from_calibration_file(1, root / calibration.format(1))
-    cameras = {0: cam0, 1: cam1}
+    reconstruction = pycolmap.Reconstruction()
+    reconstruction.add_camera_with_trivial_rig(cam0)
+    reconstruction.add_camera_with_trivial_rig(cam1)
 
     T_0to1 = np.loadtxt(root / "Calibration/undistorted_calib_stereo.txt")
     poses = parse_poses(root / "poses.txt")
-    images = {}
     id_ = 0
     for ts, R_cam0_to_w, t_cam0_to_w in poses:
         R_w_to_cam0 = R_cam0_to_w.T
@@ -121,20 +119,19 @@ def build_empty_colmap_model(root, sfm_dir):
         for idx, (R_w_to_cam, t_w_to_cam) in enumerate(
             zip([R_w_to_cam0, R_w_to_cam1], [t_w_to_cam0, t_w_to_cam1])
         ):
-            image = Image(
-                id=id_,
-                qvec=rotmat2qvec(R_w_to_cam),
-                tvec=t_w_to_cam,
+            image = pycolmap.Image(
+                image_id=id_,
                 camera_id=idx,
                 name=f"cam{idx}/{ts}.png",
-                xys=np.zeros((0, 2), float),
-                point3D_ids=np.full(0, -1, int),
             )
-            images[id_] = image
+            cam_from_world = pycolmap.Rigid3d(
+                pycolmap.Rotation3d(R_w_to_cam), t_w_to_cam
+            )
+            reconstruction.add_image_with_trivial_frame(image, cam_from_world)
             id_ += 1
 
     sfm_dir.mkdir(exist_ok=True, parents=True)
-    write_model(cameras, images, {}, path=str(sfm_dir), ext=".bin")
+    reconstruction.write_binary(sfm_dir)
 
 
 def generate_query_lists(timestamps, seq_dir, out_path):
@@ -142,7 +139,7 @@ def generate_query_lists(timestamps, seq_dir, out_path):
     cam0 = camera_from_calibration_file(
         0, seq_dir / "Calibration/undistorted_calib_0.txt"
     )
-    intrinsics = [cam0.model, cam0.width, cam0.height] + cam0.params
+    intrinsics = [cam0.model.name, cam0.width, cam0.height] + cam0.params.tolist()
     intrinsics = [str(p) for p in intrinsics]
     data = map(lambda ts: " ".join([f"cam0/{ts}.png"] + intrinsics), timestamps)
     with open(out_path, "w") as f:
@@ -199,7 +196,7 @@ def prepare_submission(results, relocs, poses_path, out_dir):
             t_ref0_to_q0 = R_w_to_q0 @ t_ref0_to_w + t_w_to_q0
 
             tvec = t_ref0_to_q0.tolist()
-            qvec = rotmat2qvec(R_ref0_to_q0)[[1, 2, 3, 0]]  # wxyz to xyzw
+            qvec = pycolmap.Rotation3d(R_ref0_to_q0).quat.tolist()  # xyzw
 
             out = [ref_ts, q_ts] + list(map(str, tvec)) + list(map(str, qvec))
             relative_poses.append(" ".join(out))
