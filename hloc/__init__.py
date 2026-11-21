@@ -21,7 +21,7 @@ try:
 except ImportError:
     logger.warning("pycolmap is not installed, some features may not work.")
 else:
-    min_version = version.parse("3.13.0")
+    min_version = version.parse("4.2.1")
     found_version = pycolmap.__version__
     if found_version != "dev":
         version = version.parse(found_version)

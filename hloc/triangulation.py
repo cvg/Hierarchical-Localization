@@ -1,4 +1,5 @@
 import argparse
+import ast
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -78,9 +79,14 @@ def import_matches(
         db.write_matches(id0, id1, matches)
         matched |= {(id0, id1), (id1, id0)}
 
-        if skip_geometric_verification:
+        if skip_geometric_verification and len(matches) > 0:
             db.write_two_view_geometry(
-                id0, id1, pycolmap.TwoViewGeometry(inlier_matches=matches)
+                id0,
+                id1,
+                pycolmap.TwoViewGeometry(
+                    config=pycolmap.TwoViewGeometryConfiguration.CALIBRATED,
+                    inlier_matches=matches,
+                ),
             )
 
 
@@ -140,7 +146,6 @@ def geometric_verification(
             matched |= {(id0, id1), (id1, id0)}
 
             if matches.shape[0] == 0:
-                db.write_two_view_geometry(id0, id1, pycolmap.TwoViewGeometry())
                 continue
 
             cam1_from_cam0 = image1.cam_from_world() * image0.cam_from_world().inverse()
@@ -153,11 +158,16 @@ def geometric_verification(
             )
             # TODO: We could also add E to the database, but we need
             # to reverse the transformations if id0 > id1 in utils/database.py.
-            db.write_two_view_geometry(
-                id0,
-                id1,
-                pycolmap.TwoViewGeometry(inlier_matches=matches[valid_matches, :]),
-            )
+            inlier_matches = matches[valid_matches, :]
+            if len(inlier_matches) > 0:
+                db.write_two_view_geometry(
+                    id0,
+                    id1,
+                    pycolmap.TwoViewGeometry(
+                        config=pycolmap.TwoViewGeometryConfiguration.CALIBRATED,
+                        inlier_matches=inlier_matches,
+                    ),
+                )
             inlier_ratios.append(np.mean(valid_matches))
     logger.info(
         "mean/med/min/max valid matches %.2f/%.2f/%.2f/%.2f%%.",
@@ -238,31 +248,71 @@ def main(
 
 
 def parse_option_args(args: List[str], default_options) -> Dict[str, Any]:
-    options = {}
+    options: Dict[str, Any] = {}
     for arg in args:
         idx = arg.find("=")
         if idx == -1:
             raise ValueError("Options format: key1=value1 key2=value2 etc.")
-        key, value = arg[:idx], arg[idx + 1 :]
-        if not hasattr(default_options, key):
+        key, raw_value = arg[:idx], arg[idx + 1 :]
+        parts = key.split(".")
+        target_obj = default_options
+        for part in parts[:-1]:
+            if not hasattr(target_obj, part):
+                raise ValueError(
+                    f'Unknown option "{key}", allowed options and default values'
+                    f" for {default_options.summary()}"
+                )
+            target_obj = getattr(target_obj, part)
+        leaf = parts[-1]
+        if not hasattr(target_obj, leaf):
             raise ValueError(
                 f'Unknown option "{key}", allowed options and default values'
                 f" for {default_options.summary()}"
             )
-        value = eval(value)
-        target_type = type(getattr(default_options, key))
-        if not isinstance(value, target_type):
+        target_type = type(getattr(target_obj, leaf))
+        if target_type is str:
+            value: Any = raw_value
+        elif issubclass(target_type, Path):
+            value = Path(raw_value)
+        elif hasattr(target_type, "__members__"):
+            if raw_value not in target_type.__members__:
+                raise ValueError(
+                    f'Unknown value "{raw_value}" for option "{key}", '
+                    f"allowed values: {list(target_type.__members__.keys())}"
+                )
+            value = target_type.__members__[raw_value]
+        else:
+            try:
+                value = ast.literal_eval(raw_value)
+            except (ValueError, SyntaxError) as exc:
+                raise ValueError(
+                    f'Could not parse value "{raw_value}" for option "{key}"'
+                ) from exc
+            if (
+                target_type is float
+                and isinstance(value, int)
+                and not isinstance(value, bool)
+            ):
+                value = float(value)
+        if (target_type is int and isinstance(value, bool)) or not isinstance(
+            value, target_type
+        ):
             raise ValueError(
-                f'Incorrect type for option "{key}":' f" {type(value)} vs {target_type}"
+                f'Incorrect type for option "{key}": {type(value)} vs {target_type}'
             )
-        options[key] = value
+        cursor = options
+        for part in parts[:-1]:
+            cursor = cursor.setdefault(part, {})
+        cursor[leaf] = value
     return options
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--sfm_dir", type=Path, required=True)
-    parser.add_argument("--reference_sfm_model", type=Path, required=True)
+    parser.add_argument(
+        "--reference_sfm_model", dest="reference_model", type=Path, required=True
+    )
     parser.add_argument("--image_dir", type=Path, required=True)
 
     parser.add_argument("--pairs", type=Path, required=True)
@@ -272,10 +322,18 @@ if __name__ == "__main__":
     parser.add_argument("--skip_geometric_verification", action="store_true")
     parser.add_argument("--min_match_score", type=float)
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument(
+        "--mapper_options",
+        nargs="+",
+        default=[],
+        help="List of key=value from {}".format(
+            pycolmap.IncrementalPipelineOptions().todict()
+        ),
+    )
     args = parser.parse_args().__dict__
 
     mapper_options = parse_option_args(
-        args.pop("mapper_options"), pycolmap.IncrementalMapperOptions()
+        args.pop("mapper_options"), pycolmap.IncrementalPipelineOptions()
     )
 
     main(**args, mapper_options=mapper_options)

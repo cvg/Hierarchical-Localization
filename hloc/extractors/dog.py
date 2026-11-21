@@ -56,14 +56,24 @@ class DoG(BaseModel):
                 options["normalization"] = pycolmap.Normalization.L1_ROOT
             else:
                 options["normalization"] = pycolmap.Normalization.L2
-            self.sift = pycolmap.Sift(
+            self.sift = pycolmap.FeatureExtractor.create(
                 options=pycolmap.FeatureExtractionOptions(
-                    sift=pycolmap.SiftExtractionOptions(options)
+                    type=pycolmap.FeatureExtractorType.SIFT,
+                    use_gpu=use_gpu,
+                    sift=pycolmap.SiftExtractionOptions(**options),
                 ),
-                device=getattr(pycolmap.Device, "cuda" if use_gpu else "cpu"),
+                device=pycolmap.Device.cuda if use_gpu else pycolmap.Device.cpu,
             )
 
-        keypoints, descriptors = self.sift.extract(image_np)
+        kps, desc = self.sift.extract_from_float32_array(
+            np.ascontiguousarray(image_np, dtype=np.float32)
+        )
+        if len(kps) > 0:
+            keypoints = pycolmap.keypoints_to_matrix(kps)
+            descriptors = desc.to_float().data / 512.0
+        else:
+            keypoints = np.zeros((0, 4), dtype=np.float32)
+            descriptors = np.zeros((0, 128), dtype=np.float32)
         scales = keypoints[:, 2]
         oris = np.rad2deg(keypoints[:, 3])
 
