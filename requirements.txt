@@ -7,7 +7,7 @@ matplotlib
 plotly
 scipy
 h5py
-pycolmap>=3.13.0
+pycolmap>=4.2.1
 kornia>=0.6.11
 gdown
 lightglue @ git+https://github.com/cvg/LightGlue

@@ -11,6 +11,8 @@ from ...utils.read_write_model import read_model, write_model
 
 def scene_coordinates(p2D, R_w2c, t_w2c, depth, camera):
     assert len(depth) == len(p2D)
+    if len(p2D) == 0:
+        return np.zeros((0, 3), dtype=np.float64)
     pycolmap_camera = pycolmap.Camera(
         camera_id=camera.id,
         model=camera.model,
@@ -18,7 +20,9 @@ def scene_coordinates(p2D, R_w2c, t_w2c, depth, camera):
         height=camera.height,
         params=camera.params,
     )
-    p2D_norm = pycolmap_camera.cam_from_img(p2D)
+    p2D_norm = np.asarray(pycolmap_camera.cam_from_img(p2D), dtype=np.float64).reshape(
+        -1, 2
+    )
     p2D_h = np.concatenate([p2D_norm, np.ones_like(p2D_norm[:, :1])], 1)
     p3D_c = p2D_h * depth[:, None]
     p3D_w = (p3D_c - t_w2c) @ R_w2c
@@ -56,9 +60,10 @@ def image_path_to_rendered_depth_path(image_name):
 
 
 def project_to_image(p3D, R, t, camera, eps: float = 1e-4, pad: int = 1):
+    if len(p3D) == 0:
+        return np.zeros((0, 2), dtype=np.float64), np.zeros((0,), dtype=bool)
     p3D = (p3D @ R.T) + t
     visible = p3D[:, -1] >= eps  # keep points in front of the camera
-    p2D_norm = p3D[:, :-1] / p3D[:, -1:].clip(min=eps)
     pycolmap_camera = pycolmap.Camera(
         camera_id=camera.id,
         model=camera.model,
@@ -66,9 +71,9 @@ def project_to_image(p3D, R, t, camera, eps: float = 1e-4, pad: int = 1):
         height=camera.height,
         params=camera.params,
     )
-    p2D = pycolmap_camera.img_from_cam(p2D_norm)
+    p2D = np.asarray(pycolmap_camera.img_from_cam(p3D), dtype=np.float64).reshape(-1, 2)
     size = np.array([camera.width - pad - 1, camera.height - pad - 1])
-    valid = np.all((p2D >= pad) & (p2D <= size), -1)
+    valid = ~np.any(np.isnan(p2D), -1) & np.all((p2D >= pad) & (p2D <= size), -1)
     valid &= visible
     return p2D[valid], valid
 

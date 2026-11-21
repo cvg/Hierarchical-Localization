@@ -1,6 +1,5 @@
 import argparse
 import multiprocessing
-import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -62,7 +61,8 @@ def incremental_mapping(
     sfm_path: Path,
     options: Optional[Dict[str, Any]] = None,
 ) -> dict[int, pycolmap.Reconstruction]:
-    num_images = pycolmap.Database.open(database_path).num_images()
+    with pycolmap.Database.open(database_path) as db:
+        num_images = db.num_images()
     pbars = []
 
     def restart_progress_bar():
@@ -126,16 +126,7 @@ def run_reconstruction(
         f"Largest model is #{largest_index} " f"with {largest_num_images} images."
     )
 
-    for filename in [
-        "images.bin",
-        "cameras.bin",
-        "points3D.bin",
-        "frames.bin",
-        "rigs.bin",
-    ]:
-        if (sfm_dir / filename).exists():
-            (sfm_dir / filename).unlink()
-        shutil.move(str(models_path / str(largest_index) / filename), str(sfm_dir))
+    reconstructions[largest_index].write(sfm_dir)
     return reconstructions[largest_index]
 
 
@@ -219,16 +210,22 @@ if __name__ == "__main__":
         nargs="+",
         default=[],
         help="List of key=value from {}".format(
-            pycolmap.IncrementalMapperOptions().todict()
+            pycolmap.IncrementalPipelineOptions().todict()
         ),
     )
     args = parser.parse_args().__dict__
 
+    camera_mode = pycolmap.CameraMode[args.pop("camera_mode")]
     image_options = parse_option_args(
         args.pop("image_options"), pycolmap.ImageReaderOptions()
     )
     mapper_options = parse_option_args(
-        args.pop("mapper_options"), pycolmap.IncrementalMapperOptions()
+        args.pop("mapper_options"), pycolmap.IncrementalPipelineOptions()
     )
 
-    main(**args, image_options=image_options, mapper_options=mapper_options)
+    main(
+        **args,
+        camera_mode=camera_mode,
+        image_options=image_options,
+        mapper_options=mapper_options,
+    )

@@ -1,15 +1,12 @@
 FROM colmap/colmap:latest
-MAINTAINER Paul-Edouard Sarlin
-ARG PYTHON_VERSION=3.8
-RUN apt-get update -y
-RUN apt-get install -y unzip wget software-properties-common
-RUN add-apt-repository ppa:deadsnakes/ppa && \
-    apt-get -y update && \
-    apt-get install -y python${PYTHON_VERSION}
-RUN wget https://bootstrap.pypa.io/get-pip.py && python${PYTHON_VERSION} get-pip.py
-RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python${PYTHON_VERSION} 1
+LABEL maintainer="Paul-Edouard Sarlin"
+RUN apt-get update -y && \
+    apt-get install -y --no-install-recommends git python3 python3-venv unzip wget && \
+    rm -rf /var/lib/apt/lists/*
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 COPY . /app
-WORKDIR app/
-RUN pip3 install --upgrade pip
-RUN pip3 install -r requirements.txt
-RUN pip3 install notebook
+WORKDIR /app
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir notebook

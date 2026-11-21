@@ -22,7 +22,7 @@ Build 3D maps with Structure-from-Motion and localize any Internet image right f
 
 ## Installation
 
-`hloc` requires Python >=3.7 and PyTorch >=1.1. Installing the package locally pulls the other dependencies:
+`hloc` requires Python >=3.10, PyTorch >=1.1, and `pycolmap>=4.2.1`. Installing the package locally pulls the other dependencies:
 
 ```bash
 git clone --recursive https://github.com/cvg/Hierarchical-Localization/
@@ -197,7 +197,7 @@ model = reconstruction.main(..., image_options=opts)
 ```
 Command-line interface:
 ```bash
-python -m hloc.reconstruction [...] --image_options camera_model='"SIMPLE_RADIAL"' camera_params='"256,256,256,0"'
+python -m hloc.reconstruction [...] --image_options camera_model=SIMPLE_RADIAL camera_params=256,256,256,0
 ```
 
 By default, hloc refines the camera parameters during the reconstruction process. To prevent this, add:
