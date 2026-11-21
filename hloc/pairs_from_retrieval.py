@@ -5,12 +5,12 @@ from typing import Optional
 
 import h5py
 import numpy as np
+import pycolmap
 import torch
 
 from . import logger
 from .utils.io import list_h5_names
 from .utils.parsers import parse_image_lists
-from .utils.read_write_model import read_images_binary
 
 
 def parse_names(prefix, names, names_all):
@@ -95,7 +95,7 @@ def main(
     query_names_h5 = list_h5_names(descriptors)
 
     if db_model:
-        images = read_images_binary(db_model / "images.bin")
+        images = pycolmap.Reconstruction(db_model).images
         db_names = [i.name for i in images.values()]
     else:
         db_names = parse_names(db_prefix, db_list, db_names_h5)
