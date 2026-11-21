@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hloc"
+dynamic = ["version"]
+description = "Tools and baselines for visual localization and mapping"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.10"
+authors = [{ name = "Paul-Edouard Sarlin" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "torch>=2.0",
+    "torchvision>=0.15",
+    "numpy",
+    "opencv-python",
+    "packaging",
+    "tqdm>=4.36.0",
+    "matplotlib",
+    "plotly",
+    "scipy",
+    "h5py",
+    "pycolmap>=4.2.1",
+    "kornia>=0.6.11",
+    "lightglue @ git+https://github.com/cvg/LightGlue",
+]
+
+[project.urls]
+Homepage = "https://github.com/cvg/Hierarchical-Localization/"
+
+[tool.setuptools.dynamic]
+version = { attr = "hloc.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["hloc*"]

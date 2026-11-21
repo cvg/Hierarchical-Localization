@@ -1,16 +1,12 @@
-import sys
-from pathlib import Path
-
+import lightglue.superpoint as lg_superpoint
 import torch
+from lightglue import SuperPoint as SuperPoint_
 
 from ..utils.base_model import BaseModel
 
-sys.path.append(str(Path(__file__).parent / "../../third_party"))
-from SuperGluePretrainedNetwork.models import superpoint  # noqa E402
-
 
 # The original keypoint sampling is incorrect. We patch it here but
-# we don't fix it upstream to not impact exisiting evaluations.
+# we don't fix it upstream to not impact existing evaluations.
 def sample_descriptors_fix_sampling(keypoints, descriptors, s: int = 8):
     """Interpolate descriptors at keypoint locations"""
     b, c, h, w = descriptors.shape
@@ -37,9 +33,26 @@ class SuperPoint(BaseModel):
     detection_noise = 2.0
 
     def _init(self, conf):
-        if conf["fix_sampling"]:
-            superpoint.sample_descriptors = sample_descriptors_fix_sampling
-        self.net = superpoint.SuperPoint(conf)
+        max_kp = conf["max_keypoints"]
+        self.net = SuperPoint_(
+            nms_radius=conf["nms_radius"],
+            detection_threshold=conf["keypoint_threshold"],
+            max_num_keypoints=None if max_kp is None or max_kp < 0 else max_kp,
+            remove_borders=conf["remove_borders"],
+        )
 
     def _forward(self, data):
-        return self.net(data)
+        if self.conf["fix_sampling"]:
+            orig_sample = lg_superpoint.sample_descriptors
+            lg_superpoint.sample_descriptors = sample_descriptors_fix_sampling
+            try:
+                pred = self.net(data)
+            finally:
+                lg_superpoint.sample_descriptors = orig_sample
+        else:
+            pred = self.net(data)
+        return {
+            "keypoints": pred["keypoints"],
+            "scores": pred["keypoint_scores"],
+            "descriptors": pred["descriptors"].transpose(-1, -2),
+        }

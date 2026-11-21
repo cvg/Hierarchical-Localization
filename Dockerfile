@@ -8,5 +8,5 @@ ENV PATH="/opt/venv/bin:$PATH"
 COPY . /app
 WORKDIR /app
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir . && \
     pip install --no-cache-dir notebook

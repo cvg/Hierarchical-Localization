@@ -149,7 +149,7 @@ def plot_camera_colmap(
         world_t_camera.rotation.matrix(),
         world_t_camera.translation,
         camera.calibration_matrix(),
-        **kwargs
+        **kwargs,
     )
 
 
@@ -158,7 +158,7 @@ def plot_image_colmap(
     image: pycolmap.Image,
     camera: pycolmap.Camera,
     name: Optional[str] = None,
-    **kwargs
+    **kwargs,
 ):
     """Plot a camera frustum from a PyCOLMAP image."""
     plot_camera_colmap(
@@ -167,7 +167,7 @@ def plot_image_colmap(
         camera,
         name=name or str(image.image_id),
         text=str(image),
-        **kwargs
+        **kwargs,
     )
 
 
