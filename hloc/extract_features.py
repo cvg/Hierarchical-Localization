@@ -65,28 +65,6 @@ confs = {
             "resize_max": 1600,
         },
     },
-    "r2d2": {
-        "output": "feats-r2d2-n5000-r1024",
-        "model": {
-            "name": "r2d2",
-            "max_keypoints": 5000,
-        },
-        "preprocessing": {
-            "grayscale": False,
-            "resize_max": 1024,
-        },
-    },
-    "d2net-ss": {
-        "output": "feats-d2net-ss",
-        "model": {
-            "name": "d2net",
-            "multiscale": False,
-        },
-        "preprocessing": {
-            "grayscale": False,
-            "resize_max": 1600,
-        },
-    },
     "sift": {
         "output": "feats-sift",
         "model": {"name": "dog"},
@@ -126,11 +104,6 @@ confs = {
         },
     },
     # Global descriptors
-    "dir": {
-        "output": "global-feats-dir",
-        "model": {"name": "dir"},
-        "preprocessing": {"resize_max": 1024},
-    },
     "netvlad": {
         "output": "global-feats-netvlad",
         "model": {"name": "netvlad"},

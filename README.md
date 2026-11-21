@@ -22,15 +22,15 @@ Build 3D maps with Structure-from-Motion and localize any Internet image right f
 
 ## Installation
 
-`hloc` requires Python >=3.10, PyTorch >=1.1, and `pycolmap>=4.2.1`. Installing the package locally pulls the other dependencies:
+`hloc` requires Python >=3.10, PyTorch >=2.0, and `pycolmap>=4.2.1`. It can be installed directly via `pip`:
 
 ```bash
-git clone --recursive https://github.com/cvg/Hierarchical-Localization/
+git clone https://github.com/cvg/Hierarchical-Localization/
 cd Hierarchical-Localization/
 python -m pip install -e .
 ```
 
-All dependencies are listed in `requirements.txt`. **Starting with `hloc-v1.3`, installing COLMAP is not required anymore.** This repository includes external local features as git submodules – don't forget to pull submodules with `git submodule update --init --recursive`.
+All dependencies are listed in `pyproject.toml`. **Starting with `hloc-v1.3`, installing COLMAP is not required anymore.**
 
 We also provide a Docker image:
 ```bash
@@ -93,9 +93,9 @@ We show in [`pipeline_SfM.ipynb`](https://nbviewer.jupyter.org/github/cvg/Hierar
 
 ## Results
 
-- Supported local feature extractors: [SuperPoint](https://arxiv.org/abs/1712.07629), [DISK](https://arxiv.org/abs/2006.13566), [D2-Net](https://arxiv.org/abs/1905.03561), [SIFT](https://www.cs.ubc.ca/~lowe/papers/ijcv04.pdf), and [R2D2](https://arxiv.org/abs/1906.06195).
-- Supported feature matchers: [SuperGlue](https://arxiv.org/abs/1911.11763), its faster follow-up [LightGlue](https://github.com/cvg/LightGlue), and nearest neighbor search with ratio test, distance test, and/or mutual check. hloc also supports dense matching with [LoFTR](https://github.com/zju3dv/LoFTR).
-- Supported image retrieval: [NetVLAD](https://arxiv.org/abs/1511.07247), [AP-GeM/DIR](https://github.com/naver/deep-image-retrieval), [OpenIBL](https://github.com/yxgeee/OpenIBL), and [MegaLoc](https://github.com/gmberton/MegaLoc).
+- Supported local feature extractors: [SuperPoint](https://arxiv.org/abs/1712.07629), [ALIKED](https://arxiv.org/abs/2304.03608), [DISK](https://arxiv.org/abs/2006.13566), and [SIFT](https://www.cs.ubc.ca/~lowe/papers/ijcv04.pdf) / SOSNet / HardNet.
+- Supported feature matchers: [SuperGlue](https://arxiv.org/abs/1911.11763), its faster follow-up [LightGlue](https://github.com/cvg/LightGlue), AdaLAM, and nearest neighbor search with ratio test, distance test, and/or mutual check. hloc also supports dense matching with [LoFTR](https://github.com/zju3dv/LoFTR).
+- Supported image retrieval: [NetVLAD](https://arxiv.org/abs/1511.07247), [OpenIBL](https://github.com/yxgeee/OpenIBL), and [MegaLoc](https://github.com/gmberton/MegaLoc).
 
 Using NetVLAD for retrieval, we obtain the following best results:
 
