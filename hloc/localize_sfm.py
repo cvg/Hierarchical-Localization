@@ -2,7 +2,7 @@ import argparse
 import pickle
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Union
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import pycolmap
@@ -18,6 +18,7 @@ def do_covisibility_clustering(
 ):
     clusters = []
     visited = set()
+    frame_ids_set = set(frame_ids)
     for frame_id in frame_ids:
         # Check if already labeled
         if frame_id in visited:
@@ -26,7 +27,7 @@ def do_covisibility_clustering(
         # New component
         clusters.append([])
         queue = {frame_id}
-        while len(queue):
+        while queue:
             exploration_frame = queue.pop()
 
             # Already part of the component
@@ -35,14 +36,15 @@ def do_covisibility_clustering(
             visited.add(exploration_frame)
             clusters[-1].append(exploration_frame)
 
-            observed = reconstruction.images[exploration_frame].points2D
+            observed = reconstruction.images[
+                exploration_frame
+            ].get_observation_points2D()
             connected_frames = {
                 obs.image_id
                 for p2D in observed
-                if p2D.has_point3D()
                 for obs in reconstruction.points3D[p2D.point3D_id].track.elements
             }
-            connected_frames &= set(frame_ids)
+            connected_frames &= frame_ids_set
             connected_frames -= visited
             queue |= connected_frames
 
@@ -51,23 +53,46 @@ def do_covisibility_clustering(
 
 
 class QueryLocalizer:
-    def __init__(self, reconstruction, config=None):
+    def __init__(
+        self,
+        reconstruction: pycolmap.Reconstruction,
+        config: Optional[Dict[str, Any]] = None,
+    ):
         self.reconstruction = reconstruction
         self.config = config or {}
+        unknown_keys = set(self.config) - {"estimation", "refinement"}
+        if unknown_keys:
+            raise ValueError(
+                f"Unknown QueryLocalizer config keys: {sorted(unknown_keys)}"
+            )
+        est_conf = self.config.get("estimation")
+        ref_conf = self.config.get("refinement")
+        self.estimation_options = (
+            est_conf
+            if isinstance(est_conf, pycolmap.AbsolutePoseEstimationOptions)
+            else pycolmap.AbsolutePoseEstimationOptions(est_conf or {})
+        )
+        self.refinement_options = (
+            ref_conf
+            if isinstance(ref_conf, pycolmap.AbsolutePoseRefinementOptions)
+            else pycolmap.AbsolutePoseRefinementOptions(ref_conf or {})
+        )
 
     def localize(self, points2D_all, points2D_idxs, points3D_id, query_camera):
         points2D = points2D_all[points2D_idxs]
-        points3D = [self.reconstruction.points3D[j].xyz for j in points3D_id]
         if points2D.shape[0] == 0:
             return None
-        ret = pycolmap.estimate_and_refine_absolute_pose(
+        points3D = np.asarray(
+            [self.reconstruction.points3D[j].xyz for j in points3D_id],
+            dtype=np.float64,
+        )
+        return pycolmap.estimate_and_refine_absolute_pose(
             points2D,
             points3D,
             query_camera,
-            estimation_options=self.config.get("estimation", {}),
-            refinement_options=self.config.get("refinement", {}),
+            estimation_options=self.estimation_options,
+            refinement_options=self.refinement_options,
         )
-        return ret
 
 
 def pose_from_cluster(
@@ -90,15 +115,13 @@ def pose_from_cluster(
         if image.num_points3D == 0:
             logger.debug(f"No 3D points found for {image.name}.")
             continue
-        points3D_ids = np.array(
-            [p.point3D_id if p.has_point3D() else -1 for p in image.points2D]
-        )
-
         matches, _ = get_matches(matches_path, qname, image.name)
-        matches = matches[points3D_ids[matches[:, 1]] != -1]
-        num_matches += len(matches)
         for idx, m in matches:
-            id_3D = points3D_ids[m]
+            p2D = image.point2D(int(m))
+            if not p2D.has_point3D():
+                continue
+            id_3D = p2D.point3D_id
+            num_matches += 1
             kp_idx_to_3D_to_db[idx][id_3D].append(i)
             # avoid duplicate observations
             if id_3D not in kp_idx_to_3D[idx]:
@@ -134,10 +157,10 @@ def main(
     features: Path,
     matches: Path,
     results: Path,
-    ransac_thresh: int = 12,
+    ransac_thresh: float = 12.0,
     covisibility_clustering: bool = False,
     prepend_camera_name: bool = False,
-    config: Dict = None,
+    config: Optional[Dict[str, Any]] = None,
 ):
     assert retrieval.exists(), retrieval
     assert features.exists(), features
@@ -151,8 +174,18 @@ def main(
         reference_sfm = pycolmap.Reconstruction(reference_sfm)
     db_name_to_id = {img.name: i for i, img in reference_sfm.images.items()}
 
-    config = {"estimation": {"ransac": {"max_error": ransac_thresh}}, **(config or {})}
-    localizer = QueryLocalizer(reference_sfm, config)
+    merged_config = dict(config or {})
+    est_conf = merged_config.get("estimation")
+    if est_conf is None or isinstance(est_conf, dict):
+        est_dict = dict(est_conf or {})
+        ransac_conf = est_dict.get("ransac")
+        if ransac_conf is None or isinstance(ransac_conf, dict):
+            est_dict["ransac"] = {
+                "max_error": ransac_thresh,
+                **(ransac_conf or {}),
+            }
+        merged_config["estimation"] = est_dict
+    localizer = QueryLocalizer(reference_sfm, merged_config)
 
     cam_from_world = {}
     logs = {
@@ -173,6 +206,11 @@ def main(
                 logger.warning(f"Image {n} was retrieved but not in database")
                 continue
             db_ids.append(db_name_to_id[n])
+        if len(db_ids) == 0:
+            logger.warning(
+                f"No retrieved images for query {qname} exist in database. Skipping..."
+            )
+            continue
 
         if covisibility_clustering:
             clusters = do_covisibility_clustering(db_ids, reference_sfm)
@@ -214,7 +252,6 @@ def main(
 
     logs_path = f"{results}_logs.pkl"
     logger.info(f"Writing logs to {logs_path}...")
-    # TODO: Resolve pickling issue with pycolmap objects.
     with open(logs_path, "wb") as f:
         pickle.dump(logs, f)
     logger.info("Done!")
