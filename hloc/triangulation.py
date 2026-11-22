@@ -3,14 +3,11 @@ import ast
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import numpy as np
 import pycolmap
 from tqdm import tqdm
 
 from . import logger
-from .utils.geometry import compute_epipolar_errors
 from .utils.io import get_keypoints, get_matches
-from .utils.parsers import parse_retrieval
 
 
 class OutputCapture:
@@ -102,80 +99,21 @@ def estimation_and_geometric_verification(
         )
 
 
-def geometric_verification(
-    image_ids: Dict[str, int],
+def guided_geometric_verification(
     reference: pycolmap.Reconstruction,
-    db: pycolmap.Database,
-    features_path: Path,
-    pairs_path: Path,
-    matches_path: Path,
+    database_path: Path,
     max_error: float = 4.0,
+    verbose: bool = False,
 ):
-    logger.info("Performing geometric verification of the matches...")
-
-    pairs = parse_retrieval(pairs_path)
-
-    inlier_ratios = []
-    matched = set()
-    for name0 in tqdm(pairs):
-        id0 = image_ids[name0]
-        image0 = reference.images[id0]
-        cam0 = reference.cameras[image0.camera_id]
-        kps0, noise0 = get_keypoints(features_path, name0, return_uncertainty=True)
-        noise0 = 1.0 if noise0 is None else noise0
-        if len(kps0) > 0:
-            kps0 = np.stack(cam0.cam_from_img(kps0))
-        else:
-            kps0 = np.zeros((0, 2))
-
-        for name1 in pairs[name0]:
-            id1 = image_ids[name1]
-            image1 = reference.images[id1]
-            cam1 = reference.cameras[image1.camera_id]
-            kps1, noise1 = get_keypoints(features_path, name1, return_uncertainty=True)
-            noise1 = 1.0 if noise1 is None else noise1
-            if len(kps1) > 0:
-                kps1 = np.stack(cam1.cam_from_img(kps1))
-            else:
-                kps1 = np.zeros((0, 2))
-
-            matches = get_matches(matches_path, name0, name1)[0]
-
-            if len({(id0, id1), (id1, id0)} & matched) > 0:
-                continue
-            matched |= {(id0, id1), (id1, id0)}
-
-            if matches.shape[0] == 0:
-                continue
-
-            cam1_from_cam0 = image1.cam_from_world() * image0.cam_from_world().inverse()
-            errors0, errors1 = compute_epipolar_errors(
-                cam1_from_cam0, kps0[matches[:, 0]], kps1[matches[:, 1]]
-            )
-            valid_matches = np.logical_and(
-                errors0 <= cam0.cam_from_img_threshold(noise0 * max_error),
-                errors1 <= cam1.cam_from_img_threshold(noise1 * max_error),
-            )
-            # TODO: We could also add E to the database, but we need
-            # to reverse the transformations if id0 > id1 in utils/database.py.
-            inlier_matches = matches[valid_matches, :]
-            if len(inlier_matches) > 0:
-                db.write_two_view_geometry(
-                    id0,
-                    id1,
-                    pycolmap.TwoViewGeometry(
-                        config=pycolmap.TwoViewGeometryConfiguration.CALIBRATED,
-                        inlier_matches=inlier_matches,
-                    ),
-                )
-            inlier_ratios.append(np.mean(valid_matches))
-    logger.info(
-        "mean/med/min/max valid matches %.2f/%.2f/%.2f/%.2f%%.",
-        np.mean(inlier_ratios) * 100,
-        np.median(inlier_ratios) * 100,
-        np.min(inlier_ratios) * 100,
-        np.max(inlier_ratios) * 100,
-    )
+    logger.info("Performing guided geometric verification of the matches...")
+    options = pycolmap.TwoViewGeometryOptions()
+    options.ransac.max_error = max_error
+    with OutputCapture(verbose):
+        pycolmap.guided_geometric_verification(
+            reference,
+            database_path,
+            two_view_geometry_options=options,
+        )
 
 
 def run_triangulation(
@@ -234,10 +172,7 @@ def main(
         if estimate_two_view_geometries:
             estimation_and_geometric_verification(database, pairs, verbose)
         else:
-            with pycolmap.Database.open(database) as db:
-                geometric_verification(
-                    image_ids, reference, db, features, pairs, matches
-                )
+            guided_geometric_verification(reference, database, verbose=verbose)
     reconstruction = run_triangulation(
         sfm_dir, database, image_dir, reference, verbose, mapper_options
     )
