@@ -7,40 +7,50 @@ import torch
 from tqdm import tqdm
 
 
-def scene_coordinates(p2D, R_w2c, t_w2c, depth, camera):
+def scene_coordinates(
+    p2D: np.ndarray,
+    R_w2c: np.ndarray,
+    t_w2c: np.ndarray,
+    depth: np.ndarray,
+    camera: pycolmap.Camera,
+) -> np.ndarray:
     assert len(depth) == len(p2D)
     if len(p2D) == 0:
         return np.zeros((0, 3), dtype=np.float64)
     p2D_norm = np.asarray(camera.cam_from_img(p2D), dtype=np.float64).reshape(-1, 2)
     p2D_h = np.concatenate([p2D_norm, np.ones_like(p2D_norm[:, :1])], 1)
     p3D_c = p2D_h * depth[:, None]
-    p3D_w = (p3D_c - t_w2c) @ R_w2c
+    p3D_w: np.ndarray = (p3D_c - t_w2c) @ R_w2c
     return p3D_w
 
 
-def interpolate_depth(depth, kp):
+def interpolate_depth(
+    depth: np.ndarray, kp: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
     h, w = depth.shape
-    kp = kp / np.array([[w - 1, h - 1]]) * 2 - 1
-    assert np.all(kp > -1) and np.all(kp < 1)
-    depth = torch.from_numpy(depth)[None, None]
-    kp = torch.from_numpy(kp)[None, None]
+    kp_norm = kp / np.array([[w - 1, h - 1]]) * 2 - 1
+    assert np.all(kp_norm > -1) and np.all(kp_norm < 1)
+    depth_t = torch.from_numpy(depth)[None, None]
+    kp_t = torch.from_numpy(kp_norm)[None, None]
     grid_sample = torch.nn.functional.grid_sample
 
     # To maximize the number of points that have depth:
     # do bilinear interpolation first and then nearest for the remaining points
-    interp_lin = grid_sample(depth, kp, align_corners=True, mode="bilinear")[0, :, 0]
+    interp_lin = grid_sample(depth_t, kp_t, align_corners=True, mode="bilinear")[
+        0, :, 0
+    ]
     interp_nn = torch.nn.functional.grid_sample(
-        depth, kp, align_corners=True, mode="nearest"
+        depth_t, kp_t, align_corners=True, mode="nearest"
     )[0, :, 0]
     interp = torch.where(torch.isnan(interp_lin), interp_nn, interp_lin)
-    valid = ~torch.any(torch.isnan(interp), 0)
+    valid_t = ~torch.any(torch.isnan(interp), 0)
 
     interp_depth = interp.T.numpy().flatten()
-    valid = valid.numpy()
+    valid = valid_t.numpy()
     return interp_depth, valid
 
 
-def image_path_to_rendered_depth_path(image_name):
+def image_path_to_rendered_depth_path(image_name: str) -> str:
     parts = image_name.split("/")
     name = "_".join(["".join(parts[0].split("-")), parts[1]])
     name = name.replace("color", "pose")
@@ -48,7 +58,14 @@ def image_path_to_rendered_depth_path(image_name):
     return name
 
 
-def project_to_image(p3D, R, t, camera, eps: float = 1e-4, pad: int = 1):
+def project_to_image(
+    p3D: np.ndarray,
+    R: np.ndarray,
+    t: np.ndarray,
+    camera: pycolmap.Camera,
+    eps: float = 1e-4,
+    pad: int = 1,
+) -> tuple[np.ndarray, np.ndarray]:
     if len(p3D) == 0:
         return np.zeros((0, 2), dtype=np.float64), np.zeros((0,), dtype=bool)
     p3D = (p3D @ R.T) + t
@@ -60,7 +77,9 @@ def project_to_image(p3D, R, t, camera, eps: float = 1e-4, pad: int = 1):
     return p2D[valid], valid
 
 
-def correct_sfm_with_gt_depth(sfm_path, depth_folder_path, output_path):
+def correct_sfm_with_gt_depth(
+    sfm_path: Path, depth_folder_path: Path, output_path: Path
+) -> None:
     reconstruction = pycolmap.Reconstruction(sfm_path)
     for imgid, img in tqdm(reconstruction.images.items()):
         if not img.has_pose:
@@ -68,8 +87,8 @@ def correct_sfm_with_gt_depth(sfm_path, depth_folder_path, output_path):
         image_name = img.name
         depth_name = image_path_to_rendered_depth_path(image_name)
 
-        depth = PIL.Image.open(Path(depth_folder_path) / depth_name)
-        depth = np.array(depth).astype("float64")
+        depth_img = PIL.Image.open(Path(depth_folder_path) / depth_name)
+        depth = np.array(depth_img).astype("float64")
         depth = depth / 1000.0  # mm to meter
         depth[(depth == 0.0) | (depth > 1000.0)] = np.nan
 
@@ -100,17 +119,19 @@ def correct_sfm_with_gt_depth(sfm_path, depth_folder_path, output_path):
         valids = np.zeros(len(obs), dtype=bool)
         valids[valids_projected] = valids_backprojected
 
-        for p2d_idx, p3did in zip(obs_p2d_idxs[~valids], obs_p3d_ids[~valids]):
-            p3did = int(p3did)
+        for p2d_idx, p3did in zip(
+            obs_p2d_idxs[~valids], obs_p3d_ids[~valids], strict=True
+        ):
+            p3d_id = int(p3did)
             img.reset_point3D_for_point2D(int(p2d_idx))
-            point3D = reconstruction.points3D[p3did]
+            point3D = reconstruction.points3D[p3d_id]
             point3D.track.delete_element(imgid, int(p2d_idx))
             if point3D.track.length() == 0:
-                reconstruction.delete_point3D(p3did)
+                reconstruction.delete_point3D(p3d_id)
 
         valid_p3d_ids = obs_p3d_ids[valids]
         assert len(valid_p3d_ids) == len(scs), f"{len(scs)}, {len(valid_p3d_ids)}"
-        for p3did, sc in zip(valid_p3d_ids, scs):
+        for p3did, sc in zip(valid_p3d_ids, scs, strict=True):
             reconstruction.points3D[int(p3did)].xyz = sc
 
     output_path.mkdir(parents=True, exist_ok=True)

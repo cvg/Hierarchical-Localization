@@ -24,8 +24,8 @@ else:
     min_version = version.parse("4.2.1")
     found_version = pycolmap.__version__
     if found_version != "dev":
-        version = version.parse(found_version)
-        if version < min_version:
+        parsed_version = version.parse(found_version)
+        if parsed_version < min_version:
             s = f"pycolmap>={min_version}"
             logger.warning(
                 "hloc requires %s but found pycolmap==%s, "

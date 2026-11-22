@@ -2,7 +2,7 @@ import argparse
 import pickle
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import numpy as np
 import pycolmap
@@ -14,10 +14,10 @@ from .utils.parsers import parse_image_lists, parse_retrieval
 
 
 def do_covisibility_clustering(
-    frame_ids: List[int], reconstruction: pycolmap.Reconstruction
-):
-    clusters = []
-    visited = set()
+    frame_ids: list[int], reconstruction: pycolmap.Reconstruction
+) -> list[list[int]]:
+    clusters: list[list[int]] = []
+    visited: set[int] = set()
     frame_ids_set = set(frame_ids)
     for frame_id in frame_ids:
         # Check if already labeled
@@ -56,8 +56,8 @@ class QueryLocalizer:
     def __init__(
         self,
         reconstruction: pycolmap.Reconstruction,
-        config: Optional[Dict[str, Any]] = None,
-    ):
+        config: dict[str, Any] | None = None,
+    ) -> None:
         self.reconstruction = reconstruction
         self.config = config or {}
         unknown_keys = set(self.config) - {"estimation", "refinement"}
@@ -78,7 +78,13 @@ class QueryLocalizer:
             else pycolmap.AbsolutePoseRefinementOptions(ref_conf or {})
         )
 
-    def localize(self, points2D_all, points2D_idxs, points3D_id, query_camera):
+    def localize(
+        self,
+        points2D_all: np.ndarray,
+        points2D_idxs: list[int] | np.ndarray,
+        points3D_id: list[int] | np.ndarray,
+        query_camera: pycolmap.Camera,
+    ) -> dict[str, Any] | None:
         points2D = points2D_all[points2D_idxs]
         if points2D.shape[0] == 0:
             return None
@@ -99,16 +105,18 @@ def pose_from_cluster(
     localizer: QueryLocalizer,
     qname: str,
     query_camera: pycolmap.Camera,
-    db_ids: List[int],
+    db_ids: list[int],
     features_path: Path,
     matches_path: Path,
-    **kwargs,
-):
+    **kwargs: Any,
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
     kpq = get_keypoints(features_path, qname)
     kpq += 0.5  # COLMAP coordinates
 
-    kp_idx_to_3D = defaultdict(list)
-    kp_idx_to_3D_to_db = defaultdict(lambda: defaultdict(list))
+    kp_idx_to_3D: dict[int, list[int]] = defaultdict(list)
+    kp_idx_to_3D_to_db: dict[int, dict[int, list[int]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
     num_matches = 0
     for i, db_id in enumerate(db_ids):
         image = localizer.reconstruction.images[db_id]
@@ -122,10 +130,10 @@ def pose_from_cluster(
                 continue
             id_3D = p2D.point3D_id
             num_matches += 1
-            kp_idx_to_3D_to_db[idx][id_3D].append(i)
+            kp_idx_to_3D_to_db[int(idx)][id_3D].append(i)
             # avoid duplicate observations
-            if id_3D not in kp_idx_to_3D[idx]:
-                kp_idx_to_3D[idx].append(id_3D)
+            if id_3D not in kp_idx_to_3D[int(idx)]:
+                kp_idx_to_3D[int(idx)].append(id_3D)
 
     idxs = list(kp_idx_to_3D.keys())
     mkp_idxs = [i for i in idxs for _ in kp_idx_to_3D[i]]
@@ -138,7 +146,7 @@ def pose_from_cluster(
     mkp_to_3D_to_db = [
         (j, kp_idx_to_3D_to_db[i][j]) for i in idxs for j in kp_idx_to_3D[i]
     ]
-    log = {
+    log: dict[str, Any] = {
         "db": db_ids,
         "PnP_ret": ret,
         "keypoints_query": kpq[mkp_idxs],
@@ -151,7 +159,7 @@ def pose_from_cluster(
 
 
 def main(
-    reference_sfm: Union[Path, pycolmap.Reconstruction],
+    reference_sfm: Path | pycolmap.Reconstruction,
     queries: Path,
     retrieval: Path,
     features: Path,
@@ -160,13 +168,13 @@ def main(
     ransac_thresh: float = 12.0,
     covisibility_clustering: bool = False,
     prepend_camera_name: bool = False,
-    config: Optional[Dict[str, Any]] = None,
-):
+    config: dict[str, Any] | None = None,
+) -> None:
     assert retrieval.exists(), retrieval
     assert features.exists(), features
     assert matches.exists(), matches
 
-    queries = parse_image_lists(queries, with_intrinsics=True)
+    query_list = parse_image_lists(queries, with_intrinsics=True)
     retrieval_dict = parse_retrieval(retrieval)
 
     logger.info("Reading the 3D model...")
@@ -187,15 +195,15 @@ def main(
         merged_config["estimation"] = est_dict
     localizer = QueryLocalizer(reference_sfm, merged_config)
 
-    cam_from_world = {}
-    logs = {
+    cam_from_world: dict[str, pycolmap.Rigid3d] = {}
+    logs: dict[str, Any] = {
         "features": features,
         "matches": matches,
         "retrieval": retrieval,
         "loc": {},
     }
     logger.info("Starting localization...")
-    for qname, qcam in tqdm(queries):
+    for qname, qcam in tqdm(query_list):
         if qname not in retrieval_dict:
             logger.warning(f"No images retrieved for query image {qname}. Skipping...")
             continue
@@ -246,7 +254,7 @@ def main(
             log["covisibility_clustering"] = covisibility_clustering
             logs["loc"][qname] = log
 
-    logger.info(f"Localized {len(cam_from_world)} / {len(queries)} images.")
+    logger.info(f"Localized {len(cam_from_world)} / {len(query_list)} images.")
     logger.info(f"Writing poses to {results}...")
     write_poses(cam_from_world, results, prepend_camera_name=prepend_camera_name)
 

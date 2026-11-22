@@ -40,8 +40,9 @@
 # --------------------------------------------------------------------*/
 # %BANNER_END%
 
+from collections.abc import Sequence
 from copy import deepcopy
-from typing import List, Tuple
+from typing import Any
 
 import torch
 from torch import nn
@@ -52,10 +53,10 @@ WEIGHTS_URL = (
 )
 
 
-def MLP(channels: List[int], do_bn: bool = True) -> nn.Module:
+def MLP(channels: list[int], do_bn: bool = True) -> nn.Sequential:
     """Multi-layer perceptron"""
     n = len(channels)
-    layers = []
+    layers: list[nn.Module] = []
     for i in range(1, n):
         layers.append(nn.Conv1d(channels[i - 1], channels[i], kernel_size=1, bias=True))
         if i < (n - 1):
@@ -65,7 +66,7 @@ def MLP(channels: List[int], do_bn: bool = True) -> nn.Module:
     return nn.Sequential(*layers)
 
 
-def normalize_keypoints(kpts, image_shape):
+def normalize_keypoints(kpts: torch.Tensor, image_shape: Sequence[int]) -> torch.Tensor:
     """Normalize keypoints locations based on image image_shape"""
     _, _, height, width = image_shape
     one = kpts.new_tensor(1)
@@ -78,19 +79,22 @@ def normalize_keypoints(kpts, image_shape):
 class KeypointEncoder(nn.Module):
     """Joint encoding of visual appearance and location using MLPs"""
 
-    def __init__(self, feature_dim: int, layers: List[int]) -> None:
+    def __init__(self, feature_dim: int, layers: list[int]) -> None:
         super().__init__()
         self.encoder = MLP([3] + layers + [feature_dim])
-        nn.init.constant_(self.encoder[-1].bias, 0.0)
+        last_layer = self.encoder[-1]
+        assert isinstance(last_layer, nn.Conv1d) and last_layer.bias is not None
+        nn.init.constant_(last_layer.bias, 0.0)
 
-    def forward(self, kpts, scores):
+    def forward(self, kpts: torch.Tensor, scores: torch.Tensor) -> torch.Tensor:
         inputs = [kpts.transpose(1, 2), scores.unsqueeze(1)]
-        return self.encoder(torch.cat(inputs, dim=1))
+        out: torch.Tensor = self.encoder(torch.cat(inputs, dim=1))
+        return out
 
 
 def attention(
     query: torch.Tensor, key: torch.Tensor, value: torch.Tensor
-) -> Tuple[torch.Tensor, torch.Tensor]:
+) -> tuple[torch.Tensor, torch.Tensor]:
     dim = query.shape[1]
     scores = torch.einsum("bdhn,bdhm->bhnm", query, key) / dim**0.5
     prob = torch.nn.functional.softmax(scores, dim=-1)
@@ -100,7 +104,7 @@ def attention(
 class MultiHeadedAttention(nn.Module):
     """Multi-head attention to increase model expressivity"""
 
-    def __init__(self, num_heads: int, d_model: int):
+    def __init__(self, num_heads: int, d_model: int) -> None:
         super().__init__()
         assert d_model % num_heads == 0
         self.dim = d_model // num_heads
@@ -114,26 +118,32 @@ class MultiHeadedAttention(nn.Module):
         batch_dim = query.size(0)
         query, key, value = [
             proj(x).view(batch_dim, self.dim, self.num_heads, -1)
-            for proj, x in zip(self.proj, (query, key, value))
+            for proj, x in zip(self.proj, (query, key, value), strict=True)
         ]
         x, _ = attention(query, key, value)
-        return self.merge(x.contiguous().view(batch_dim, self.dim * self.num_heads, -1))
+        out: torch.Tensor = self.merge(
+            x.contiguous().view(batch_dim, self.dim * self.num_heads, -1)
+        )
+        return out
 
 
 class AttentionalPropagation(nn.Module):
-    def __init__(self, feature_dim: int, num_heads: int):
+    def __init__(self, feature_dim: int, num_heads: int) -> None:
         super().__init__()
         self.attn = MultiHeadedAttention(num_heads, feature_dim)
         self.mlp = MLP([feature_dim * 2, feature_dim * 2, feature_dim])
-        nn.init.constant_(self.mlp[-1].bias, 0.0)
+        last_layer = self.mlp[-1]
+        assert isinstance(last_layer, nn.Conv1d) and last_layer.bias is not None
+        nn.init.constant_(last_layer.bias, 0.0)
 
     def forward(self, x: torch.Tensor, source: torch.Tensor) -> torch.Tensor:
         message = self.attn(x, source, source)
-        return self.mlp(torch.cat([x, message], dim=1))
+        out: torch.Tensor = self.mlp(torch.cat([x, message], dim=1))
+        return out
 
 
 class AttentionalGNN(nn.Module):
-    def __init__(self, feature_dim: int, layer_names: List[str]) -> None:
+    def __init__(self, feature_dim: int, layer_names: list[str]) -> None:
         super().__init__()
         self.layers = nn.ModuleList(
             [AttentionalPropagation(feature_dim, 4) for _ in range(len(layer_names))]
@@ -142,8 +152,8 @@ class AttentionalGNN(nn.Module):
 
     def forward(
         self, desc0: torch.Tensor, desc1: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        for layer, name in zip(self.layers, self.names):
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        for layer, name in zip(self.layers, self.names, strict=True):
             if name == "cross":
                 src0, src1 = desc1, desc0
             else:  # if name == 'self':
@@ -190,7 +200,7 @@ def log_optimal_transport(
     return Z
 
 
-def arange_like(x, dim: int):
+def arange_like(x: torch.Tensor, dim: int) -> torch.Tensor:
     return x.new_ones(x.shape[dim]).cumsum(0) - 1  # traceable in 1.1
 
 
@@ -212,7 +222,7 @@ class SuperGlue(nn.Module):
     Networks. In CVPR, 2020. https://arxiv.org/abs/1911.11763
     """
 
-    default_config = {
+    default_config: dict[str, Any] = {
         "descriptor_dim": 256,
         "weights": "indoor",
         "keypoint_encoder": [32, 64, 128, 256],
@@ -221,7 +231,7 @@ class SuperGlue(nn.Module):
         "match_threshold": 0.2,
     }
 
-    def __init__(self, config):
+    def __init__(self, config: dict[str, Any]) -> None:
         super().__init__()
         self.config = {**self.default_config, **config}
 
@@ -241,15 +251,14 @@ class SuperGlue(nn.Module):
             bias=True,
         )
 
-        bin_score = torch.nn.Parameter(torch.tensor(1.0))
-        self.register_parameter("bin_score", bin_score)
+        self.bin_score = nn.Parameter(torch.tensor(1.0))
 
         assert self.config["weights"] in ["indoor", "outdoor"]
         url = WEIGHTS_URL.format(self.config["weights"])
         state_dict = torch.hub.load_state_dict_from_url(url, map_location="cpu")
         self.load_state_dict(state_dict)
 
-    def forward(self, data):
+    def forward(self, data: dict[str, Any]) -> dict[str, torch.Tensor]:
         """Run SuperGlue on a pair of keypoints and descriptors"""
         desc0, desc1 = data["descriptors0"], data["descriptors1"]
         kpts0, kpts1 = data["keypoints0"], data["keypoints1"]

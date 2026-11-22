@@ -33,8 +33,51 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/cvg/Hierarchical-Localization/"
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff",
+    "mypy",
+]
+
 [tool.setuptools.dynamic]
 version = { attr = "hloc.__version__" }
 
 [tool.setuptools.packages.find]
 include = ["hloc*"]
+
+[tool.setuptools.package-data]
+hloc = ["py.typed"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+extend-include = ["*.ipynb"]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "UP",
+    "B",
+    "SIM",
+    "I",
+]
+ignore = ["SIM117"]
+
+[tool.ruff.lint.per-file-ignores]
+"*.ipynb" = ["E402", "E501", "F401", "F821"]
+
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+explicit_package_bases = true
+# Digit-prefixed packages with __init__.py are rejected by mypy's package discovery.
+exclude = ["^hloc/pipelines/(4Seasons|7Scenes)/"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

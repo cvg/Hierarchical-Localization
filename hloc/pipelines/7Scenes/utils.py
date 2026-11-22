@@ -1,19 +1,24 @@
 import logging
+from pathlib import Path
 
 import pycolmap
 
 logger = logging.getLogger(__name__)
 
 
-def create_reference_sfm(full_model, ref_model, blacklist=None):
+def create_reference_sfm(
+    full_model: Path,
+    ref_model: Path,
+    blacklist: Path | None = None,
+) -> None:
     """Create a new COLMAP model with only training images."""
     logger.info("Creating the reference model.")
     ref_model.mkdir(exist_ok=True, parents=True)
     full = pycolmap.Reconstruction(full_model)
 
-    blacklist_set = set()
+    blacklist_set: set[str] = set()
     if blacklist is not None:
-        with open(blacklist, "r") as f:
+        with open(blacklist) as f:
             blacklist_set = set(f.read().rstrip().split("\n"))
 
     ref = pycolmap.Reconstruction()
@@ -22,8 +27,8 @@ def create_reference_sfm(full_model, ref_model, blacklist=None):
     for rig in full.rigs.values():
         ref.add_rig(rig)
 
-    kept_image_ids = set()
-    kept_frame_ids = set()
+    kept_image_ids: set[int] = set()
+    kept_frame_ids: set[int] = set()
     for id_, image in full.images.items():
         if image.name in blacklist_set:
             continue

@@ -1,4 +1,5 @@
 import warnings
+from typing import Any
 
 import torch
 from kornia.feature import LoFTR as LoFTR_
@@ -8,19 +9,19 @@ from ..utils.base_model import BaseModel
 
 
 class LoFTR(BaseModel):
-    default_conf = {
+    default_conf: dict[str, Any] = {
         "weights": "outdoor",
         "match_threshold": 0.2,
         "max_num_matches": None,
     }
-    required_inputs = ["image0", "image1"]
+    required_inputs: list[str] = ["image0", "image1"]
 
-    def _init(self, conf):
-        cfg = default_cfg
+    def _init(self, conf: dict[str, Any]) -> None:
+        cfg: dict[str, Any] = default_cfg
         cfg["match_coarse"]["thr"] = conf["match_threshold"]
         self.net = LoFTR_(pretrained=conf["weights"], config=cfg)
 
-    def _forward(self, data):
+    def _forward(self, data: dict[str, Any]) -> dict[str, torch.Tensor]:
         # For consistency with hloc pairs, we refine kpts in image0!
         rename = {
             "keypoints0": "keypoints1",
@@ -47,7 +48,7 @@ class LoFTR(BaseModel):
             scores = scores[keep]
 
         # Switch back indices
-        pred = {(rename[k] if k in rename else k): v for k, v in pred.items()}
+        pred = {rename.get(k, k): v for k, v in pred.items()}
         pred["scores"] = scores
         del pred["confidence"]
         return pred

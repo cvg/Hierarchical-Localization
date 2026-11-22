@@ -1,3 +1,5 @@
+from typing import Any
+
 import kornia
 import numpy as np
 import pycolmap
@@ -9,7 +11,7 @@ from ..utils.base_model import BaseModel
 EPS = 1e-6
 
 
-def sift_to_rootsift(x):
+def sift_to_rootsift(x: np.ndarray) -> np.ndarray:
     x = x / (np.linalg.norm(x, ord=1, axis=-1, keepdims=True) + EPS)
     x = np.sqrt(x.clip(min=EPS))
     x = x / (np.linalg.norm(x, axis=-1, keepdims=True) + EPS)
@@ -17,7 +19,7 @@ def sift_to_rootsift(x):
 
 
 class DoG(BaseModel):
-    default_conf = {
+    default_conf: dict[str, Any] = {
         "options": {
             "first_octave": 0,
             "peak_threshold": 0.01,
@@ -27,22 +29,23 @@ class DoG(BaseModel):
         "patch_size": 32,
         "mr_size": 12,
     }
-    required_inputs = ["image"]
-    detection_noise = 1.0
-    max_batch_size = 1024
+    required_inputs: list[str] = ["image"]
+    detection_noise: float = 1.0
+    max_batch_size: int = 1024
 
-    def _init(self, conf):
+    def _init(self, conf: dict[str, Any]) -> None:
+        self.describe: kornia.feature.SOSNet | kornia.feature.HardNet
         if conf["descriptor"] == "sosnet":
             self.describe = kornia.feature.SOSNet(pretrained=True)
         elif conf["descriptor"] == "hardnet":
             self.describe = kornia.feature.HardNet(pretrained=True)
         elif conf["descriptor"] not in ["sift", "rootsift"]:
-            raise ValueError(f'Unknown descriptor: {conf["descriptor"]}')
+            raise ValueError(f"Unknown descriptor: {conf['descriptor']}")
 
-        self.sift = None  # lazily instantiated on the first image
+        self.sift: pycolmap.FeatureExtractor | None = None  # lazily instantiated
         self.dummy_param = torch.nn.Parameter(torch.empty(0))
 
-    def _forward(self, data):
+    def _forward(self, data: dict[str, Any]) -> dict[str, torch.Tensor]:
         image = data["image"]
         image_np = image.cpu().numpy()[0, 0]
         assert image.shape[1] == 1
@@ -69,24 +72,24 @@ class DoG(BaseModel):
             np.ascontiguousarray(image_np, dtype=np.float32)
         )
         if len(kps) > 0:
-            keypoints = pycolmap.keypoints_to_matrix(kps)
-            descriptors = desc.to_float().data / 512.0
+            keypoints_np = pycolmap.keypoints_to_matrix(kps)
+            descriptors_np = desc.to_float().data / 512.0
         else:
-            keypoints = np.zeros((0, 4), dtype=np.float32)
-            descriptors = np.zeros((0, 128), dtype=np.float32)
-        scales = keypoints[:, 2]
-        oris = np.rad2deg(keypoints[:, 3])
+            keypoints_np = np.zeros((0, 4), dtype=np.float32)
+            descriptors_np = np.zeros((0, 128), dtype=np.float32)
+        scales_np = keypoints_np[:, 2]
+        oris_np = np.rad2deg(keypoints_np[:, 3])
 
         if self.conf["descriptor"] in ["sift", "rootsift"]:
             # We still renormalize because COLMAP does not normalize well,
             # maybe due to numerical errors
             if self.conf["descriptor"] == "rootsift":
-                descriptors = sift_to_rootsift(descriptors)
-            descriptors = torch.from_numpy(descriptors)
+                descriptors_np = sift_to_rootsift(descriptors_np)
+            descriptors = torch.from_numpy(descriptors_np)
         elif self.conf["descriptor"] in ("sosnet", "hardnet"):
-            center = keypoints[:, :2] + 0.5
-            laf_scale = scales * self.conf["mr_size"] / 2
-            laf_ori = -oris
+            center = keypoints_np[:, :2] + 0.5
+            laf_scale = scales_np * self.conf["mr_size"] / 2
+            laf_ori = -oris_np
             lafs = laf_from_center_scale_ori(
                 torch.from_numpy(center)[None],
                 torch.from_numpy(laf_scale)[None, :, None, None],
@@ -103,11 +106,11 @@ class DoG(BaseModel):
                         patches[start_idx:end_idx]
                     )
         else:
-            raise ValueError(f'Unknown descriptor: {self.conf["descriptor"]}')
+            raise ValueError(f"Unknown descriptor: {self.conf['descriptor']}")
 
-        keypoints = torch.from_numpy(keypoints[:, :2])  # keep only x, y
-        scales = torch.from_numpy(scales)
-        oris = torch.from_numpy(oris)
+        keypoints = torch.from_numpy(keypoints_np[:, :2])  # keep only x, y
+        scales = torch.from_numpy(scales_np)
+        oris = torch.from_numpy(oris_np)
         scores = keypoints.new_zeros(len(keypoints))  # no scores for SIFT yet
 
         if self.conf["max_keypoints"] != -1:

@@ -14,9 +14,9 @@ from ... import (
 TEST_SLICES = [2, 3, 4, 5, 6, 13, 14, 15, 16, 17, 18, 19, 20, 21]
 
 
-def generate_query_list(dataset, path, slice_):
-    cameras = {}
-    with open(dataset / "intrinsics.txt", "r") as f:
+def generate_query_list(dataset: Path, path: Path, slice_: str) -> None:
+    cameras: dict[str, list[str]] = {}
+    with open(dataset / "intrinsics.txt") as f:
         for line in f.readlines():
             if line[0] == "#" or line == "\n":
                 continue
@@ -24,8 +24,8 @@ def generate_query_list(dataset, path, slice_):
             cameras[data[0]] = data[1:]
     assert len(cameras) == 2
 
-    queries = dataset / f"{slice_}/test-images-{slice_}.txt"
-    with open(queries, "r") as f:
+    queries_path = dataset / f"{slice_}/test-images-{slice_}.txt"
+    with open(queries_path) as f:
         queries = [q.rstrip("\n") for q in f.readlines()]
 
     out = [[q] + cameras[q.split("_")[2]] for q in queries]
@@ -33,7 +33,9 @@ def generate_query_list(dataset, path, slice_):
         f.write("\n".join(map(" ".join, out)))
 
 
-def run_slice(slice_, root, outputs, num_covis, num_loc):
+def run_slice(
+    slice_: str, root: Path, outputs: Path, num_covis: int, num_loc: int
+) -> None:
     dataset = root / slice_
     ref_images = dataset / "database"
     query_images = dataset / "query"

@@ -1,10 +1,10 @@
 import argparse
-import collections.abc as collections
 import glob
 import pprint
+from collections.abc import Iterable
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Dict, List, Optional, Union
+from typing import Any
 
 import cv2
 import h5py
@@ -25,7 +25,7 @@ line using their name. Each is a dictionary with the following entries:
     - model: the model configuration, as passed to a feature extractor.
     - preprocessing: how to preprocess the images read from disk.
 """
-confs = {
+confs: dict[str, dict[str, Any]] = {
     "superpoint_aachen": {
         "output": "feats-superpoint-n4096-r1024",
         "model": {
@@ -122,25 +122,26 @@ confs = {
 }
 
 
-def resize_image(image, size, interp):
+def resize_image(image: np.ndarray, size: tuple[int, int], interp: str) -> np.ndarray:
     if interp.startswith("cv2_"):
-        interp = getattr(cv2, "INTER_" + interp[len("cv2_") :].upper())
+        cv_interp = getattr(cv2, "INTER_" + interp[len("cv2_") :].upper())
         h, w = image.shape[:2]
-        if interp == cv2.INTER_AREA and (w < size[0] or h < size[1]):
-            interp = cv2.INTER_LINEAR
-        resized = cv2.resize(image, size, interpolation=interp)
+        if cv_interp == cv2.INTER_AREA and (w < size[0] or h < size[1]):
+            cv_interp = cv2.INTER_LINEAR
+        resized = cv2.resize(image, size, interpolation=cv_interp)
     elif interp.startswith("pil_"):
-        interp = getattr(PIL.Image, interp[len("pil_") :].upper())
-        resized = PIL.Image.fromarray(image.astype(np.uint8))
-        resized = resized.resize(size, resample=interp)
-        resized = np.asarray(resized, dtype=image.dtype)
+        pil_interp = getattr(PIL.Image, interp[len("pil_") :].upper())
+        pil_img = PIL.Image.fromarray(image.astype(np.uint8)).resize(
+            size, resample=pil_interp
+        )
+        resized = np.asarray(pil_img, dtype=image.dtype)
     else:
         raise ValueError(f"Unknown interpolation {interp}.")
     return resized
 
 
 class ImageDataset(torch.utils.data.Dataset):
-    default_conf = {
+    default_conf: dict[str, Any] = {
         "globs": ["*.jpg", "*.png", "*.jpeg", "*.JPG", "*.PNG"],
         "grayscale": False,
         "resize_max": None,
@@ -148,23 +149,30 @@ class ImageDataset(torch.utils.data.Dataset):
         "interpolation": "cv2_area",  # pil_linear is more accurate but slower
     }
 
-    def __init__(self, root, conf, paths=None):
-        self.conf = conf = SimpleNamespace(**{**self.default_conf, **conf})
+    def __init__(
+        self,
+        root: Path,
+        conf: dict[str, Any],
+        paths: Path | str | Iterable[str | Path] | None = None,
+    ) -> None:
+        self.conf = conf_ns = SimpleNamespace(**{**self.default_conf, **conf})
         self.root = root
 
         if paths is None:
-            paths = []
-            for g in conf.globs:
-                paths += glob.glob((Path(root) / "**" / g).as_posix(), recursive=True)
-            if len(paths) == 0:
+            found_paths: list[str] = []
+            for g in conf_ns.globs:
+                found_paths += glob.glob(
+                    (Path(root) / "**" / g).as_posix(), recursive=True
+                )
+            if len(found_paths) == 0:
                 raise ValueError(f"Could not find any image in root: {root}.")
-            paths = sorted(set(paths))
-            self.names = [Path(p).relative_to(root).as_posix() for p in paths]
+            found_paths = sorted(set(found_paths))
+            self.names = [Path(p).relative_to(root).as_posix() for p in found_paths]
             logger.info(f"Found {len(self.names)} images in root {root}.")
         else:
             if isinstance(paths, (Path, str)):
-                self.names = parse_image_lists(paths)
-            elif isinstance(paths, collections.Iterable):
+                self.names = parse_image_lists(Path(paths))
+            elif isinstance(paths, Iterable):
                 self.names = [p.as_posix() if isinstance(p, Path) else p for p in paths]
             else:
                 raise ValueError(f"Unknown format for path argument {paths}.")
@@ -173,7 +181,7 @@ class ImageDataset(torch.utils.data.Dataset):
                 if not (root / name).exists():
                     raise ValueError(f"Image {name} does not exists in root: {root}.")
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> dict[str, np.ndarray]:
         name = self.names[idx]
         image = read_image(self.root / name, self.conf.grayscale)
         image = image.astype(np.float32)
@@ -183,13 +191,14 @@ class ImageDataset(torch.utils.data.Dataset):
             self.conf.resize_force or max(size) > self.conf.resize_max
         ):
             scale = self.conf.resize_max / max(size)
-            size_new = tuple(int(round(x * scale)) for x in size)
+            size_new = (int(round(size[0] * scale)), int(round(size[1] * scale)))
             image = resize_image(image, size_new, self.conf.interpolation)
 
-        if self.conf.grayscale:
-            image = image[None]
-        else:
-            image = image.transpose((2, 0, 1))  # HxWxC to CxHxW
+        image = (
+            image[None]
+            if self.conf.grayscale
+            else image.transpose((2, 0, 1))  # HxWxC to CxHxW
+        )
         image = image / 255.0
 
         data = {
@@ -198,26 +207,28 @@ class ImageDataset(torch.utils.data.Dataset):
         }
         return data
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.names)
 
 
 @torch.no_grad()
 def main(
-    conf: Dict,
+    conf: dict[str, Any],
     image_dir: Path,
-    export_dir: Optional[Path] = None,
+    export_dir: Path | None = None,
     as_half: bool = True,
-    image_list: Optional[Union[Path, List[str]]] = None,
-    feature_path: Optional[Path] = None,
+    image_list: Path | list[str] | None = None,
+    feature_path: Path | None = None,
     overwrite: bool = False,
 ) -> Path:
     logger.info(
-        "Extracting local features with configuration:" f"\n{pprint.pformat(conf)}"
+        f"Extracting local features with configuration:\n{pprint.pformat(conf)}"
     )
 
     dataset = ImageDataset(image_dir, conf["preprocessing"], image_list)
     if feature_path is None:
+        if export_dir is None:
+            raise ValueError("Provide either export_dir or feature_path.")
         feature_path = Path(export_dir, conf["output"] + ".h5")
     feature_path.parent.mkdir(exist_ok=True, parents=True)
     skip_names = set(

@@ -1,5 +1,6 @@
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Mapping, Tuple
+from typing import Any, Literal, overload
 
 import cv2
 import h5py
@@ -9,11 +10,8 @@ import pycolmap
 from .parsers import names_to_pair, names_to_pair_old
 
 
-def read_image(path, grayscale=False):
-    if grayscale:
-        mode = cv2.IMREAD_GRAYSCALE
-    else:
-        mode = cv2.IMREAD_COLOR
+def read_image(path: Path | str, grayscale: bool = False) -> np.ndarray:
+    mode = cv2.IMREAD_GRAYSCALE if grayscale else cv2.IMREAD_COLOR
     image = cv2.imread(str(path), mode | cv2.IMREAD_IGNORE_ORIENTATION)
     if image is None:
         raise ValueError(f"Cannot read image {path}.")
@@ -22,11 +20,11 @@ def read_image(path, grayscale=False):
     return image
 
 
-def list_h5_names(path):
-    names = []
+def list_h5_names(path: Path | str) -> list[str]:
+    names: list[str] = []
     with h5py.File(str(path), "r", libver="latest") as fd:
 
-        def visit_fn(_, obj):
+        def visit_fn(_: str, obj: h5py.HLObject) -> None:
             if isinstance(obj, h5py.Dataset):
                 names.append(obj.parent.name.strip("/"))
 
@@ -34,9 +32,27 @@ def list_h5_names(path):
     return list(set(names))
 
 
+@overload
 def get_keypoints(
-    path: Path, name: str, return_uncertainty: bool = False
-) -> np.ndarray:
+    path: Path | str, name: str, return_uncertainty: Literal[False] = False
+) -> np.ndarray: ...
+
+
+@overload
+def get_keypoints(
+    path: Path | str, name: str, return_uncertainty: Literal[True]
+) -> tuple[np.ndarray, float | np.floating[Any] | None]: ...
+
+
+@overload
+def get_keypoints(
+    path: Path | str, name: str, return_uncertainty: bool
+) -> np.ndarray | tuple[np.ndarray, float | np.floating[Any] | None]: ...
+
+
+def get_keypoints(
+    path: Path | str, name: str, return_uncertainty: bool = False
+) -> np.ndarray | tuple[np.ndarray, float | np.floating[Any] | None]:
     with h5py.File(str(path), "r", libver="latest") as hfile:
         dset = hfile[name]["keypoints"]
         p = dset.__array__()
@@ -46,7 +62,7 @@ def get_keypoints(
     return p
 
 
-def find_pair(hfile: h5py.File, name0: str, name1: str):
+def find_pair(hfile: h5py.File, name0: str, name1: str) -> tuple[str, bool]:
     pair = names_to_pair(name0, name1)
     if pair in hfile:
         return pair, False
@@ -66,7 +82,9 @@ def find_pair(hfile: h5py.File, name0: str, name1: str):
     )
 
 
-def get_matches(path: Path, name0: str, name1: str) -> Tuple[np.ndarray]:
+def get_matches(
+    path: Path | str, name0: str, name1: str
+) -> tuple[np.ndarray, np.ndarray]:
     with h5py.File(str(path), "r", libver="latest") as hfile:
         pair, reverse = find_pair(hfile, name0, name1)
         matches = hfile[pair]["matches0"].__array__()
@@ -80,8 +98,10 @@ def get_matches(path: Path, name0: str, name1: str) -> Tuple[np.ndarray]:
 
 
 def write_poses(
-    poses: Mapping[str, pycolmap.Rigid3d], path: str, prepend_camera_name: bool
-):
+    poses: Mapping[str, pycolmap.Rigid3d],
+    path: Path | str,
+    prepend_camera_name: bool,
+) -> None:
     with open(path, "w") as f:
         for query, t in poses.items():
             qvec = " ".join(map(str, t.rotation.quat[[3, 0, 1, 2]]))

@@ -1,5 +1,6 @@
 import argparse
 from pathlib import Path
+from typing import Any
 
 from ... import (
     extract_features,
@@ -17,21 +18,21 @@ SCENES = ["chess", "fire", "heads", "office", "pumpkin", "redkitchen", "stairs"]
 
 
 def run_scene(
-    images,
-    gt_dir,
-    retrieval,
-    outputs,
-    results,
-    num_covis,
-    use_dense_depth,
-    depth_dir=None,
-):
+    images: Path,
+    gt_dir: Path,
+    retrieval: Path,
+    outputs: Path,
+    results: Path,
+    num_covis: int,
+    use_dense_depth: bool,
+    depth_dir: Path | None = None,
+) -> None:
     outputs.mkdir(exist_ok=True, parents=True)
     ref_sfm_sift = outputs / "sfm_sift"
     ref_sfm = outputs / "sfm_superpoint+superglue"
     query_list = outputs / "query_list_with_intrinsics.txt"
 
-    feature_conf = {
+    feature_conf: dict[str, Any] = {
         "output": "feats-superpoint-n4096-r1024",
         "model": {
             "name": "superpoint",

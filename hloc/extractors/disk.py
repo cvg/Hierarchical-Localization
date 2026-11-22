@@ -1,22 +1,25 @@
+from typing import Any
+
 import kornia
+import torch
 
 from ..utils.base_model import BaseModel
 
 
 class DISK(BaseModel):
-    default_conf = {
+    default_conf: dict[str, Any] = {
         "weights": "depth",
         "max_keypoints": None,
         "nms_window_size": 5,
         "detection_threshold": 0.0,
         "pad_if_not_divisible": True,
     }
-    required_inputs = ["image"]
+    required_inputs: list[str] = ["image"]
 
-    def _init(self, conf):
+    def _init(self, conf: dict[str, Any]) -> None:
         self.model = kornia.feature.DISK.from_pretrained(conf["weights"])
 
-    def _forward(self, data):
+    def _forward(self, data: dict[str, Any]) -> dict[str, list[torch.Tensor]]:
         image = data["image"]
         features = self.model(
             image,

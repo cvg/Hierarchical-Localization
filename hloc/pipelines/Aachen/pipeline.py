@@ -14,7 +14,7 @@ from ... import (
 )
 
 
-def run(args):
+def run(args: argparse.Namespace) -> None:
     # Setup the paths
     dataset = args.dataset
     images = dataset / "images_upright/"

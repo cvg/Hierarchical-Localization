@@ -15,14 +15,20 @@ from ...colmap_from_nvm import (
 logger = logging.getLogger(__name__)
 
 
-def read_nvm_model(nvm_path, database_path, image_ids, camera_ids, skip_points=False):
+def read_nvm_model(
+    nvm_path: Path,
+    database_path: Path,
+    image_ids: dict[str, int],
+    camera_ids: dict[str, int],
+    skip_points: bool = False,
+) -> pycolmap.Reconstruction:
     # Extract the intrinsics from the db file instead of the NVM model
     reconstruction = pycolmap.Reconstruction()
     with pycolmap.Database.open(database_path) as db:
         for camera in db.read_all_cameras():
             reconstruction.add_camera_with_trivial_rig(camera)
 
-    with open(nvm_path, "r") as nvm_f:
+    with open(nvm_path) as nvm_f:
         line = nvm_f.readline()
         while line == "\n" or line.startswith("NVM_V3"):
             line = nvm_f.readline()
@@ -128,7 +134,7 @@ def read_nvm_model(nvm_path, database_path, image_ids, camera_ids, skip_points=F
     return reconstruction
 
 
-def main(nvm, database, output, skip_points=False):
+def main(nvm: Path, database: Path, output: Path, skip_points: bool = False) -> None:
     assert nvm.exists(), nvm
     assert database.exists(), database
 

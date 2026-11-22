@@ -1,10 +1,11 @@
 import argparse
 import pprint
+from collections.abc import Callable
 from functools import partial
 from pathlib import Path
 from queue import Queue
 from threading import Thread
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any
 
 import h5py
 import torch
@@ -20,7 +21,7 @@ line using their name. Each is a dictionary with the following entries:
     - output: the name of the match file that will be generated.
     - model: the model configuration, as passed to a feature matcher.
 """
-confs = {
+confs: dict[str, dict[str, Any]] = {
     "superpoint+lightglue": {
         "output": "matches-superpoint-lightglue",
         "model": {
@@ -89,39 +90,44 @@ confs = {
 
 
 class WorkQueue:
-    def __init__(self, work_fn, num_threads=1):
-        self.queue = Queue(num_threads)
+    def __init__(self, work_fn: Callable[[Any], None], num_threads: int = 1) -> None:
+        self.queue: Queue[Any] = Queue(num_threads)
         self.threads = [
             Thread(target=self.thread_fn, args=(work_fn,)) for _ in range(num_threads)
         ]
         for thread in self.threads:
             thread.start()
 
-    def join(self):
-        for thread in self.threads:
+    def join(self) -> None:
+        for _thread in self.threads:
             self.queue.put(None)
         for thread in self.threads:
             thread.join()
 
-    def thread_fn(self, work_fn):
+    def thread_fn(self, work_fn: Callable[[Any], None]) -> None:
         item = self.queue.get()
         while item is not None:
             work_fn(item)
             item = self.queue.get()
 
-    def put(self, data):
+    def put(self, data: Any) -> None:
         self.queue.put(data)
 
 
 class FeaturePairsDataset(torch.utils.data.Dataset):
-    def __init__(self, pairs, feature_path_q, feature_path_r):
+    def __init__(
+        self,
+        pairs: list[tuple[str, str]],
+        feature_path_q: Path,
+        feature_path_r: Path,
+    ) -> None:
         self.pairs = pairs
         self.feature_path_q = feature_path_q
         self.feature_path_r = feature_path_r
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> dict[str, torch.Tensor]:
         name0, name1 = self.pairs[idx]
-        data = {}
+        data: dict[str, torch.Tensor] = {}
         with h5py.File(self.feature_path_q, "r") as fd:
             grp = fd[name0]
             for k, v in grp.items():
@@ -135,11 +141,11 @@ class FeaturePairsDataset(torch.utils.data.Dataset):
             data["image1"] = torch.empty((1,) + tuple(grp["image_size"])[::-1])
         return data
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.pairs)
 
 
-def writer_fn(inp, match_path):
+def writer_fn(inp: tuple[str, dict[str, torch.Tensor]], match_path: Path) -> None:
     pair, pred = inp
     with h5py.File(str(match_path), "a", libver="latest") as fd:
         if pair in fd:
@@ -153,28 +159,28 @@ def writer_fn(inp, match_path):
 
 
 def main(
-    conf: Dict,
+    conf: dict[str, Any],
     pairs: Path,
-    features: Union[Path, str],
-    export_dir: Optional[Path] = None,
-    matches: Optional[Path] = None,
-    features_ref: Optional[Path] = None,
+    features: Path | str,
+    export_dir: Path | None = None,
+    matches: Path | None = None,
+    features_ref: Path | None = None,
     overwrite: bool = False,
 ) -> Path:
     if isinstance(features, Path) or Path(features).exists():
-        features_q = features
+        features_q = Path(features)
         if matches is None:
             raise ValueError(
-                "Either provide both features and matches as Path" " or both as names."
+                "Either provide both features and matches as Path or both as names."
             )
     else:
         if export_dir is None:
             raise ValueError(
-                "Provide an export_dir if features is not" f" a file path: {features}."
+                f"Provide an export_dir if features is not a file path: {features}."
             )
         features_q = Path(export_dir, features + ".h5")
         if matches is None:
-            matches = Path(export_dir, f'{features}_{conf["output"]}_{pairs.stem}.h5')
+            matches = Path(export_dir, f"{features}_{conf['output']}_{pairs.stem}.h5")
 
     if features_ref is None:
         features_ref = features_q
@@ -183,13 +189,15 @@ def main(
     return matches
 
 
-def find_unique_new_pairs(pairs_all: List[Tuple[str]], match_path: Path = None):
+def find_unique_new_pairs(
+    pairs_all: list[tuple[str, str]], match_path: Path | None = None
+) -> list[tuple[str, str]]:
     """Avoid to recompute duplicates to save time."""
-    pairs = set()
+    pairs_set: set[tuple[str, str]] = set()
     for i, j in pairs_all:
-        if (j, i) not in pairs:
-            pairs.add((i, j))
-    pairs = list(pairs)
+        if (j, i) not in pairs_set:
+            pairs_set.add((i, j))
+    pairs = list(pairs_set)
     if match_path is not None and match_path.exists():
         with h5py.File(str(match_path), "r", libver="latest") as fd:
             pairs_filtered = []
@@ -208,16 +216,14 @@ def find_unique_new_pairs(pairs_all: List[Tuple[str]], match_path: Path = None):
 
 @torch.no_grad()
 def match_from_paths(
-    conf: Dict,
+    conf: dict[str, Any],
     pairs_path: Path,
     match_path: Path,
     feature_path_q: Path,
     feature_path_ref: Path,
     overwrite: bool = False,
-) -> Path:
-    logger.info(
-        "Matching local features with configuration:" f"\n{pprint.pformat(conf)}"
-    )
+) -> None:
+    logger.info(f"Matching local features with configuration:\n{pprint.pformat(conf)}")
 
     if not feature_path_q.exists():
         raise FileNotFoundError(f"Query feature file {feature_path_q}.")
@@ -226,8 +232,8 @@ def match_from_paths(
     match_path.parent.mkdir(exist_ok=True, parents=True)
 
     assert pairs_path.exists(), pairs_path
-    pairs = parse_retrieval(pairs_path)
-    pairs = [(q, r) for q, rs in pairs.items() for r in rs]
+    pairs_dict = parse_retrieval(pairs_path)
+    pairs = [(q, r) for q, rs in pairs_dict.items() for r in rs]
     pairs = find_unique_new_pairs(pairs, None if overwrite else match_path)
     if len(pairs) == 0:
         logger.info("Skipping the matching.")

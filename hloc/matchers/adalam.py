@@ -1,12 +1,19 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, cast
+
 import torch
 from kornia.feature.adalam import AdalamFilter
 from kornia.utils.helpers import get_cuda_device_if_available
 
 from ..utils.base_model import BaseModel
 
+if TYPE_CHECKING:
+    from kornia.feature.adalam.core import AdalamConfig
+
 
 class AdaLAM(BaseModel):
-    default_conf = {
+    default_conf: dict[str, Any] = {
         "area_ratio": 100,
         "search_expansion": 4,
         "ransac_iters": 128,
@@ -19,7 +26,7 @@ class AdaLAM(BaseModel):
         "force_seed_mnn": True,
         "device": get_cuda_device_if_available(),
     }
-    required_inputs = [
+    required_inputs: list[str] = [
         "image0",
         "image1",
         "descriptors0",
@@ -32,17 +39,17 @@ class AdaLAM(BaseModel):
         "oris1",
     ]
 
-    def _init(self, conf):
-        self.adalam = AdalamFilter(conf)
+    def _init(self, conf: dict[str, Any]) -> None:
+        self.adalam = AdalamFilter(cast("AdalamConfig", conf))
 
-    def _forward(self, data):
+    def _forward(self, data: dict[str, Any]) -> dict[str, torch.Tensor]:
         assert data["keypoints0"].size(0) == 1
         if data["keypoints0"].size(1) < 2 or data["keypoints1"].size(1) < 2:
             matches = torch.zeros(
                 (0, 2), dtype=torch.int64, device=data["keypoints0"].device
             )
         else:
-            matches = self.adalam.match_and_filter(
+            raw_matches = self.adalam.match_and_filter(
                 data["keypoints0"][0],
                 data["keypoints1"][0],
                 data["descriptors0"][0].T,
@@ -54,6 +61,8 @@ class AdaLAM(BaseModel):
                 data["scales0"][0],
                 data["scales1"][0],
             )
+            assert isinstance(raw_matches, torch.Tensor)
+            matches = raw_matches
         matches_new = torch.full(
             (data["keypoints0"].size(1),),
             -1,
