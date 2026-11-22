@@ -3,25 +3,28 @@ from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
+import pycolmap
 from tqdm import tqdm
 
 from . import logger
-from .utils.read_write_model import read_model
 
 
 def main(model, output, num_matched):
     logger.info("Reading the COLMAP model...")
-    cameras, images, points3D = read_model(model)
+    reconstruction = pycolmap.Reconstruction(model)
+    images = reconstruction.images
+    points3D = reconstruction.points3D
 
     logger.info("Extracting image pairs from covisibility info...")
+    track_image_ids = {
+        pid: [el.image_id for el in point3D.track.elements]
+        for pid, point3D in points3D.items()
+    }
     pairs = []
     for image_id, image in tqdm(images.items()):
-        matched = image.point3D_ids != -1
-        points3D_covis = image.point3D_ids[matched]
-
         covis = defaultdict(int)
-        for point_id in points3D_covis:
-            for image_covis_id in points3D[point_id].image_ids:
+        for p2D in image.get_observation_points2D():
+            for image_covis_id in track_image_ids[p2D.point3D_id]:
                 if image_covis_id != image_id:
                     covis[image_covis_id] += 1
 

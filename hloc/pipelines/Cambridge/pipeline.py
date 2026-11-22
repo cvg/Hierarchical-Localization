@@ -42,7 +42,7 @@ def run_scene(images, gt_dir, outputs, results, num_covis, num_loc):
     retrieval_conf = extract_features.confs["netvlad"]
 
     create_query_list_with_intrinsics(
-        gt_dir / "empty_all", query_list, test_list, ext=".txt", image_dir=images
+        gt_dir / "empty_all", query_list, test_list, image_dir=images
     )
     with open(test_list, "r") as f:
         query_seqs = {q.split("/")[0] for q in f.read().rstrip().split("\n")}
@@ -136,5 +136,4 @@ if __name__ == "__main__":
             gt_dirs / scene / "empty_all",
             all_results[scene],
             gt_dirs / scene / "list_query.txt",
-            ext=".txt",
         )

@@ -2,16 +2,7 @@ import logging
 
 import cv2
 import numpy as np
-
-from hloc.utils.read_write_model import (
-    qvec2rotmat,
-    read_cameras_binary,
-    read_cameras_text,
-    read_images_binary,
-    read_images_text,
-    read_model,
-    write_model,
-)
+import pycolmap
 
 logger = logging.getLogger(__name__)
 
@@ -21,44 +12,38 @@ def scale_sfm_images(full_model, scaled_model, image_dir):
     they match the original image resolution - makes everything easier.
     """
     logger.info("Scaling the COLMAP model to the original image size.")
-    scaled_model.mkdir(exist_ok=True)
-    cameras, images, points3D = read_model(full_model)
+    scaled_model.mkdir(exist_ok=True, parents=True)
+    reconstruction = pycolmap.Reconstruction(full_model)
 
-    scaled_cameras = {}
-    for id_, image in images.items():
+    scaled_camera_ids = set()
+    for image in reconstruction.images.values():
         name = image.name
         img = cv2.imread(str(image_dir / name))
         assert img is not None, image_dir / name
         h, w = img.shape[:2]
 
         cam_id = image.camera_id
-        if cam_id in scaled_cameras:
-            assert scaled_cameras[cam_id].width == w
-            assert scaled_cameras[cam_id].height == h
+        camera = reconstruction.cameras[cam_id]
+        if cam_id in scaled_camera_ids:
+            assert camera.width == w
+            assert camera.height == h
             continue
 
-        camera = cameras[cam_id]
-        assert camera.model == "SIMPLE_RADIAL"
+        assert camera.model == pycolmap.CameraModelId.SIMPLE_RADIAL
         sx = w / camera.width
         sy = h / camera.height
         assert sx == sy, (sx, sy)
-        scaled_cameras[cam_id] = camera._replace(
-            width=w, height=h, params=camera.params * np.array([sx, sx, sy, 1.0])
-        )
+        camera.rescale(w, h)
+        scaled_camera_ids.add(cam_id)
 
-    write_model(scaled_cameras, images, points3D, scaled_model)
+    reconstruction.write(scaled_model)
 
 
-def create_query_list_with_intrinsics(
-    model, out, list_file=None, ext=".bin", image_dir=None
-):
+def create_query_list_with_intrinsics(model, out, list_file=None, image_dir=None):
     """Create a list of query images with intrinsics from the colmap model."""
-    if ext == ".bin":
-        images = read_images_binary(model / "images.bin")
-        cameras = read_cameras_binary(model / "cameras.bin")
-    else:
-        images = read_images_text(model / "images.txt")
-        cameras = read_cameras_text(model / "cameras.txt")
+    reconstruction = pycolmap.Reconstruction(model)
+    images = reconstruction.images
+    cameras = reconstruction.cameras
 
     name2id = {image.name: i for i, image in images.items()}
     if list_file is None:
@@ -70,38 +55,35 @@ def create_query_list_with_intrinsics(
     for name in names:
         image = images[name2id[name]]
         camera = cameras[image.camera_id]
-        w, h, params = camera.width, camera.height, camera.params
+        w, h, params = camera.width, camera.height, camera.params.copy()
 
         if image_dir is not None:
             # Check the original image size and rescale the camera intrinsics
             img = cv2.imread(str(image_dir / name))
             assert img is not None, image_dir / name
             h_orig, w_orig = img.shape[:2]
-            assert camera.model == "SIMPLE_RADIAL"
+            assert camera.model == pycolmap.CameraModelId.SIMPLE_RADIAL
             sx = w_orig / w
             sy = h_orig / h
             assert sx == sy, (sx, sy)
             w, h = w_orig, h_orig
             params = params * np.array([sx, sx, sy, 1.0])
 
-        p = [name, camera.model, w, h] + params.tolist()
+        p = [name, camera.model.name, w, h] + params.tolist()
         data.append(" ".join(map(str, p)))
     with open(out, "w") as f:
         f.write("\n".join(data))
 
 
-def evaluate(model, results, list_file=None, ext=".bin", only_localized=False):
+def evaluate(model, results, list_file=None, only_localized=False):
     predictions = {}
     with open(results, "r") as f:
         for data in f.read().rstrip().split("\n"):
             data = data.split()
             name = data[0]
             q, t = np.split(np.array(data[1:], float), [4])
-            predictions[name] = (qvec2rotmat(q), t)
-    if ext == ".bin":
-        images = read_images_binary(model / "images.bin")
-    else:
-        images = read_images_text(model / "images.txt")
+            predictions[name] = (pycolmap.Rotation3d(q[[1, 2, 3, 0]]).matrix(), t)
+    images = pycolmap.Reconstruction(model).images
     name2id = {image.name: i for i, image in images.items()}
 
     if list_file is None:
@@ -120,7 +102,8 @@ def evaluate(model, results, list_file=None, ext=".bin", only_localized=False):
             e_R = 180.0
         else:
             image = images[name2id[name]]
-            R_gt, t_gt = image.qvec2rotmat(), image.tvec
+            pose = image.cam_from_world()
+            R_gt, t_gt = pose.rotation.matrix(), pose.translation
             R, t = predictions[name]
             e_t = np.linalg.norm(-R_gt.T @ t_gt + R.T @ t, axis=0)
             cos = np.clip((np.trace(np.dot(R_gt.T, R)) - 1) / 2, -1.0, 1.0)
@@ -141,5 +124,5 @@ def evaluate(model, results, list_file=None, ext=".bin", only_localized=False):
     threshs_R = [1.0, 2.0, 3.0, 5.0, 2.0, 5.0, 10.0]
     for th_t, th_R in zip(threshs_t, threshs_R):
         ratio = np.mean((errors_t < th_t) & (errors_R < th_R))
-        out += f"\n\t{th_t*100:.0f}cm, {th_R:.0f}deg : {ratio*100:.2f}%"
+        out += f"\n\t{th_t * 100:.0f}cm, {th_R:.0f}deg : {ratio * 100:.2f}%"
     logger.info(out)

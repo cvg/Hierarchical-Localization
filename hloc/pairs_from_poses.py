@@ -2,31 +2,25 @@ import argparse
 from pathlib import Path
 
 import numpy as np
+import pycolmap
 import scipy.spatial
 
 from . import logger
 from .pairs_from_retrieval import pairs_from_score_matrix
-from .utils.read_write_model import read_images_binary
 
 DEFAULT_ROT_THRESH = 30  # in degrees
 
 
 def get_pairwise_distances(images):
-    ids = np.array(list(images.keys()))
+    ids = np.array([id_ for id_, img in images.items() if img.has_pose])
     Rs = []
     ts = []
     for id_ in ids:
-        image = images[id_]
-        R = image.qvec2rotmat()
-        t = image.tvec
-        Rs.append(R)
-        ts.append(t)
+        world_from_cam = images[id_].cam_from_world().inverse()
+        Rs.append(world_from_cam.rotation.matrix())
+        ts.append(world_from_cam.translation)
     Rs = np.stack(Rs, 0)
     ts = np.stack(ts, 0)
-
-    # Invert the poses from world-to-camera to camera-to-world.
-    Rs = Rs.transpose(0, 2, 1)
-    ts = -(Rs @ ts[:, :, None])[:, :, 0]
 
     dist = scipy.spatial.distance.squareform(scipy.spatial.distance.pdist(ts))
 
@@ -42,7 +36,7 @@ def get_pairwise_distances(images):
 
 def main(model, output, num_matched, rotation_threshold=DEFAULT_ROT_THRESH):
     logger.info("Reading the COLMAP model...")
-    images = read_images_binary(model / "images.bin")
+    images = pycolmap.Reconstruction(model).images
 
     logger.info(f"Obtaining pairwise distances between {len(images)} images...")
     ids, dist, dR = get_pairwise_distances(images)
