@@ -100,6 +100,16 @@ def pose_from_cluster(dataset_dir, q, retrieved, feature_file, match_file, skip=
         all_mkp3d.append(mkp3d[valid])
         all_indices.append(np.full(np.count_nonzero(valid), i))
 
+    if len(all_mkpq) == 0:
+        return (
+            None,
+            np.zeros((0, 2)),
+            np.zeros((0, 2)),
+            np.zeros((0, 3)),
+            np.zeros((0,), dtype=int),
+            num_matches,
+        )
+
     all_mkpq = np.concatenate(all_mkpq, 0)
     all_mkpr = np.concatenate(all_mkpr, 0)
     all_mkp3d = np.concatenate(all_mkp3d, 0)
@@ -111,12 +121,15 @@ def pose_from_cluster(dataset_dir, q, retrieved, feature_file, match_file, skip=
         "height": height,
         "params": [focal_length, cx, cy],
     }
+    camera = pycolmap.Camera(**cfg)
     estimation_options = pycolmap.AbsolutePoseEstimationOptions()
     estimation_options.ransac.max_error = 48
     ret = pycolmap.estimate_and_refine_absolute_pose(
-        all_mkpq, all_mkp3d, cfg, estimation_options
+        all_mkpq, all_mkp3d, camera, estimation_options
     )
-    ret["cfg"] = cfg
+    if ret is not None:
+        ret["cfg"] = cfg
+        ret["camera"] = camera
     return ret, all_mkpq, all_mkpr, all_mkp3d, all_indices, num_matches
 
 
@@ -128,9 +141,6 @@ def main(dataset_dir, retrieval, features, matches, results, skip_matches=None):
     retrieval_dict = parse_retrieval(retrieval)
     queries = list(retrieval_dict.keys())
 
-    feature_file = h5py.File(features, "r", libver="latest")
-    match_file = h5py.File(matches, "r", libver="latest")
-
     poses = {}
     logs = {
         "features": features,
@@ -139,22 +149,27 @@ def main(dataset_dir, retrieval, features, matches, results, skip_matches=None):
         "loc": {},
     }
     logger.info("Starting localization...")
-    for q in tqdm(queries):
-        db = retrieval_dict[q]
-        ret, mkpq, mkpr, mkp3d, indices, num_matches = pose_from_cluster(
-            dataset_dir, q, db, feature_file, match_file, skip_matches
-        )
+    with (
+        h5py.File(features, "r", libver="latest") as feature_file,
+        h5py.File(matches, "r", libver="latest") as match_file,
+    ):
+        for q in tqdm(queries):
+            db = retrieval_dict[q]
+            ret, mkpq, mkpr, mkp3d, indices, num_matches = pose_from_cluster(
+                dataset_dir, q, db, feature_file, match_file, skip_matches
+            )
 
-        poses[q] = ret["cam_from_world"]
-        logs["loc"][q] = {
-            "db": db,
-            "PnP_ret": ret,
-            "keypoints_query": mkpq,
-            "keypoints_db": mkpr,
-            "3d_points": mkp3d,
-            "indices_db": indices,
-            "num_matches": num_matches,
-        }
+            if ret is not None:
+                poses[q] = ret["cam_from_world"]
+            logs["loc"][q] = {
+                "db": db,
+                "PnP_ret": ret,
+                "keypoints_query": mkpq,
+                "keypoints_db": mkpr,
+                "3d_points": mkp3d,
+                "indices_db": indices,
+                "num_matches": num_matches,
+            }
 
     logger.info(f"Writing poses to {results}...")
     write_poses(poses, results, prepend_camera_name=False)
