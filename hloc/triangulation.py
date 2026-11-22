@@ -1,7 +1,7 @@
 import argparse
 import ast
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import pycolmap
 from tqdm import tqdm
@@ -11,40 +11,40 @@ from .utils.io import get_keypoints, get_matches
 
 
 class OutputCapture:
-    def __init__(self, verbose: bool):
+    def __init__(self, verbose: bool) -> None:
         self.verbose = verbose
 
-    def __enter__(self):
+    def __enter__(self) -> None:
         if not self.verbose:
             pycolmap.logging.alsologtostderr = False
 
-    def __exit__(self, exc_type, *args):
+    def __exit__(self, exc_type: Any, *args: Any) -> None:
         if not self.verbose:
             pycolmap.logging.alsologtostderr = True
 
 
 def create_db_from_model(
     reconstruction: pycolmap.Reconstruction, database_path: Path
-) -> Dict[str, int]:
+) -> dict[str, int]:
     if database_path.exists():
         logger.warning("The database already exists, deleting it.")
         database_path.unlink()
 
     with pycolmap.Database.open(database_path) as db:
-        for camera_id, camera in reconstruction.cameras.items():
+        for camera in reconstruction.cameras.values():
             db.write_camera(camera, use_camera_id=True)
-        for rig_id, rig in reconstruction.rigs.items():
+        for rig in reconstruction.rigs.values():
             db.write_rig(rig, use_rig_id=True)
-        for frame_id, frame in reconstruction.frames.items():
+        for frame in reconstruction.frames.values():
             db.write_frame(frame, use_frame_id=True)
-        for image_id, image in reconstruction.images.items():
+        for image in reconstruction.images.values():
             db.write_image(image, use_image_id=True)
     return {image.name: image_id for image_id, image in reconstruction.images.items()}
 
 
 def import_features(
-    image_ids: Dict[str, int], db: pycolmap.Database, features_path: Path
-):
+    image_ids: dict[str, int], db: pycolmap.Database, features_path: Path
+) -> None:
     logger.info("Importing features into the database...")
     for image_name, image_id in tqdm(image_ids.items()):
         keypoints = get_keypoints(features_path, image_name)
@@ -53,19 +53,19 @@ def import_features(
 
 
 def import_matches(
-    image_ids: Dict[str, int],
+    image_ids: dict[str, int],
     db: pycolmap.Database,
     pairs_path: Path,
     matches_path: Path,
-    min_match_score: Optional[float] = None,
+    min_match_score: float | None = None,
     skip_geometric_verification: bool = False,
-):
+) -> None:
     logger.info("Importing matches into the database...")
 
-    with open(str(pairs_path), "r") as f:
+    with open(str(pairs_path)) as f:
         pairs = [p.split() for p in f.readlines()]
 
-    matched = set()
+    matched: set[tuple[int, int]] = set()
     for name0, name1 in tqdm(pairs):
         id0, id1 = image_ids[name0], image_ids[name1]
         if len({(id0, id1), (id1, id0)} & matched) > 0:
@@ -89,13 +89,16 @@ def import_matches(
 
 def estimation_and_geometric_verification(
     database_path: Path, pairs_path: Path, verbose: bool = False
-):
+) -> None:
     logger.info("Performing geometric verification of the matches...")
+    verification_options = pycolmap.TwoViewGeometryOptions(
+        {"ransac": {"max_num_trials": 20000, "min_inlier_ratio": 0.1}}
+    )
     with OutputCapture(verbose):
         pycolmap.verify_matches(
             database_path,
             pairs_path,
-            options=dict(ransac=dict(max_num_trials=20000, min_inlier_ratio=0.1)),
+            options=verification_options,
         )
 
 
@@ -104,7 +107,7 @@ def guided_geometric_verification(
     database_path: Path,
     max_error: float = 4.0,
     verbose: bool = False,
-):
+) -> None:
     logger.info("Performing guided geometric verification of the matches...")
     options = pycolmap.TwoViewGeometryOptions()
     options.ransac.max_error = max_error
@@ -122,15 +125,23 @@ def run_triangulation(
     image_dir: Path,
     reference_model: pycolmap.Reconstruction,
     verbose: bool = False,
-    options: Optional[Dict[str, Any]] = None,
+    options: dict[str, Any] | pycolmap.IncrementalPipelineOptions | None = None,
 ) -> pycolmap.Reconstruction:
     model_path.mkdir(parents=True, exist_ok=True)
     logger.info("Running 3D triangulation...")
     if options is None:
-        options = {}
+        pipeline_options = pycolmap.IncrementalPipelineOptions()
+    elif isinstance(options, pycolmap.IncrementalPipelineOptions):
+        pipeline_options = options
+    else:
+        pipeline_options = pycolmap.IncrementalPipelineOptions(options)
     with OutputCapture(verbose):
         reconstruction = pycolmap.triangulate_points(
-            reference_model, database_path, image_dir, model_path, options=options
+            reference_model,
+            database_path,
+            image_dir,
+            model_path,
+            options=pipeline_options,
         )
     return reconstruction
 
@@ -144,9 +155,9 @@ def main(
     matches: Path,
     skip_geometric_verification: bool = False,
     estimate_two_view_geometries: bool = False,
-    min_match_score: Optional[float] = None,
+    min_match_score: float | None = None,
     verbose: bool = False,
-    mapper_options: Optional[Dict[str, Any]] = None,
+    mapper_options: dict[str, Any] | None = None,
 ) -> pycolmap.Reconstruction:
     assert reference_model.exists(), reference_model
     assert features.exists(), features
@@ -182,8 +193,8 @@ def main(
     return reconstruction
 
 
-def parse_option_args(args: List[str], default_options) -> Dict[str, Any]:
-    options: Dict[str, Any] = {}
+def parse_option_args(args: list[str], default_options: Any) -> dict[str, Any]:
+    options: dict[str, Any] = {}
     for arg in args:
         idx = arg.find("=")
         if idx == -1:
@@ -261,9 +272,7 @@ if __name__ == "__main__":
         "--mapper_options",
         nargs="+",
         default=[],
-        help="List of key=value from {}".format(
-            pycolmap.IncrementalPipelineOptions().todict()
-        ),
+        help=f"List of key=value from {pycolmap.IncrementalPipelineOptions().todict()}",
     )
     args = parser.parse_args().__dict__
 

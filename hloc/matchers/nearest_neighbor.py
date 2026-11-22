@@ -1,9 +1,15 @@
+from typing import Any
+
 import torch
 
 from ..utils.base_model import BaseModel
 
 
-def find_nn(sim, ratio_thresh, distance_thresh):
+def find_nn(
+    sim: torch.Tensor,
+    ratio_thresh: float | None,
+    distance_thresh: float | None,
+) -> tuple[torch.Tensor, torch.Tensor]:
     sim_nn, ind_nn = sim.topk(2 if ratio_thresh else 1, dim=-1, largest=True)
     dist_nn = 2 * (1 - sim_nn)
     mask = torch.ones(ind_nn.shape[:-1], dtype=torch.bool, device=sim.device)
@@ -16,7 +22,7 @@ def find_nn(sim, ratio_thresh, distance_thresh):
     return matches, scores
 
 
-def mutual_check(m0, m1):
+def mutual_check(m0: torch.Tensor, m1: torch.Tensor) -> torch.Tensor:
     inds0 = torch.arange(m0.shape[-1], device=m0.device)
     loop = torch.gather(m1, -1, torch.where(m0 > -1, m0, m0.new_tensor(0)))
     ok = (m0 > -1) & (inds0 == loop)
@@ -25,17 +31,17 @@ def mutual_check(m0, m1):
 
 
 class NearestNeighbor(BaseModel):
-    default_conf = {
+    default_conf: dict[str, Any] = {
         "ratio_threshold": None,
         "distance_threshold": None,
         "do_mutual_check": True,
     }
-    required_inputs = ["descriptors0", "descriptors1"]
+    required_inputs: list[str] = ["descriptors0", "descriptors1"]
 
-    def _init(self, conf):
+    def _init(self, conf: dict[str, Any]) -> None:
         pass
 
-    def _forward(self, data):
+    def _forward(self, data: dict[str, Any]) -> dict[str, torch.Tensor]:
         if data["descriptors0"].size(-1) == 0 or data["descriptors1"].size(-1) == 0:
             matches0 = torch.full(
                 data["descriptors0"].shape[:2], -1, device=data["descriptors0"].device

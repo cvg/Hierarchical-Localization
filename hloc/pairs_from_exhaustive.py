@@ -1,7 +1,6 @@
 import argparse
-import collections.abc as collections
+from collections.abc import Iterable
 from pathlib import Path
-from typing import List, Optional, Union
 
 from . import logger
 from .utils.io import list_h5_names
@@ -10,15 +9,15 @@ from .utils.parsers import parse_image_lists
 
 def main(
     output: Path,
-    image_list: Optional[Union[Path, List[str]]] = None,
-    features: Optional[Path] = None,
-    ref_list: Optional[Union[Path, List[str]]] = None,
-    ref_features: Optional[Path] = None,
-):
+    image_list: Path | str | Iterable[str] | None = None,
+    features: Path | None = None,
+    ref_list: Path | str | Iterable[str] | None = None,
+    ref_features: Path | None = None,
+) -> None:
     if image_list is not None:
         if isinstance(image_list, (str, Path)):
-            names_q = parse_image_lists(image_list)
-        elif isinstance(image_list, collections.Iterable):
+            names_q = parse_image_lists(Path(image_list))
+        elif isinstance(image_list, Iterable):
             names_q = list(image_list)
         else:
             raise ValueError(f"Unknown type for image list: {image_list}")
@@ -30,8 +29,8 @@ def main(
     self_matching = False
     if ref_list is not None:
         if isinstance(ref_list, (str, Path)):
-            names_ref = parse_image_lists(ref_list)
-        elif isinstance(image_list, collections.Iterable):
+            names_ref = parse_image_lists(Path(ref_list))
+        elif isinstance(ref_list, Iterable):
             names_ref = list(ref_list)
         else:
             raise ValueError(f"Unknown type for reference image list: {ref_list}")

@@ -1,7 +1,9 @@
 import glob
 import logging
 import os
+from collections.abc import Collection, Sequence
 from pathlib import Path
+from typing import Any, Literal, overload
 
 import numpy as np
 import pycolmap
@@ -11,13 +13,13 @@ from ...utils.parsers import parse_retrieval
 logger = logging.getLogger(__name__)
 
 
-def get_timestamps(files, idx):
+def get_timestamps(files: Path, idx: int) -> set[str]:
     """Extract timestamps from a pose or relocalization file."""
-    lines = []
+    lines: list[str] = []
     for p in files.parent.glob(files.name):
         with open(p) as f:
             lines += f.readlines()
-    timestamps = set()
+    timestamps: set[str] = set()
     for line in lines:
         line = line.rstrip("\n")
         if line[0] == "#" or line == "":
@@ -27,7 +29,7 @@ def get_timestamps(files, idx):
     return timestamps
 
 
-def delete_unused_images(root, timestamps):
+def delete_unused_images(root: Path, timestamps: Collection[str]) -> None:
     """Delete all images in root if they are not contained in timestamps."""
     images = glob.glob((root / "**/*.png").as_posix(), recursive=True)
     deleted = 0
@@ -39,9 +41,9 @@ def delete_unused_images(root, timestamps):
     logger.info(f"Deleted {deleted} images in {root}.")
 
 
-def camera_from_calibration_file(id_, path):
+def camera_from_calibration_file(id_: int, path: Path) -> pycolmap.Camera:
     """Create a COLMAP camera from an MLAD calibration file."""
-    with open(path, "r") as f:
+    with open(path) as f:
         data = f.readlines()
     model, fx, fy, cx, cy = data[0].split()[:5]
     width, height = data[1].split()
@@ -58,9 +60,11 @@ def camera_from_calibration_file(id_, path):
     return camera
 
 
-def parse_poses(path, colmap=False):
+def parse_poses(
+    path: Path, colmap: bool = False
+) -> list[tuple[str, np.ndarray, np.ndarray]]:
     """Parse a list of poses in COLMAP or MLAD quaternion convention."""
-    poses = []
+    poses: list[tuple[str, np.ndarray, np.ndarray]] = []
     with open(path) as f:
         for line in f.readlines():
             line = line.rstrip("\n")
@@ -78,26 +82,44 @@ def parse_poses(path, colmap=False):
     return poses
 
 
-def parse_relocalization(path, has_poses=False):
+@overload
+def parse_relocalization(
+    path: Path, has_poses: Literal[False] = False
+) -> list[tuple[str, str]]: ...
+
+
+@overload
+def parse_relocalization(
+    path: Path, has_poses: Literal[True]
+) -> list[tuple[str, str, np.ndarray, np.ndarray]]: ...
+
+
+@overload
+def parse_relocalization(
+    path: Path, has_poses: bool = False
+) -> list[tuple[str, str]] | list[tuple[str, str, np.ndarray, np.ndarray]]: ...
+
+
+def parse_relocalization(path: Path, has_poses: bool = False) -> list[Any]:
     """Parse a relocalization file, possibly with poses."""
-    reloc = []
+    reloc: list[Any] = []
     with open(path) as f:
         for line in f.readlines():
             line = line.rstrip("\n")
             if line[0] == "#" or line == "":
                 continue
             data = line.replace(",", " ").split()
-            out = data[:2]  # ref_ts, q_ts
             if has_poses:
                 assert len(data) == 9
                 t, q = np.split(np.array(data[2:], float), [3])
                 R = pycolmap.Rotation3d(q).matrix()
-                out += [R, t]
-            reloc.append(out)
+                reloc.append((data[0], data[1], R, t))
+            else:
+                reloc.append((data[0], data[1]))
     return reloc
 
 
-def build_empty_colmap_model(root, sfm_dir):
+def build_empty_colmap_model(root: Path, sfm_dir: Path) -> None:
     """Build a COLMAP model with images and cameras only."""
     calibration = "Calibration/undistorted_calib_{}.txt"
     cam0 = camera_from_calibration_file(0, root / calibration.format(0))
@@ -117,7 +139,7 @@ def build_empty_colmap_model(root, sfm_dir):
         t_w_to_cam1 = T_0to1[:3, :3] @ t_w_to_cam0 + T_0to1[:3, 3]
 
         for idx, (R_w_to_cam, t_w_to_cam) in enumerate(
-            zip([R_w_to_cam0, R_w_to_cam1], [t_w_to_cam0, t_w_to_cam1])
+            zip([R_w_to_cam0, R_w_to_cam1], [t_w_to_cam0, t_w_to_cam1], strict=True)
         ):
             image = pycolmap.Image(
                 image_id=id_,
@@ -134,31 +156,41 @@ def build_empty_colmap_model(root, sfm_dir):
     reconstruction.write_binary(sfm_dir)
 
 
-def generate_query_lists(timestamps, seq_dir, out_path):
+def generate_query_lists(
+    timestamps: Collection[str], seq_dir: Path, out_path: Path
+) -> None:
     """Create a list of query images with intrinsics from timestamps."""
     cam0 = camera_from_calibration_file(
         0, seq_dir / "Calibration/undistorted_calib_0.txt"
     )
-    intrinsics = [cam0.model.name, cam0.width, cam0.height] + cam0.params.tolist()
-    intrinsics = [str(p) for p in intrinsics]
+    intrinsics_vals: list[Any] = [
+        cam0.model.name,
+        cam0.width,
+        cam0.height,
+    ] + cam0.params.tolist()
+    intrinsics = [str(p) for p in intrinsics_vals]
     data = map(lambda ts: " ".join([f"cam0/{ts}.png"] + intrinsics), timestamps)
     with open(out_path, "w") as f:
         f.write("\n".join(data))
 
 
-def generate_localization_pairs(sequence, reloc, num, ref_pairs, out_path):
+def generate_localization_pairs(
+    sequence: str, reloc: Path, num: int, ref_pairs: Path, out_path: Path
+) -> None:
     """Create the matching pairs for the localization.
     We simply lookup the corresponding reference frame
     and extract its `num` closest frames from the existing pair list.
     """
     if "test" in sequence:
         # hard pairs will be overwritten by easy ones if available
-        relocs = [str(reloc).replace("*", d) for d in ["hard", "moderate", "easy"]]
+        relocs = [
+            Path(str(reloc).replace("*", d)) for d in ["hard", "moderate", "easy"]
+        ]
     else:
         relocs = [reloc]
-    query_to_ref_ts = {}
-    for reloc in relocs:
-        with open(reloc, "r") as f:
+    query_to_ref_ts: dict[str, str] = {}
+    for reloc_file in relocs:
+        with open(reloc_file) as f:
             for line in f.readlines():
                 line = line.rstrip("\n")
                 if line[0] == "#" or line == "":
@@ -167,17 +199,19 @@ def generate_localization_pairs(sequence, reloc, num, ref_pairs, out_path):
                 query_to_ref_ts[q_ts] = ref_ts
 
     ts_to_name = "cam0/{}.png".format
-    ref_pairs = parse_retrieval(ref_pairs)
-    loc_pairs = []
+    ref_pairs_dict = parse_retrieval(ref_pairs)
+    loc_pairs: list[str] = []
     for q_ts, ref_ts in query_to_ref_ts.items():
         ref_name = ts_to_name(ref_ts)
-        selected = [ref_name] + ref_pairs[ref_name][: num - 1]
+        selected = [ref_name] + ref_pairs_dict[ref_name][: num - 1]
         loc_pairs.extend([" ".join((ts_to_name(q_ts), s)) for s in selected])
     with open(out_path, "w") as f:
         f.write("\n".join(loc_pairs))
 
 
-def prepare_submission(results, relocs, poses_path, out_dir):
+def prepare_submission(
+    results: Path, relocs: Path, poses_path: Path, out_dir: Path
+) -> None:
     """Obtain relative poses from estimated absolute and reference poses."""
     gt_poses = parse_poses(poses_path)
     all_T_ref0_to_w = {ts: (R, t) for ts, R, t in gt_poses}
@@ -186,7 +220,7 @@ def prepare_submission(results, relocs, poses_path, out_dir):
     all_T_w_to_q0 = {Path(name).stem: (R, t) for name, R, t in pred_poses}
 
     for reloc in relocs.parent.glob(relocs.name):
-        relative_poses = []
+        relative_poses: list[str] = []
         reloc_ts = parse_relocalization(reloc)
         for ref_ts, q_ts in reloc_ts:
             R_w_to_q0, t_w_to_q0 = all_T_w_to_q0[q_ts]
@@ -207,22 +241,28 @@ def prepare_submission(results, relocs, poses_path, out_dir):
         logger.info(f"Submission file written to {out_path}.")
 
 
-def evaluate_submission(submission_dir, relocs, ths=[0.1, 0.2, 0.5]):
+def evaluate_submission(
+    submission_dir: Path,
+    relocs: Path,
+    ths: Sequence[float] = (0.1, 0.2, 0.5),
+) -> None:
     """Compute the relocalization recall from predicted and ground truth poses."""
     for reloc in relocs.parent.glob(relocs.name):
         poses_gt = parse_relocalization(reloc, has_poses=True)
-        poses_pred = parse_relocalization(submission_dir / reloc.name, has_poses=True)
-        poses_pred = {(ref_ts, q_ts): (R, t) for ref_ts, q_ts, R, t in poses_pred}
+        poses_pred_list = parse_relocalization(
+            submission_dir / reloc.name, has_poses=True
+        )
+        poses_pred = {(ref_ts, q_ts): (R, t) for ref_ts, q_ts, R, t in poses_pred_list}
 
-        error = []
-        for ref_ts, q_ts, R_gt, t_gt in poses_gt:
-            R, t = poses_pred[(ref_ts, q_ts)]
-            e = np.linalg.norm(t - t_gt)
-            error.append(e)
+        error_list: list[float] = []
+        for ref_ts, q_ts, _R_gt, t_gt in poses_gt:
+            _R, t = poses_pred[(ref_ts, q_ts)]
+            e = float(np.linalg.norm(t - t_gt))
+            error_list.append(e)
 
-        error = np.array(error)
+        error = np.array(error_list)
         recall = [np.mean(error <= th) for th in ths]
         s = f"Relocalization evaluation {submission_dir.name}/{reloc.name}\n"
         s += " / ".join([f"{th:>7}m" for th in ths]) + "\n"
-        s += " / ".join([f"{100*r:>7.3f}%" for r in recall])
+        s += " / ".join([f"{100 * r:>7.3f}%" for r in recall])
         logger.info(s)

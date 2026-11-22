@@ -8,14 +8,15 @@ Works for a small number of points and cameras, might be slow otherwise.
 Written by Paul-Edouard Sarlin and Philipp Lindenberger.
 """
 
-from typing import Optional
+from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 import plotly.graph_objects as go
 import pycolmap
 
 
-def to_homogeneous(points):
+def to_homogeneous(points: np.ndarray) -> np.ndarray:
     pad = np.ones((points.shape[:-1] + (1,)), dtype=points.dtype)
     return np.concatenate([points, pad], axis=-1)
 
@@ -55,11 +56,11 @@ def init_figure(height: int = 800) -> go.Figure:
 def plot_points(
     fig: go.Figure,
     pts: np.ndarray,
-    color: str = "rgba(255, 0, 0, 1)",
+    color: str | Sequence[Any] | np.ndarray = "rgba(255, 0, 0, 1)",
     ps: int = 2,
-    colorscale: Optional[str] = None,
-    name: Optional[str] = None,
-):
+    colorscale: str | None = None,
+    name: str | None = None,
+) -> None:
     """Plot a set of 3D points."""
     x, y, z = pts.T
     tr = go.Scatter3d(
@@ -80,12 +81,12 @@ def plot_camera(
     t: np.ndarray,
     K: np.ndarray,
     color: str = "rgb(0, 0, 255)",
-    name: Optional[str] = None,
-    legendgroup: Optional[str] = None,
+    name: str | None = None,
+    legendgroup: str | None = None,
     fill: bool = False,
-    size: float = 1.0,
-    text: Optional[str] = None,
-):
+    size: float | None = 1.0,
+    text: str | None = None,
+) -> None:
     """Plot a camera frustum from pose and intrinsic matrix."""
     W, H = K[0, 2] * 2, K[1, 2] * 2
     corners = np.array([[0, 0], [W, 0], [W, H], [0, H], [0, 0]])
@@ -140,8 +141,11 @@ def plot_camera(
 
 
 def plot_camera_colmap(
-    fig: go.Figure, cam_from_world: pycolmap.Rigid3d, camera: pycolmap.Camera, **kwargs
-):
+    fig: go.Figure,
+    cam_from_world: pycolmap.Rigid3d,
+    camera: pycolmap.Camera,
+    **kwargs: Any,
+) -> None:
     """Plot a camera frustum from PyCOLMAP objects"""
     world_t_camera = cam_from_world.inverse()
     plot_camera(
@@ -157,9 +161,9 @@ def plot_image_colmap(
     fig: go.Figure,
     image: pycolmap.Image,
     camera: pycolmap.Camera,
-    name: Optional[str] = None,
-    **kwargs,
-):
+    name: str | None = None,
+    **kwargs: Any,
+) -> None:
     """Plot a camera frustum from a PyCOLMAP image."""
     plot_camera_colmap(
         fig,
@@ -171,9 +175,11 @@ def plot_image_colmap(
     )
 
 
-def plot_cameras(fig: go.Figure, reconstruction: pycolmap.Reconstruction, **kwargs):
+def plot_cameras(
+    fig: go.Figure, reconstruction: pycolmap.Reconstruction, **kwargs: Any
+) -> None:
     """Plot a camera as a cone with camera frustum."""
-    for image_id, image in reconstruction.images.items():
+    for _image_id, image in reconstruction.images.items():
         plot_image_colmap(fig, image, reconstruction.cameras[image.camera_id], **kwargs)
 
 
@@ -182,13 +188,13 @@ def plot_reconstruction(
     rec: pycolmap.Reconstruction,
     max_reproj_error: float = 6.0,
     color: str = "rgb(0, 0, 255)",
-    name: Optional[str] = None,
+    name: str | None = None,
     min_track_length: int = 2,
     points: bool = True,
     cameras: bool = True,
     points_rgb: bool = True,
     cs: float = 1.0,
-):
+) -> None:
     # Filter outliers
     bbs = rec.compute_bounding_box(0.001, 0.999)
     # Filter points, use original reproj error here
@@ -202,10 +208,9 @@ def plot_reconstruction(
         )
     ]
     xyzs = [p3D.xyz for p3D in p3Ds]
-    if points_rgb:
-        pcolor = [p3D.color for p3D in p3Ds]
-    else:
-        pcolor = color
+    pcolor: str | list[np.ndarray] = (
+        [p3D.color for p3D in p3Ds] if points_rgb else color
+    )
     if points:
         plot_points(fig, np.array(xyzs), color=pcolor, ps=1, name=name)
     if cameras:

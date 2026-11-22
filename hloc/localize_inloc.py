@@ -1,6 +1,8 @@
 import argparse
 import pickle
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 import cv2
 import h5py
@@ -15,29 +17,28 @@ from .utils.io import write_poses
 from .utils.parsers import names_to_pair, parse_retrieval
 
 
-def interpolate_scan(scan, kp):
-    h, w, c = scan.shape
-    kp = kp / np.array([[w - 1, h - 1]]) * 2 - 1
-    assert np.all(kp > -1) and np.all(kp < 1)
-    scan = torch.from_numpy(scan).permute(2, 0, 1)[None]
-    kp = torch.from_numpy(kp)[None, None]
+def interpolate_scan(scan: np.ndarray, kp: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    h, w, _c = scan.shape
+    kp_norm = kp / np.array([[w - 1, h - 1]]) * 2 - 1
+    assert np.all(kp_norm > -1) and np.all(kp_norm < 1)
+    scan_t = torch.from_numpy(scan).permute(2, 0, 1)[None]
+    kp_t = torch.from_numpy(kp_norm)[None, None]
     grid_sample = torch.nn.functional.grid_sample
 
     # To maximize the number of points that have depth:
     # do bilinear interpolation first and then nearest for the remaining points
-    interp_lin = grid_sample(scan, kp, align_corners=True, mode="bilinear")[0, :, 0]
+    interp_lin = grid_sample(scan_t, kp_t, align_corners=True, mode="bilinear")[0, :, 0]
     interp_nn = torch.nn.functional.grid_sample(
-        scan, kp, align_corners=True, mode="nearest"
+        scan_t, kp_t, align_corners=True, mode="nearest"
     )[0, :, 0]
     interp = torch.where(torch.isnan(interp_lin), interp_nn, interp_lin)
     valid = ~torch.any(torch.isnan(interp), 0)
 
     kp3d = interp.T.numpy()
-    valid = valid.numpy()
-    return kp3d, valid
+    return kp3d, valid.numpy()
 
 
-def get_scan_pose(dataset_dir, rpath):
+def get_scan_pose(dataset_dir: Path, rpath: str) -> np.ndarray:
     split_image_rpath = rpath.split("/")
     floor_name = split_image_rpath[-3]
     scan_id = split_image_rpath[-2]
@@ -65,16 +66,32 @@ def get_scan_pose(dataset_dir, rpath):
     return P_after_GICP
 
 
-def pose_from_cluster(dataset_dir, q, retrieved, feature_file, match_file, skip=None):
-    height, width = cv2.imread(str(dataset_dir / q)).shape[:2]
+def pose_from_cluster(
+    dataset_dir: Path,
+    q: str,
+    retrieved: Sequence[str],
+    feature_file: h5py.File,
+    match_file: h5py.File,
+    skip: int | None = None,
+) -> tuple[
+    dict[str, Any] | None,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    np.ndarray,
+    int,
+]:
+    img = cv2.imread(str(dataset_dir / q))
+    assert img is not None, dataset_dir / q
+    height, width = img.shape[:2]
     cx = 0.5 * width
     cy = 0.5 * height
     focal_length = 4032.0 * 28.0 / 36.0
 
-    all_mkpq = []
-    all_mkpr = []
-    all_mkp3d = []
-    all_indices = []
+    all_mkpq_list: list[np.ndarray] = []
+    all_mkpr_list: list[np.ndarray] = []
+    all_mkp3d_list: list[np.ndarray] = []
+    all_indices_list: list[np.ndarray] = []
     kpq = feature_file[q]["keypoints"].__array__()
     num_matches = 0
 
@@ -95,12 +112,12 @@ def pose_from_cluster(dataset_dir, q, retrieved, feature_file, match_file, skip=
         Tr = get_scan_pose(dataset_dir, r)
         mkp3d = (Tr[:3, :3] @ mkp3d.T + Tr[:3, -1:]).T
 
-        all_mkpq.append(mkpq[valid])
-        all_mkpr.append(mkpr[valid])
-        all_mkp3d.append(mkp3d[valid])
-        all_indices.append(np.full(np.count_nonzero(valid), i))
+        all_mkpq_list.append(mkpq[valid])
+        all_mkpr_list.append(mkpr[valid])
+        all_mkp3d_list.append(mkp3d[valid])
+        all_indices_list.append(np.full(np.count_nonzero(valid), i))
 
-    if len(all_mkpq) == 0:
+    if len(all_mkpq_list) == 0:
         return (
             None,
             np.zeros((0, 2)),
@@ -110,12 +127,12 @@ def pose_from_cluster(dataset_dir, q, retrieved, feature_file, match_file, skip=
             num_matches,
         )
 
-    all_mkpq = np.concatenate(all_mkpq, 0)
-    all_mkpr = np.concatenate(all_mkpr, 0)
-    all_mkp3d = np.concatenate(all_mkp3d, 0)
-    all_indices = np.concatenate(all_indices, 0)
+    all_mkpq = np.concatenate(all_mkpq_list, 0)
+    all_mkpr = np.concatenate(all_mkpr_list, 0)
+    all_mkp3d = np.concatenate(all_mkp3d_list, 0)
+    all_indices = np.concatenate(all_indices_list, 0)
 
-    cfg = {
+    cfg: dict[str, Any] = {
         "model": "SIMPLE_PINHOLE",
         "width": width,
         "height": height,
@@ -133,7 +150,14 @@ def pose_from_cluster(dataset_dir, q, retrieved, feature_file, match_file, skip=
     return ret, all_mkpq, all_mkpr, all_mkp3d, all_indices, num_matches
 
 
-def main(dataset_dir, retrieval, features, matches, results, skip_matches=None):
+def main(
+    dataset_dir: Path,
+    retrieval: Path,
+    features: Path,
+    matches: Path,
+    results: Path,
+    skip_matches: int | None = None,
+) -> None:
     assert retrieval.exists(), retrieval
     assert features.exists(), features
     assert matches.exists(), matches
@@ -141,8 +165,8 @@ def main(dataset_dir, retrieval, features, matches, results, skip_matches=None):
     retrieval_dict = parse_retrieval(retrieval)
     queries = list(retrieval_dict.keys())
 
-    poses = {}
-    logs = {
+    poses: dict[str, pycolmap.Rigid3d] = {}
+    logs: dict[str, Any] = {
         "features": features,
         "matches": matches,
         "retrieval": retrieval,

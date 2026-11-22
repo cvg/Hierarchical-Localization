@@ -1,7 +1,7 @@
 import argparse
 import multiprocessing
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import pycolmap
 import tqdm
@@ -16,7 +16,7 @@ from .triangulation import (
 )
 
 
-def create_empty_db(database_path: Path):
+def create_empty_db(database_path: Path) -> None:
     if database_path.exists():
         logger.warning("The database already exists, deleting it.")
         database_path.unlink()
@@ -29,26 +29,30 @@ def import_images(
     image_dir: Path,
     database_path: Path,
     camera_mode: pycolmap.CameraMode,
-    image_list: Optional[List[str]] = None,
-    options: Optional[Dict[str, Any]] = None,
-):
+    image_list: list[str] | None = None,
+    options: dict[str, Any] | pycolmap.ImageReaderOptions | None = None,
+) -> None:
     logger.info("Importing images into the database...")
     if options is None:
-        options = {}
+        reader_options = pycolmap.ImageReaderOptions()
+    elif isinstance(options, pycolmap.ImageReaderOptions):
+        reader_options = options
+    else:
+        reader_options = pycolmap.ImageReaderOptions(options)
     images = list(image_dir.iterdir())
     if len(images) == 0:
-        raise IOError(f"No images found in {image_dir}.")
+        raise OSError(f"No images found in {image_dir}.")
     with pycolmap.ostream():
         pycolmap.import_images(
             database_path,
             image_dir,
             camera_mode,
             image_names=image_list or [],
-            options=options,
+            options=reader_options,
         )
 
 
-def get_image_ids(database_path: Path) -> Dict[str, int]:
+def get_image_ids(database_path: Path) -> dict[str, int]:
     images = {}
     with pycolmap.Database.open(database_path) as db:
         images = {image.name: image.image_id for image in db.read_all_images()}
@@ -59,13 +63,13 @@ def incremental_mapping(
     database_path: Path,
     image_dir: Path,
     sfm_path: Path,
-    options: Optional[Dict[str, Any]] = None,
+    options: dict[str, Any] | pycolmap.IncrementalPipelineOptions | None = None,
 ) -> dict[int, pycolmap.Reconstruction]:
     with pycolmap.Database.open(database_path) as db:
         num_images = db.num_images()
-    pbars = []
+    pbars: list[tqdm.tqdm] = []
 
-    def restart_progress_bar():
+    def restart_progress_bar() -> None:
         if len(pbars) > 0:
             pbars[-1].close()
         pbars.append(
@@ -78,11 +82,18 @@ def incremental_mapping(
         )
         pbars[-1].update(2)
 
+    if options is None:
+        pipeline_options = pycolmap.IncrementalPipelineOptions()
+    elif isinstance(options, pycolmap.IncrementalPipelineOptions):
+        pipeline_options = options
+    else:
+        pipeline_options = pycolmap.IncrementalPipelineOptions(options)
+
     reconstructions = pycolmap.incremental_mapping(
         database_path,
         image_dir,
         sfm_path,
-        options=options or {},
+        options=pipeline_options,
         initial_image_pair_callback=restart_progress_bar,
         next_image_callback=lambda: pbars[-1].update(1),
     )
@@ -95,8 +106,8 @@ def run_reconstruction(
     database_path: Path,
     image_dir: Path,
     verbose: bool = False,
-    options: Optional[Dict[str, Any]] = None,
-) -> pycolmap.Reconstruction:
+    options: dict[str, Any] | None = None,
+) -> pycolmap.Reconstruction | None:
     models_path = sfm_dir / "models"
     models_path.mkdir(exist_ok=True, parents=True)
     logger.info("Running 3D reconstruction...")
@@ -122,9 +133,7 @@ def run_reconstruction(
             largest_index = index
             largest_num_images = num_images
     assert largest_index is not None
-    logger.info(
-        f"Largest model is #{largest_index} " f"with {largest_num_images} images."
-    )
+    logger.info(f"Largest model is #{largest_index} with {largest_num_images} images.")
 
     reconstructions[largest_index].write(sfm_dir)
     return reconstructions[largest_index]
@@ -139,11 +148,11 @@ def main(
     camera_mode: pycolmap.CameraMode = pycolmap.CameraMode.AUTO,
     verbose: bool = False,
     skip_geometric_verification: bool = False,
-    min_match_score: Optional[float] = None,
-    image_list: Optional[List[str]] = None,
-    image_options: Optional[Dict[str, Any]] = None,
-    mapper_options: Optional[Dict[str, Any]] = None,
-) -> pycolmap.Reconstruction:
+    min_match_score: float | None = None,
+    image_list: list[str] | None = None,
+    image_options: dict[str, Any] | None = None,
+    mapper_options: dict[str, Any] | None = None,
+) -> pycolmap.Reconstruction | None:
     assert features.exists(), features
     assert pairs.exists(), pairs
     assert matches.exists(), matches
@@ -203,19 +212,17 @@ if __name__ == "__main__":
         "--image_options",
         nargs="+",
         default=[],
-        help="List of key=value from {}".format(pycolmap.ImageReaderOptions().todict()),
+        help=f"List of key=value from {pycolmap.ImageReaderOptions().todict()}",
     )
     parser.add_argument(
         "--mapper_options",
         nargs="+",
         default=[],
-        help="List of key=value from {}".format(
-            pycolmap.IncrementalPipelineOptions().todict()
-        ),
+        help=f"List of key=value from {pycolmap.IncrementalPipelineOptions().todict()}",
     )
     args = parser.parse_args().__dict__
 
-    camera_mode = pycolmap.CameraMode[args.pop("camera_mode")]
+    camera_mode = getattr(pycolmap.CameraMode, args.pop("camera_mode"))
     image_options = parse_option_args(
         args.pop("image_options"), pycolmap.ImageReaderOptions()
     )

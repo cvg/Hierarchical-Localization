@@ -1,16 +1,18 @@
+from typing import Any
+
 from lightglue import LightGlue as LightGlue_
 
 from ..utils.base_model import BaseModel
 
 
 class LightGlue(BaseModel):
-    default_conf = {
+    default_conf: dict[str, Any] = {
         "features": "superpoint",
         "depth_confidence": 0.95,
         "width_confidence": 0.99,
         "compile": False,
     }
-    required_inputs = [
+    required_inputs: list[str] = [
         "image0",
         "keypoints0",
         "descriptors0",
@@ -19,12 +21,12 @@ class LightGlue(BaseModel):
         "descriptors1",
     ]
 
-    def _init(self, conf):
+    def _init(self, conf: dict[str, Any]) -> None:
         self.net = LightGlue_(conf.pop("features"), **conf)
         if conf["compile"]:
             self.net.compile()
 
-    def _forward(self, data):
+    def _forward(self, data: dict[str, Any]) -> dict[str, Any]:
         data["descriptors0"] = data["descriptors0"].transpose(-1, -2)
         data["descriptors1"] = data["descriptors1"].transpose(-1, -2)
 

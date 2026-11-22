@@ -1,5 +1,6 @@
 import argparse
 from pathlib import Path
+from typing import Any
 
 from ... import (
     extract_features,
@@ -15,7 +16,14 @@ from .utils import create_query_list_with_intrinsics, evaluate, scale_sfm_images
 SCENES = ["KingsCollege", "OldHospital", "ShopFacade", "StMarysChurch", "GreatCourt"]
 
 
-def run_scene(images, gt_dir, outputs, results, num_covis, num_loc):
+def run_scene(
+    images: Path,
+    gt_dir: Path,
+    outputs: Path,
+    results: Path,
+    num_covis: int,
+    num_loc: int,
+) -> None:
     ref_sfm_sift = gt_dir / "model_train"
     test_list = gt_dir / "list_query.txt"
 
@@ -26,7 +34,7 @@ def run_scene(images, gt_dir, outputs, results, num_covis, num_loc):
     sfm_pairs = outputs / f"pairs-db-covis{num_covis}.txt"
     loc_pairs = outputs / f"pairs-query-netvlad{num_loc}.txt"
 
-    feature_conf = {
+    feature_conf: dict[str, Any] = {
         "output": "feats-superpoint-n4096-r1024",
         "model": {
             "name": "superpoint",
@@ -44,7 +52,7 @@ def run_scene(images, gt_dir, outputs, results, num_covis, num_loc):
     create_query_list_with_intrinsics(
         gt_dir / "empty_all", query_list, test_list, image_dir=images
     )
-    with open(test_list, "r") as f:
+    with open(test_list) as f:
         query_seqs = {q.split("/")[0] for q in f.read().rstrip().split("\n")}
 
     global_descriptors = extract_features.main(retrieval_conf, images, outputs)
@@ -53,7 +61,7 @@ def run_scene(images, gt_dir, outputs, results, num_covis, num_loc):
         loc_pairs,
         num_loc,
         db_model=ref_sfm_sift,
-        query_prefix=query_seqs,
+        query_prefix=sorted(query_seqs),
     )
 
     features = extract_features.main(feature_conf, images, outputs, as_half=True)

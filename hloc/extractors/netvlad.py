@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import torch
@@ -16,7 +17,15 @@ EPS = 1e-6
 
 
 class NetVLADLayer(nn.Module):
-    def __init__(self, input_dim=512, K=64, score_bias=False, intranorm=True):
+    centers: nn.Parameter
+
+    def __init__(
+        self,
+        input_dim: int = 512,
+        K: int = 64,
+        score_bias: bool = False,
+        intranorm: bool = True,
+    ) -> None:
         super().__init__()
         self.score_proj = nn.Conv1d(input_dim, K, kernel_size=1, bias=score_bias)
         centers = nn.parameter.Parameter(torch.empty([input_dim, K]))
@@ -25,7 +34,7 @@ class NetVLADLayer(nn.Module):
         self.intranorm = intranorm
         self.output_dim = input_dim * K
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         b = x.size(0)
         scores = self.score_proj(x)
         scores = F.softmax(scores, dim=1)
@@ -40,20 +49,23 @@ class NetVLADLayer(nn.Module):
 
 
 class NetVLAD(BaseModel):
-    default_conf = {"model_name": "VGG16-NetVLAD-Pitts30K", "whiten": True}
-    required_inputs = ["image"]
+    default_conf: dict[str, Any] = {
+        "model_name": "VGG16-NetVLAD-Pitts30K",
+        "whiten": True,
+    }
+    required_inputs: list[str] = ["image"]
 
     # Models exported using
     # https://github.com/uzh-rpg/netvlad_tf_open/blob/master/matlab/net_class2struct.m.
-    checkpoint_urls = {
+    checkpoint_urls: dict[str, str] = {
         "VGG16-NetVLAD-Pitts30K": "https://cvg-data.inf.ethz.ch/hloc/netvlad/Pitts30K_struct.mat",  # noqa: E501
         "VGG16-NetVLAD-TokyoTM": "https://cvg-data.inf.ethz.ch/hloc/netvlad/TokyoTM_struct.mat",  # noqa: E501
     }
 
-    def _init(self, conf):
+    def _init(self, conf: dict[str, Any]) -> None:
         if conf["model_name"] not in self.checkpoint_urls:
             raise ValueError(
-                f'{conf["model_name"]} not in {self.checkpoint_urls.keys()}.'
+                f"{conf['model_name']} not in {self.checkpoint_urls.keys()}."
             )
 
         # Download the checkpoint.
@@ -63,7 +75,7 @@ class NetVLAD(BaseModel):
         if not checkpoint_path.exists():
             checkpoint_path.parent.mkdir(exist_ok=True, parents=True)
             url = self.checkpoint_urls[conf["model_name"]]
-            torch.hub.download_url_to_file(url, checkpoint_path)
+            torch.hub.download_url_to_file(url, str(checkpoint_path))
 
         # Create the network.
         # Remove classification head.
@@ -80,7 +92,9 @@ class NetVLAD(BaseModel):
         mat = loadmat(checkpoint_path, struct_as_record=False, squeeze_me=True)
 
         # CNN weights.
-        for layer, mat_layer in zip(self.backbone.children(), mat["net"].layers):
+        for layer, mat_layer in zip(
+            self.backbone.children(), mat["net"].layers, strict=False
+        ):
             if isinstance(layer, nn.Conv2d):
                 w = mat_layer.weights[0]  # Shape: S x S x IN x OUT
                 b = mat_layer.weights[1]  # Shape: OUT
@@ -123,7 +137,7 @@ class NetVLAD(BaseModel):
             "std": np.array([1, 1, 1], dtype=np.float32),
         }
 
-    def _forward(self, data):
+    def _forward(self, data: dict[str, Any]) -> dict[str, torch.Tensor]:
         image = data["image"]
         assert image.shape[1] == 3
         assert image.min() >= -EPS and image.max() <= 1 + EPS

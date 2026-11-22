@@ -1,4 +1,6 @@
 import logging
+from pathlib import Path
+from typing import Any
 
 import cv2
 import numpy as np
@@ -7,7 +9,7 @@ import pycolmap
 logger = logging.getLogger(__name__)
 
 
-def scale_sfm_images(full_model, scaled_model, image_dir):
+def scale_sfm_images(full_model: Path, scaled_model: Path, image_dir: Path) -> None:
     """Duplicate the provided model and scale the camera intrinsics so that
     they match the original image resolution - makes everything easier.
     """
@@ -15,7 +17,7 @@ def scale_sfm_images(full_model, scaled_model, image_dir):
     scaled_model.mkdir(exist_ok=True, parents=True)
     reconstruction = pycolmap.Reconstruction(full_model)
 
-    scaled_camera_ids = set()
+    scaled_camera_ids: set[int] = set()
     for image in reconstruction.images.values():
         name = image.name
         img = cv2.imread(str(image_dir / name))
@@ -39,7 +41,12 @@ def scale_sfm_images(full_model, scaled_model, image_dir):
     reconstruction.write(scaled_model)
 
 
-def create_query_list_with_intrinsics(model, out, list_file=None, image_dir=None):
+def create_query_list_with_intrinsics(
+    model: Path,
+    out: Path,
+    list_file: Path | None = None,
+    image_dir: Path | None = None,
+) -> None:
     """Create a list of query images with intrinsics from the colmap model."""
     reconstruction = pycolmap.Reconstruction(model)
     images = reconstruction.images
@@ -49,7 +56,7 @@ def create_query_list_with_intrinsics(model, out, list_file=None, image_dir=None
     if list_file is None:
         names = list(name2id)
     else:
-        with open(list_file, "r") as f:
+        with open(list_file) as f:
             names = f.read().rstrip().split("\n")
     data = []
     for name in names:
@@ -69,17 +76,22 @@ def create_query_list_with_intrinsics(model, out, list_file=None, image_dir=None
             w, h = w_orig, h_orig
             params = params * np.array([sx, sx, sy, 1.0])
 
-        p = [name, camera.model.name, w, h] + params.tolist()
+        p: list[Any] = [name, camera.model.name, w, h] + params.tolist()
         data.append(" ".join(map(str, p)))
     with open(out, "w") as f:
         f.write("\n".join(data))
 
 
-def evaluate(model, results, list_file=None, only_localized=False):
-    predictions = {}
-    with open(results, "r") as f:
-        for data in f.read().rstrip().split("\n"):
-            data = data.split()
+def evaluate(
+    model: Path,
+    results: Path,
+    list_file: Path | None = None,
+    only_localized: bool = False,
+) -> None:
+    predictions: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+    with open(results) as f:
+        for line in f.read().rstrip().split("\n"):
+            data = line.split()
             name = data[0]
             q, t = np.split(np.array(data[1:], float), [4])
             predictions[name] = (pycolmap.Rotation3d(q[[1, 2, 3, 0]]).matrix(), t)
@@ -89,11 +101,11 @@ def evaluate(model, results, list_file=None, only_localized=False):
     if list_file is None:
         test_names = list(name2id)
     else:
-        with open(list_file, "r") as f:
+        with open(list_file) as f:
             test_names = f.read().rstrip().split("\n")
 
-    errors_t = []
-    errors_R = []
+    errors_t_list: list[float] = []
+    errors_R_list: list[float] = []
     for name in test_names:
         if name not in predictions:
             if only_localized:
@@ -105,14 +117,14 @@ def evaluate(model, results, list_file=None, only_localized=False):
             pose = image.cam_from_world()
             R_gt, t_gt = pose.rotation.matrix(), pose.translation
             R, t = predictions[name]
-            e_t = np.linalg.norm(-R_gt.T @ t_gt + R.T @ t, axis=0)
+            e_t = float(np.linalg.norm(-R_gt.T @ t_gt + R.T @ t, axis=0))
             cos = np.clip((np.trace(np.dot(R_gt.T, R)) - 1) / 2, -1.0, 1.0)
-            e_R = np.rad2deg(np.abs(np.arccos(cos)))
-        errors_t.append(e_t)
-        errors_R.append(e_R)
+            e_R = float(np.rad2deg(np.abs(np.arccos(cos))))
+        errors_t_list.append(e_t)
+        errors_R_list.append(e_R)
 
-    errors_t = np.array(errors_t)
-    errors_R = np.array(errors_R)
+    errors_t = np.array(errors_t_list)
+    errors_R = np.array(errors_R_list)
 
     med_t = np.median(errors_t)
     med_R = np.median(errors_R)
@@ -122,7 +134,7 @@ def evaluate(model, results, list_file=None, only_localized=False):
     out += "\nPercentage of test images localized within:"
     threshs_t = [0.01, 0.02, 0.03, 0.05, 0.25, 0.5, 5.0]
     threshs_R = [1.0, 2.0, 3.0, 5.0, 2.0, 5.0, 10.0]
-    for th_t, th_R in zip(threshs_t, threshs_R):
+    for th_t, th_R in zip(threshs_t, threshs_R, strict=True):
         ratio = np.mean((errors_t < th_t) & (errors_R < th_R))
         out += f"\n\t{th_t * 100:.0f}cm, {th_R:.0f}deg : {ratio * 100:.2f}%"
     logger.info(out)

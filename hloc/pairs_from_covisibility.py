@@ -9,7 +9,7 @@ from tqdm import tqdm
 from . import logger
 
 
-def main(model, output, num_matched):
+def main(model: Path, output: Path, num_matched: int) -> None:
     logger.info("Reading the COLMAP model...")
     reconstruction = pycolmap.Reconstruction(model)
     images = reconstruction.images
@@ -22,7 +22,7 @@ def main(model, output, num_matched):
     }
     pairs = []
     for image_id, image in tqdm(images.items()):
-        covis = defaultdict(int)
+        covis: dict[int, int] = defaultdict(int)
         for p2D in image.get_observation_points2D():
             for image_covis_id in track_image_ids[p2D.point3D_id]:
                 if image_covis_id != image_id:
@@ -42,7 +42,7 @@ def main(model, output, num_matched):
             ind_top = np.argpartition(covis_num, -num_matched)
             ind_top = ind_top[-num_matched:]  # unsorted top k
             ind_top = ind_top[np.argsort(-covis_num[ind_top])]
-            top_covis_ids = [covis_ids[i] for i in ind_top]
+            top_covis_ids = covis_ids[ind_top]
             assert covis_num[ind_top[0]] == np.max(covis_num)
 
         for i in top_covis_ids:

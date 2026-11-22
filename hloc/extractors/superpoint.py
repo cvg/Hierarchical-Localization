@@ -1,3 +1,5 @@
+from typing import Any
+
 import lightglue.superpoint as lg_superpoint
 import torch
 from lightglue import SuperPoint as SuperPoint_
@@ -7,7 +9,9 @@ from ..utils.base_model import BaseModel
 
 # The original keypoint sampling is incorrect. We patch it here but
 # we don't fix it upstream to not impact existing evaluations.
-def sample_descriptors_fix_sampling(keypoints, descriptors, s: int = 8):
+def sample_descriptors_fix_sampling(
+    keypoints: torch.Tensor, descriptors: torch.Tensor, s: int = 8
+) -> torch.Tensor:
     """Interpolate descriptors at keypoint locations"""
     b, c, h, w = descriptors.shape
     keypoints = (keypoints + 0.5) / (keypoints.new_tensor([w, h]) * s)
@@ -22,17 +26,17 @@ def sample_descriptors_fix_sampling(keypoints, descriptors, s: int = 8):
 
 
 class SuperPoint(BaseModel):
-    default_conf = {
+    default_conf: dict[str, Any] = {
         "nms_radius": 4,
         "keypoint_threshold": 0.005,
         "max_keypoints": -1,
         "remove_borders": 4,
         "fix_sampling": False,
     }
-    required_inputs = ["image"]
-    detection_noise = 2.0
+    required_inputs: list[str] = ["image"]
+    detection_noise: float = 2.0
 
-    def _init(self, conf):
+    def _init(self, conf: dict[str, Any]) -> None:
         max_kp = conf["max_keypoints"]
         self.net = SuperPoint_(
             nms_radius=conf["nms_radius"],
@@ -41,7 +45,7 @@ class SuperPoint(BaseModel):
             remove_borders=conf["remove_borders"],
         )
 
-    def _forward(self, data):
+    def _forward(self, data: dict[str, Any]) -> dict[str, torch.Tensor]:
         if self.conf["fix_sampling"]:
             orig_sample = lg_superpoint.sample_descriptors
             lg_superpoint.sample_descriptors = sample_descriptors_fix_sampling

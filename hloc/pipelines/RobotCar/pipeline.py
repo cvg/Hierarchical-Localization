@@ -25,12 +25,12 @@ CONDITIONS = [
 ]
 
 
-def generate_query_list(dataset, image_dir, path):
+def generate_query_list(dataset: Path, image_dir: Path, path: Path | str) -> None:
     h, w = 1024, 1024
     intrinsics_filename = "intrinsics/{}_intrinsics.txt"
     cameras = {}
     for side in ["left", "right", "rear"]:
-        with open(dataset / intrinsics_filename.format(side), "r") as f:
+        with open(dataset / intrinsics_filename.format(side)) as f:
             fx = f.readline().split()[1]
             fy = f.readline().split()[1]
             cx = f.readline().split()[1]
@@ -49,7 +49,7 @@ def generate_query_list(dataset, image_dir, path):
         f.write("\n".join(map(" ".join, out)))
 
 
-def run(args):
+def run(args: argparse.Namespace) -> None:
     # Setup the paths
     dataset = args.dataset
     images = dataset / "images/"

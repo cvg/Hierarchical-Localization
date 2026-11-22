@@ -1,10 +1,11 @@
 import argparse
 import pprint
 from collections import Counter, defaultdict
+from collections.abc import Collection
 from itertools import chain
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Dict, Iterable, List, Optional, Set, Tuple, Union
+from typing import Any
 
 import h5py
 import numpy as np
@@ -35,7 +36,7 @@ from .utils.parsers import names_to_pair, parse_retrieval
 # loc_features, loc_matches = main(matcher_conf, loc_pairs,
 #      images, export_dir=outputs, features_ref=features, max_kps=None)
 
-confs = {
+confs: dict[str, dict[str, Any]] = {
     # Best quality but loads of points. Only use for small scenes
     "loftr": {
         "output": "matches-loftr",
@@ -63,7 +64,7 @@ confs = {
 }
 
 
-def to_cpts(kpts, ps):
+def to_cpts(kpts: np.ndarray, ps: float) -> list[tuple[Any, ...]]:
     if ps > 0.0:
         kpts = np.round(np.round((kpts + 0.5) / ps) * ps - 0.5, 2)
     return [tuple(cpt) for cpt in kpts]
@@ -71,13 +72,13 @@ def to_cpts(kpts, ps):
 
 def assign_keypoints(
     kpts: np.ndarray,
-    other_cpts: Union[List[Tuple], np.ndarray],
+    other_cpts: list[tuple[Any, ...]] | np.ndarray,
     max_error: float,
     update: bool = False,
-    ref_bins: Optional[List[Counter]] = None,
-    scores: Optional[np.ndarray] = None,
-    cell_size: Optional[int] = None,
-):
+    ref_bins: list[dict[Any, float]] | None = None,
+    scores: np.ndarray | None = None,
+    cell_size: float | None = None,
+) -> np.ndarray:
     if not update:
         # Without update this is just a NN search
         if len(other_cpts) == 0 or len(kpts) == 0:
@@ -85,17 +86,17 @@ def assign_keypoints(
         dist, kpt_ids = KDTree(np.array(other_cpts)).query(kpts)
         valid = dist <= max_error
         kpt_ids[~valid] = -1
-        return kpt_ids
+        return np.asarray(kpt_ids)
     else:
         ps = cell_size if cell_size is not None else max_error
         ps = max(ps, max_error)
         # With update we quantize and bin (optionally)
         assert isinstance(other_cpts, list)
-        kpt_ids = []
+        assigned_ids: list[int] = []
         cpts = to_cpts(kpts, ps)
         bpts = to_cpts(kpts, int(max_error))
         cp_to_id = {val: i for i, val in enumerate(other_cpts)}
-        for i, (cpt, bpt) in enumerate(zip(cpts, bpts)):
+        for i, (cpt, bpt) in enumerate(zip(cpts, bpts, strict=True)):
             try:
                 kid = cp_to_id[cpt]
             except KeyError:
@@ -103,15 +104,15 @@ def assign_keypoints(
                 cp_to_id[cpt] = kid
                 other_cpts.append(cpt)
                 if ref_bins is not None:
-                    ref_bins.append(Counter())
+                    ref_bins.append(defaultdict(float))
             if ref_bins is not None:
-                score = scores[i] if scores is not None else 1
+                score = float(scores[i]) if scores is not None else 1.0
                 ref_bins[cp_to_id[cpt]][bpt] += score
-            kpt_ids.append(kid)
-        return np.array(kpt_ids)
+            assigned_ids.append(kid)
+        return np.array(assigned_ids)
 
 
-def get_grouped_ids(array):
+def get_grouped_ids(array: np.ndarray) -> list[np.ndarray]:
     # Group array indices based on its values
     # all duplicates are grouped as a set
     idx_sort = np.argsort(array)
@@ -121,9 +122,13 @@ def get_grouped_ids(array):
     return res
 
 
-def get_unique_matches(match_ids, scores):
-    if len(match_ids.shape) == 1:
-        return [0]
+def get_unique_matches(
+    match_ids: np.ndarray, scores: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    if match_ids.ndim != 2:
+        raise ValueError(f"Expected 2D match_ids array, got shape {match_ids.shape}.")
+    if len(match_ids) == 0:
+        return match_ids, scores
 
     isets1 = get_grouped_ids(match_ids[:, 0])
     isets2 = get_grouped_ids(match_ids[:, 1])
@@ -133,10 +138,12 @@ def get_unique_matches(match_ids, scores):
     return match_ids[uids], scores[uids]
 
 
-def matches_to_matches0(matches, scores):
+def matches_to_matches0(
+    matches: np.ndarray, scores: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
     if len(matches) == 0:
         return np.zeros(0, dtype=np.int32), np.zeros(0, dtype=np.float16)
-    n_kps0 = np.max(matches[:, 0]) + 1
+    n_kps0 = int(np.max(matches[:, 0])) + 1
     matches0 = -np.ones((n_kps0,))
     scores0 = np.zeros((n_kps0,))
     matches0[matches[:, 0]] = matches[:, 1]
@@ -144,7 +151,9 @@ def matches_to_matches0(matches, scores):
     return matches0.astype(np.int32), scores0.astype(np.float16)
 
 
-def kpids_to_matches0(kpt_ids0, kpt_ids1, scores):
+def kpids_to_matches0(
+    kpt_ids0: np.ndarray, kpt_ids1: np.ndarray, scores: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
     valid = (kpt_ids0 != -1) & (kpt_ids1 != -1)
     matches = np.dstack([kpt_ids0[valid], kpt_ids1[valid]])
     matches = matches.reshape(-1, 2)
@@ -155,87 +164,93 @@ def kpids_to_matches0(kpt_ids0, kpt_ids1, scores):
     return matches_to_matches0(matches, scores)
 
 
-def scale_keypoints(kpts, scale):
+def scale_keypoints(kpts: torch.Tensor, scale: np.ndarray | float) -> torch.Tensor:
     if np.any(scale != 1.0):
         kpts *= kpts.new_tensor(scale)
     return kpts
 
 
-class ImagePairDataset(torch.utils.data.Dataset):
-    default_conf = {
+class ImagePairDataset(torch.utils.data.Dataset[Any]):
+    default_conf: dict[str, Any] = {
         "grayscale": True,
         "resize_max": 1024,
         "dfactor": 8,
         "cache_images": False,
     }
 
-    def __init__(self, image_dir, conf, pairs):
+    def __init__(
+        self,
+        image_dir: Path,
+        conf: dict[str, Any],
+        pairs: list[tuple[str, str]],
+    ) -> None:
         self.image_dir = image_dir
-        self.conf = conf = SimpleNamespace(**{**self.default_conf, **conf})
+        self.conf = SimpleNamespace(**{**self.default_conf, **conf})
         self.pairs = pairs
+        self.images: dict[str, torch.Tensor] = {}
+        self.scales: dict[str, np.ndarray] = {}
         if self.conf.cache_images:
             image_names = set(sum(pairs, ()))  # unique image names in pairs
             logger.info(f"Loading and caching {len(image_names)} unique images.")
-            self.images = {}
-            self.scales = {}
             for name in tqdm(image_names):
                 image = read_image(self.image_dir / name, self.conf.grayscale)
                 self.images[name], self.scales[name] = self.preprocess(image)
 
-    def preprocess(self, image: np.ndarray):
+    def preprocess(self, image: np.ndarray) -> tuple[torch.Tensor, np.ndarray]:
         image = image.astype(np.float32, copy=False)
         size = image.shape[:2][::-1]
-        scale = np.array([1.0, 1.0])
 
         if self.conf.resize_max:
-            scale = self.conf.resize_max / max(size)
-            if scale < 1.0:
-                size_new = tuple(int(round(x * scale)) for x in size)
+            scale_factor = self.conf.resize_max / max(size)
+            if scale_factor < 1.0:
+                size_new = (
+                    int(round(size[0] * scale_factor)),
+                    int(round(size[1] * scale_factor)),
+                )
                 image = resize_image(image, size_new, "cv2_area")
-                scale = np.array(size) / np.array(size_new)
 
         if self.conf.grayscale:
             assert image.ndim == 2, image.shape
             image = image[None]
         else:
             image = image.transpose((2, 0, 1))  # HxWxC to CxHxW
-        image = torch.from_numpy(image / 255.0).float()
+        image_t = torch.from_numpy(image / 255.0).float()
 
         # assure that the size is divisible by dfactor
-        size_new = tuple(
-            map(
-                lambda x: int(x // self.conf.dfactor * self.conf.dfactor),
-                image.shape[-2:],
-            )
-        )
-        image = F.resize(image, size=size_new)
-        scale = np.array(size) / np.array(size_new)[::-1]
-        return image, scale
+        size_new_hw = [
+            int(x // self.conf.dfactor * self.conf.dfactor) for x in image_t.shape[-2:]
+        ]
+        image_t = F.resize(image_t, size=size_new_hw)
+        scale = np.array(size) / np.array(size_new_hw)[::-1]
+        return image_t, scale
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.pairs)
 
-    def __getitem__(self, idx):
+    def __getitem__(
+        self, idx: int
+    ) -> tuple[torch.Tensor, torch.Tensor, np.ndarray, np.ndarray, str, str]:
         name0, name1 = self.pairs[idx]
         if self.conf.cache_images:
             image0, scale0 = self.images[name0], self.scales[name0]
             image1, scale1 = self.images[name1], self.scales[name1]
         else:
-            image0 = read_image(self.image_dir / name0, self.conf.grayscale)
-            image1 = read_image(self.image_dir / name1, self.conf.grayscale)
-            image0, scale0 = self.preprocess(image0)
-            image1, scale1 = self.preprocess(image1)
+            raw0 = read_image(self.image_dir / name0, self.conf.grayscale)
+            raw1 = read_image(self.image_dir / name1, self.conf.grayscale)
+            image0, scale0 = self.preprocess(raw0)
+            image1, scale1 = self.preprocess(raw1)
         return image0, image1, scale0, scale1, name0, name1
 
 
 @torch.no_grad()
 def match_dense(
-    conf: Dict,
-    pairs: List[Tuple[str, str]],
+    conf: dict[str, Any],
+    pairs: list[tuple[str, str]],
     image_dir: Path,
     match_path: Path,  # out
-    existing_refs: Optional[List] = [],
-):
+    existing_refs: Collection[str] | None = None,
+) -> None:
+    existing_refs_set = set(existing_refs) if existing_refs is not None else set()
     device = "cuda" if torch.cuda.is_available() else "cpu"
     Model = dynamic_load(matchers, conf["model"]["name"])
     model = Model(conf["model"]).eval().to(device)
@@ -255,7 +270,7 @@ def match_dense(
 
             # match semi-dense
             # for consistency with pairs_from_*: refine kpts of image0
-            if name0 in existing_refs:
+            if name0 in existing_refs_set:
                 # special case: flip to enable refinement in query image
                 pred = model({"image0": image1, "image1": image0})
                 pred = {
@@ -290,8 +305,10 @@ def match_dense(
 
 # default: quantize all!
 def load_keypoints(
-    conf: Dict, feature_paths_refs: List[Path], quantize: Optional[set] = None
-):
+    conf: dict[str, Any],
+    feature_paths_refs: list[Path],
+    quantize: set[str] | None = None,
+) -> tuple[dict[str, Any], dict[str, list[dict[Any, float]]]]:
     name2ref = {
         n: i for i, p in enumerate(feature_paths_refs) for n in list_h5_names(p)
     }
@@ -303,21 +320,21 @@ def load_keypoints(
         logger.info(f"Loading keypoints from {len(existing_refs)} images.")
 
     # Load query keypoints
-    cpdict = defaultdict(list)
-    bindict = defaultdict(list)
+    cpdict: dict[str, Any] = defaultdict(list)
+    bindict: dict[str, list[dict[Any, float]]] = defaultdict(list)
     for name in existing_refs:
         with h5py.File(str(feature_paths_refs[name2ref[name]]), "r") as fd:
             kps = fd[name]["keypoints"].__array__()
             if name not in quantize:
                 cpdict[name] = kps
             else:
-                if "scores" in fd[name].keys():
+                if "scores" in fd[name]:
                     kp_scores = fd[name]["scores"].__array__()
                 else:
                     # we set the score to 1.0 if not provided
                     # increase for more weight on reference keypoints for
                     # stronger anchoring
-                    kp_scores = [1.0 for _ in range(kps.shape[0])]
+                    kp_scores = np.ones(kps.shape[0], dtype=np.float32)
                 # bin existing keypoints of reference images for association
                 assign_keypoints(
                     kps,
@@ -332,27 +349,31 @@ def load_keypoints(
 
 
 def aggregate_matches(
-    conf: Dict,
-    pairs: List[Tuple[str, str]],
+    conf: dict[str, Any],
+    pairs: list[tuple[str, str]],
     match_path: Path,
     feature_path: Path,
-    required_queries: Optional[Set[str]] = None,
-    max_kps: Optional[int] = None,
-    cpdict: Dict[str, Iterable] = defaultdict(list),
-    bindict: Dict[str, List[Counter]] = defaultdict(list),
-):
+    required_queries: set[str] | None = None,
+    max_kps: int | None = None,
+    cpdict: dict[str, Any] | None = None,
+    bindict: dict[str, list[dict[Any, float]]] | None = None,
+) -> dict[str, Any]:
+    if cpdict is None:
+        cpdict = defaultdict(list)
+    if bindict is None:
+        bindict = defaultdict(list)
     if required_queries is None:
         required_queries = set(sum(pairs, ()))
         # default: do not overwrite existing features in feature_path!
         required_queries -= set(list_h5_names(feature_path))
 
     # if an entry in cpdict is provided as np.ndarray we assume it is fixed
-    required_queries -= set([k for k, v in cpdict.items() if isinstance(v, np.ndarray)])
+    required_queries -= {k for k, v in cpdict.items() if isinstance(v, np.ndarray)}
 
     # sort pairs for reduced RAM
     pairs_per_q = Counter(list(chain(*pairs)))
     pairs_score = [min(pairs_per_q[i], pairs_per_q[j]) for i, j in pairs]
-    pairs = [p for _, p in sorted(zip(pairs_score, pairs))]
+    pairs = [p for _, p in sorted(zip(pairs_score, pairs, strict=True))]
 
     if len(required_queries) > 0:
         logger.info(f"Aggregating keypoints for {len(required_queries)} images.")
@@ -409,16 +430,16 @@ def aggregate_matches(
                 pairs_per_q[name] -= 1
                 if pairs_per_q[name] > 0 or name not in required_queries:
                     continue
-                kp_score = [c.most_common(1)[0][1] for c in bindict[name]]
-                cpdict[name] = [c.most_common(1)[0][0] for c in bindict[name]]
-                cpdict[name] = np.array(cpdict[name], dtype=np.float32)
+                best = [max(c.items(), key=lambda kv: kv[1]) for c in bindict[name]]
+                kp_score = np.array([v for _, v in best], dtype=np.float32)
+                cpdict[name] = np.array([k for k, _ in best], dtype=np.float32)
 
                 # Select top-k query kps by score (reassign matches later)
                 if max_kps:
-                    top_k = min(max_kps, cpdict[name].shape[0])
-                    top_k = np.argsort(kp_score)[::-1][:top_k]
+                    num_top = min(max_kps, cpdict[name].shape[0])
+                    top_k = np.argsort(kp_score)[::-1][:num_top]
                     cpdict[name] = cpdict[name][top_k]
-                    kp_score = np.array(kp_score)[top_k]
+                    kp_score = kp_score[top_k]
 
                 # Write query keypoints
                 with h5py.File(feature_path, "a") as kfd:
@@ -440,13 +461,13 @@ def aggregate_matches(
 
 
 def assign_matches(
-    pairs: List[Tuple[str, str]],
+    pairs: list[tuple[str, str]],
     match_path: Path,
-    keypoints: Union[List[Path], Dict[str, np.array]],
+    keypoints: list[Path] | dict[str, Any],
     max_error: float,
-):
+) -> None:
     if isinstance(keypoints, list):
-        keypoints = load_keypoints({}, keypoints, kpts_as_bin=set([]))
+        keypoints, _ = load_keypoints({}, keypoints, quantize=set())
     assert len(set(sum(pairs, ())) - set(keypoints.keys())) == 0
     with h5py.File(str(match_path), "a") as fd:
         for name0, name1 in tqdm(pairs):
@@ -470,26 +491,25 @@ def assign_matches(
 
 @torch.no_grad()
 def match_and_assign(
-    conf: Dict,
+    conf: dict[str, Any],
     pairs_path: Path,
     image_dir: Path,
     match_path: Path,  # out
     feature_path_q: Path,  # out
-    feature_paths_refs: Optional[List[Path]] = [],
-    max_kps: Optional[int] = 8192,
+    feature_paths_refs: list[Path] | None = None,
+    max_kps: int | None = 8192,
     overwrite: bool = False,
-) -> Path:
-    for path in feature_paths_refs:
+) -> None:
+    refs = list(feature_paths_refs) if feature_paths_refs is not None else []
+    for path in refs:
         if not path.exists():
             raise FileNotFoundError(f"Reference feature file {path}.")
-    pairs = parse_retrieval(pairs_path)
-    pairs = [(q, r) for q, rs in pairs.items() for r in rs]
+    pairs_dict = parse_retrieval(pairs_path)
+    pairs = [(q, r) for q, rs in pairs_dict.items() for r in rs]
     pairs = find_unique_new_pairs(pairs, None if overwrite else match_path)
     required_queries = set(chain.from_iterable(pairs))
 
-    name2ref = {
-        n: i for i, p in enumerate(feature_paths_refs) for n in list_h5_names(p)
-    }
+    name2ref = {n: i for i, p in enumerate(refs) for n in list_h5_names(p)}
     existing_refs = required_queries.intersection(set(name2ref.keys()))
 
     # images which require feature extraction
@@ -497,7 +517,7 @@ def match_and_assign(
 
     if feature_path_q.exists():
         existing_queries = set(list_h5_names(feature_path_q))
-        feature_paths_refs.append(feature_path_q)
+        refs.append(feature_path_q)
         existing_refs = set.union(existing_refs, existing_queries)
         if not overwrite:
             required_queries = required_queries - existing_queries
@@ -512,9 +532,7 @@ def match_and_assign(
     logger.info("Assigning matches...")
 
     # Pre-load existing keypoints
-    cpdict, bindict = load_keypoints(
-        conf, feature_paths_refs, quantize=required_queries
-    )
+    cpdict, bindict = load_keypoints(conf, refs, quantize=required_queries)
 
     # Reassign matches by aggregation
     cpdict = aggregate_matches(
@@ -530,24 +548,24 @@ def match_and_assign(
 
     # Invalidate matches that are far from selected bin by reassignment
     if max_kps is not None:
-        logger.info(f'Reassign matches with max_error={conf["max_error"]}.')
+        logger.info(f"Reassign matches with max_error={conf['max_error']}.")
         assign_matches(pairs, match_path, cpdict, max_error=conf["max_error"])
 
 
 @torch.no_grad()
 def main(
-    conf: Dict,
+    conf: dict[str, Any],
     pairs: Path,
     image_dir: Path,
-    export_dir: Optional[Path] = None,
-    matches: Optional[Path] = None,  # out
-    features: Optional[Path] = None,  # out
-    features_ref: Optional[Path] = None,
-    max_kps: Optional[int] = 8192,
+    export_dir: Path | None = None,
+    matches: Path | None = None,  # out
+    features: Path | str | None = None,  # out
+    features_ref: Path | list[Path] | None = None,
+    max_kps: int | None = 8192,
     overwrite: bool = False,
-) -> Path:
+) -> tuple[Path, Path]:
     logger.info(
-        "Extracting semi-dense features with configuration:" f"\n{pprint.pformat(conf)}"
+        f"Extracting semi-dense features with configuration:\n{pprint.pformat(conf)}"
     )
 
     if features is None:
@@ -557,7 +575,7 @@ def main(
         features_q = features
         if matches is None:
             raise ValueError(
-                "Either provide both features and matches as Path" " or both as names."
+                "Either provide both features and matches as Path or both as names."
             )
     else:
         if export_dir is None:
@@ -565,21 +583,28 @@ def main(
                 "Provide an export_dir if features and matches"
                 f" are not file paths: {features}, {matches}."
             )
-        features_q = Path(export_dir, f'{features}{conf["output"]}.h5')
+        features_q = Path(export_dir, f"{features}{conf['output']}.h5")
         if matches is None:
-            matches = Path(export_dir, f'{conf["output"]}_{pairs.stem}.h5')
+            matches = Path(export_dir, f"{conf['output']}_{pairs.stem}.h5")
 
     if features_ref is None:
-        features_ref = []
+        features_ref_list: list[Path] = []
     elif isinstance(features_ref, list):
-        features_ref = list(features_ref)
+        features_ref_list = list(features_ref)
     elif isinstance(features_ref, Path):
-        features_ref = [features_ref]
+        features_ref_list = [features_ref]
     else:
         raise TypeError(str(features_ref))
 
     match_and_assign(
-        conf, pairs, image_dir, matches, features_q, features_ref, max_kps, overwrite
+        conf,
+        pairs,
+        image_dir,
+        matches,
+        features_q,
+        features_ref_list,
+        max_kps,
+        overwrite,
     )
 
     return features_q, matches

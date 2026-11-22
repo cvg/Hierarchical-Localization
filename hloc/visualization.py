@@ -1,17 +1,26 @@
 import pickle
 import random
+from collections.abc import Sequence
+from pathlib import Path
+from typing import Any
 
+import matplotlib
 import numpy as np
 import pycolmap
-from matplotlib import cm
 
 from .utils.io import read_image
 from .utils.viz import add_text, cm_RdGn, plot_images, plot_keypoints, plot_matches
 
 
 def visualize_sfm_2d(
-    reconstruction, image_dir, color_by="visibility", selected=[], n=1, seed=0, dpi=75
-):
+    reconstruction: Path | pycolmap.Reconstruction,
+    image_dir: Path,
+    color_by: str = "visibility",
+    selected: Sequence[int] | None = None,
+    n: int = 1,
+    seed: int = 0,
+    dpi: int = 75,
+) -> None:
     assert image_dir.exists()
     if not isinstance(reconstruction, pycolmap.Reconstruction):
         reconstruction = pycolmap.Reconstruction(reconstruction)
@@ -25,6 +34,7 @@ def visualize_sfm_2d(
         keypoints = np.array([p.xy for p in image.points2D])
         visible = np.array([p.has_point3D() for p in image.points2D])
 
+        color: Any
         if color_by == "visibility":
             color = [(0, 0, 1) if v else (1, 0, 0) for v in visible]
             text = f"visible: {np.count_nonzero(visible)}/{len(visible)}"
@@ -41,7 +51,7 @@ def visualize_sfm_2d(
             )
             max_, med_ = np.max(tl), np.median(tl[tl > 1])
             tl = np.log(tl)
-            color = cm.jet(tl / tl.max()).tolist()
+            color = matplotlib.colormaps["jet"](tl / tl.max()).tolist()
             text = f"max/median track length: {max_}/{med_}"
         elif color_by == "depth":
             p3ids = [p.point3D_id for p in image.points2D if p.has_point3D()]
@@ -52,7 +62,7 @@ def visualize_sfm_2d(
                 ]
             )
             z -= z.min()
-            color = cm.jet(z / np.percentile(z, 99.9))
+            color = matplotlib.colormaps["jet"](z / np.percentile(z, 99.9))
             text = f"visible: {np.count_nonzero(visible)}/{len(visible)}"
             keypoints = keypoints[visible]
         else:
@@ -66,16 +76,16 @@ def visualize_sfm_2d(
 
 
 def visualize_loc(
-    results,
-    image_dir,
-    reconstruction=None,
-    db_image_dir=None,
-    selected=[],
-    n=1,
-    seed=0,
-    prefix=None,
-    **kwargs,
-):
+    results: Path,
+    image_dir: Path,
+    reconstruction: Path | pycolmap.Reconstruction | None = None,
+    db_image_dir: Path | None = None,
+    selected: Sequence[str] | None = None,
+    n: int = 1,
+    seed: int = 0,
+    prefix: str | None = None,
+    **kwargs: Any,
+) -> None:
     assert image_dir.exists()
 
     with open(str(results) + "_logs.pkl", "rb") as f:
@@ -87,9 +97,10 @@ def visualize_loc(
             queries = [q for q in queries if q.startswith(prefix)]
         selected = random.Random(seed).sample(queries, min(n, len(queries)))
 
-    if reconstruction is not None:
-        if not isinstance(reconstruction, pycolmap.Reconstruction):
-            reconstruction = pycolmap.Reconstruction(reconstruction)
+    if reconstruction is not None and not isinstance(
+        reconstruction, pycolmap.Reconstruction
+    ):
+        reconstruction = pycolmap.Reconstruction(reconstruction)
 
     for qname in selected:
         loc = logs["loc"][qname]
@@ -99,14 +110,14 @@ def visualize_loc(
 
 
 def visualize_loc_from_log(
-    image_dir,
-    query_name,
-    loc,
-    reconstruction=None,
-    db_image_dir=None,
-    top_k_db=2,
-    dpi=75,
-):
+    image_dir: Path,
+    query_name: str,
+    loc: dict[str, Any],
+    reconstruction: pycolmap.Reconstruction | None = None,
+    db_image_dir: Path | None = None,
+    top_k_db: int = 2,
+    dpi: int = 75,
+) -> None:
     q_image = read_image(image_dir / query_name)
     if loc.get("covisibility_clustering", False):
         # select the first, largest cluster if the localization failed
@@ -121,15 +132,17 @@ def visualize_loc_from_log(
         # that observes it. We also count the number of inliers in each.
         kp_idxs, kp_to_3D_to_db = loc["keypoint_index_to_db"]
         counts = np.zeros(n)
-        dbs_kp_q_db = [[] for _ in range(n)]
-        inliers_dbs = [[] for _ in range(n)]
-        for i, (inl, (p3D_id, db_idxs)) in enumerate(zip(inliers, kp_to_3D_to_db)):
+        dbs_kp_q_db: list[list[tuple[int, int]]] = [[] for _ in range(n)]
+        inliers_dbs: list[list[bool]] = [[] for _ in range(n)]
+        for i, (inl, (p3D_id, db_idxs)) in enumerate(
+            zip(inliers, kp_to_3D_to_db, strict=True)
+        ):
             track = reconstruction.points3D[p3D_id].track
-            track = {el.image_id: el.point2D_idx for el in track.elements}
+            track_map = {el.image_id: el.point2D_idx for el in track.elements}
             for db_idx in db_idxs:
                 counts[db_idx] += inl
-                kp_db = track[loc["db"][db_idx]]
-                dbs_kp_q_db[db_idx].append((i, kp_db))
+                kp_db_idx = track_map[loc["db"][db_idx]]
+                dbs_kp_q_db[db_idx].append((i, kp_db_idx))
                 inliers_dbs[db_idx].append(inl)
     else:
         # for inloc the database keypoints are already in the logs
@@ -146,7 +159,7 @@ def visualize_loc_from_log(
             db_kp_q_db = np.array(dbs_kp_q_db[db_idx])
             kp_q = mkp_q[db_kp_q_db[:, 0]]
             kp_db = np.array([db.points2D[i].xy for i in db_kp_q_db[:, 1]])
-            inliers_db = inliers_dbs[db_idx]
+            inliers_db: Any = inliers_dbs[db_idx]
         else:
             db_name = loc["db"][db_idx]
             kp_q = mkp_q[loc["indices_db"] == db_idx]
@@ -160,6 +173,6 @@ def visualize_loc_from_log(
         plot_images([q_image, db_image], dpi=dpi)
         plot_matches(kp_q, kp_db, color, a=0.1)
         add_text(0, text)
-        opts = dict(pos=(0.01, 0.01), fs=5, lcolor=None, va="bottom")
+        opts: dict[str, Any] = dict(pos=(0.01, 0.01), fs=5, lcolor=None, va="bottom")
         add_text(0, query_name, **opts)
         add_text(1, db_name, **opts)

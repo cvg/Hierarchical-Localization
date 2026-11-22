@@ -1,5 +1,6 @@
 import argparse
 from collections import defaultdict
+from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
@@ -9,9 +10,11 @@ from tqdm import tqdm
 from . import logger
 
 
-def recover_database_images_and_ids(database_path):
-    images = {}
-    cameras = {}
+def recover_database_images_and_ids(
+    database_path: Path,
+) -> tuple[dict[str, int], dict[str, int]]:
+    images: dict[str, int] = {}
+    cameras: dict[str, int] = {}
     with pycolmap.Database.open(database_path) as db:
         for image in db.read_all_images():
             images[image.name] = image.image_id
@@ -20,23 +23,31 @@ def recover_database_images_and_ids(database_path):
     return images, cameras
 
 
-def camera_center_to_translation(c, qvec):
-    qvec = np.asarray(qvec, dtype=float)
-    rot = pycolmap.Rotation3d(qvec[[1, 2, 3, 0]])
+def camera_center_to_translation(
+    c: np.ndarray | Sequence[float], qvec: np.ndarray | Sequence[float]
+) -> np.ndarray:
+    qvec_arr = np.asarray(qvec, dtype=float)
+    rot = pycolmap.Rotation3d(qvec_arr[[1, 2, 3, 0]])
     rot.normalize()
     return (-1) * np.matmul(rot.matrix(), c)
 
 
-def read_nvm_model(nvm_path, intrinsics_path, image_ids, camera_ids, skip_points=False):
-    with open(intrinsics_path, "r") as f:
+def read_nvm_model(
+    nvm_path: Path,
+    intrinsics_path: Path,
+    image_ids: dict[str, int],
+    camera_ids: dict[str, int],
+    skip_points: bool = False,
+) -> pycolmap.Reconstruction:
+    with open(intrinsics_path) as f:
         raw_intrinsics = f.readlines()
 
     logger.info(f"Reading {len(raw_intrinsics)} cameras...")
     reconstruction = pycolmap.Reconstruction()
-    for intrinsics in raw_intrinsics:
-        intrinsics = intrinsics.strip("\n").split(" ")
-        name, camera_model, width, height = intrinsics[:4]
-        params = [float(p) for p in intrinsics[4:]]
+    for line in raw_intrinsics:
+        parts = line.strip("\n").split(" ")
+        name, camera_model, width, height = parts[:4]
+        params = [float(p) for p in parts[4:]]
         camera_id = camera_ids[name]
         camera = pycolmap.Camera(
             camera_id=camera_id,
@@ -48,7 +59,7 @@ def read_nvm_model(nvm_path, intrinsics_path, image_ids, camera_ids, skip_points
         assert camera.verify_params(), f"Invalid params for {camera}"
         reconstruction.add_camera_with_trivial_rig(camera)
 
-    with open(nvm_path, "r") as nvm_f:
+    with open(nvm_path) as nvm_f:
         line = nvm_f.readline()
         while line == "\n" or line.startswith("NVM_V3"):
             line = nvm_f.readline()
@@ -155,7 +166,13 @@ def read_nvm_model(nvm_path, intrinsics_path, image_ids, camera_ids, skip_points
     return reconstruction
 
 
-def main(nvm, intrinsics, database, output, skip_points=False):
+def main(
+    nvm: Path,
+    intrinsics: Path,
+    database: Path,
+    output: Path,
+    skip_points: bool = False,
+) -> None:
     assert nvm.exists(), nvm
     assert intrinsics.exists(), intrinsics
     assert database.exists(), database
